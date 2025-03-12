@@ -1,7 +1,7 @@
-# 🚀 PlannerOP - Sistema de Gestión de Operaciones
+# 🚀 ServidorCargoPlanner - Sistema de Gestión de Operaciones
 
 <p align="center">
-  <img src="https://nestjs.com/img/logo-small.svg" width="150" alt="Logo de PlannerOP" />
+  <img src="https://nestjs.com/img/logo-small.svg" width="150" alt="Logo de ServidorCargoPlanner" />
 </p>
 
 <p align="center">
@@ -20,7 +20,7 @@
 
 ## 📋 Descripción
 
-**PlannerOP** es un sistema de gestión diseñado específicamente para optimizar la planificación de operaciones y la asignación de trabajadores en entornos empresariales. 
+**ServidorCargoPlanner** es un sistema de gestión diseñado específicamente para optimizar la planificación de operaciones y la asignación de trabajadores en entornos empresariales. 
 
 Esta solución integral permite a las organizaciones:
 - Organizar eficientemente sus operaciones diarias
@@ -79,10 +79,10 @@ La aplicación está construida como una API robusta con NestJS que se integra f
 
 ```bash
 # Clonar el repositorio
-$ git clone https://github.com/KeniBeck/plannerOPBack.git
+$ git clone https://github.com/DuvanBonilla/ServidorCargoPlanner.git
 
 # Acceder al directorio del proyecto
-$ cd plannerOPBack
+$ cd ServidorCargoPlanner
 
 # Instalar dependencias
 $ npm install
@@ -154,12 +154,12 @@ $ npm run doc
 
 | Método | Endpoint | Descripción |
 |--------|----------|-------------|
-| GET | `/api/operations` | Obtener todas las operaciones |
-| POST | `/api/operations` | Crear una nueva operación |
-| GET | `/api/workers` | Obtener todos los trabajadores |
-| POST | `/api/workers` | Registrar un nuevo trabajador |
-| POST | `/api/auth/login` | Iniciar sesión |
-| GET | `/api/areas` | Obtener todas las áreas de trabajo |
+| GET | `/operations` | Obtener todas las operaciones |
+| POST | `/operations` | Crear una nueva operación |
+| GET | `/workers` | Obtener todos los trabajadores |
+| POST | `/workers` | Registrar un nuevo trabajador |
+| POST | `/auth/login` | Iniciar sesión |
+| GET | `/areas` | Obtener todas las áreas de trabajo |
 
 ## 💻 Tecnologías
 
@@ -193,5 +193,5 @@ Para preguntas o sugerencias, puedes contactar al equipo de desarrollo:
 ---
 
 <p align="center">
-  <b>Desarrollado con ❤️ por el Equipo PlannerOP</b>
+  <b>Desarrollado con ❤️ por el Equipo</b>
 </p>

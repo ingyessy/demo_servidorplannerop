@@ -281,7 +281,7 @@ try {
 }
 
 // Obtener información del package.json para la documentación
-let packageInfo = { name: 'PlannerOP API', version: '1.0.0', description: 'API Documentation' };
+let packageInfo = { name: 'ServidorCargoPlanner API', version: '1.0.0', description: 'API Documentation' };
 try {
   const packageJsonPath = './package.json';
   if (fs.existsSync(packageJsonPath)) {

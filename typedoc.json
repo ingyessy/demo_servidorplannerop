@@ -8,7 +8,7 @@
     "**/*.test.ts",
     "**/dist/**"
   ],
-  "name": "PlannerOP API Documentation",
+  "name": "ServidorCargoPlanner API Documentation",
   "excludePrivate": true,
   "excludeProtected": false,
   "categorizeByGroup": true,
@@ -24,6 +24,5 @@
   "entryPointStrategy": "expand",
   "sort": ["static-first", "visibility", "alphabetical"],
   "disableSources": false,
-  "sourceLinkTemplate": "https://github.com/tu-usuario/plannerOPBack/blob/main/{path}#L{line}",
   "searchInComments": true
 }
