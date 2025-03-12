@@ -1,0 +1,29 @@
+{
+  "entryPoints": [
+    "./src/**/*.ts"
+  ],
+  "exclude": [
+    "**/node_modules/**", 
+    "**/*.spec.ts", 
+    "**/*.test.ts",
+    "**/dist/**"
+  ],
+  "name": "PlannerOP API Documentation",
+  "excludePrivate": true,
+  "excludeProtected": false,
+  "categorizeByGroup": true,
+  "categoryOrder": ["Controllers", "Services", "DTOs", "Entities", "Guards", "Pipes", "Interceptors", "Decorators", "Interfaces", "Constants", "*"],
+  "readme": "README.md",
+  "navigation": {
+    "includeGroups": true,
+    "includeCategories": true
+  },
+  "darkHighlightTheme": "dark-plus",
+  "lightHighlightTheme": "light-plus",
+  "hideGenerator": true,
+  "entryPointStrategy": "expand",
+  "sort": ["static-first", "visibility", "alphabetical"],
+  "disableSources": false,
+  "sourceLinkTemplate": "https://github.com/tu-usuario/plannerOPBack/blob/main/{path}#L{line}",
+  "searchInComments": true
+}
