@@ -363,4 +363,17 @@ export class OperationService {
       throw new Error(`Error finding active operations: ${error.message}`);
     }
   }
+
+  async findOperationByUser(id_user: number){
+    try {
+      const response = await this.prisma.operation.findMany({
+        where: {
+          id_user
+        }
+      });
+      return response;
+    } catch (error) {
+      throw new Error(error.message);
+    }
+  }
 }

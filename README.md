@@ -159,6 +159,7 @@ $ npm run doc
 | GET | `/workers` | Obtener todos los trabajadores |
 | POST | `/workers` | Registrar un nuevo trabajador |
 | POST | `/auth/login` | Iniciar sesión |
+| POST | `/auth/logout` | Cerrar sesión |
 | GET | `/areas` | Obtener todas las áreas de trabajo |
 
 ## 💻 Tecnologías
