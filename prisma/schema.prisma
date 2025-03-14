@@ -106,6 +106,8 @@ model Client {
 enum Role {
   ADMIN
   SUPERADMIN
+  GH
+  SUPERVISOR
 }
 
 enum Status {

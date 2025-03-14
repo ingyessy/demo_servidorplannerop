@@ -310,6 +310,9 @@ export class OperationService {
           ],
         },
       });
+      if (response.length === 0) {
+        return { message: 'No operations found in this range', status: 404 };
+      }
       return response;
     } catch (error) {
       throw new Error(error.message);
@@ -369,8 +372,29 @@ export class OperationService {
       const response = await this.prisma.operation.findMany({
         where: {
           id_user
+        }, include:{
+          jobArea: {
+            select: {
+              id: true,
+              name: true
+            }
+          },
+          task: {
+            select: {
+              id: true,
+              name: true
+            }
+          },
+          workers: {
+            select: {
+              id_worker: true
+            }
+          }
         }
       });
+      if (response.length === 0) {
+        return { message: 'No operations found for this user', status: 404 };
+      }
       return response;
     } catch (error) {
       throw new Error(error.message);
