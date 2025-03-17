@@ -109,7 +109,7 @@ export class ValidationService {
 
       // 7. Validar teléfono si se proporciona
       if (phone_worker !== undefined) {
-        const existingWorkerWithPhone = await this.prisma.worker.findUnique({
+        const existingWorkerWithPhone = await this.prisma.worker.findFirst({
           where: { phone: phone_worker },
         });
 
@@ -254,7 +254,7 @@ export class ValidationService {
    */
   async workerPhoneExists(phone: string): Promise<boolean> {
     try {
-      const existingWorker = await this.prisma.worker.findUnique({
+      const existingWorker = await this.prisma.worker.findFirst({
         where: { phone },
       });
       return !!existingWorker;

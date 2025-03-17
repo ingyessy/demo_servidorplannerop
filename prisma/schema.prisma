@@ -42,7 +42,7 @@ model Worker {
   id               Int                @id @default(autoincrement())
   dni              String             @unique
   code             String             @unique
-  phone            String?            @unique
+  phone            String?            
   name             String
   createAt         DateTime           @default(now())
   updateAt         DateTime           @updatedAt
