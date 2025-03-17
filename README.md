@@ -102,8 +102,6 @@ DATABASE_URL="postgresql://usuario:contraseña@localhost:5432/plannerop?schema=p
 SECRET_JWT="tu_clave_secreta_aqui"
 EXPIRES_IN="1d"
 
-# Puerto de la aplicación
-PORT=3000
 ```
 
 ### 2. Configuración de la base de datos
