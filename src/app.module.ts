@@ -12,6 +12,7 @@ import { CronJobModule } from './cron-job/cron-job.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ClientModule } from './client/client.module';
 import { ValidationModule } from './common/validation/validation.module';
+import { CalledAttentionModule } from './called-attention/called-attention.module';
 
 
 
@@ -32,6 +33,7 @@ import { ValidationModule } from './common/validation/validation.module';
     CronJobModule,
     ClientModule,
     ValidationModule,
+    CalledAttentionModule,
   ],
   providers: [ PrismaService],
 })

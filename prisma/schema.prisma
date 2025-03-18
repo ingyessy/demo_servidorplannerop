@@ -27,6 +27,7 @@ model User {
   operation  Operation[]
   task       Task[]
   client     Client[]
+  calledAttention CalledAttention[]
 }
 
 model JobArea {
@@ -57,6 +58,7 @@ model Worker {
   id_user          Int
   user             User               @relation(fields: [id_user], references: [id])
   operations       Operation_Worker[]
+  calledAttention  CalledAttention[]
 }
 
 model Operation {
@@ -101,6 +103,16 @@ model Client {
   id_user    Int
   user       User        @relation(fields: [id_user], references: [id])
   operations Operation[]
+}
+
+model CalledAttention {
+  id Int @id @default(autoincrement())
+  name String 
+  description String?
+  id_user Int
+  user User @relation(fields: [id_user], references: [id])
+  id_worker Int
+  worker Worker @relation(fields: [id_worker], references: [id])
 }
 
 enum Role {
