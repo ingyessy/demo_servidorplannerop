@@ -106,11 +106,35 @@ export class OperationService {
       // 1. Extraer los datos de actualización
       const { workers, ...directFields } = updateOperationDto;
 
+      // verificar si se esta cambiando el estado a COMPLETED
+      const isCompletingOperation = directFields.status === 'COMPLETED';
+
       // 2. Actualizar campos directos de la operación
       await this.prisma.operation.update({
         where: { id },
         data: directFields,
       });
+
+      // si se esta completando la operación, se liberan los trabajadores
+      if (isCompletingOperation) {
+        // Obtener los trabajadores de esta operación desde la tabla intermedia
+        const operationWorkers = await this.prisma.operation_Worker.findMany({
+          where: { id_operation: id },
+          select: { id_worker: true },
+        });
+
+        const workerIds = operationWorkers.map((ow) => ow.id_worker);
+        // Actualizar el estado de los trabajadores a AVALIABLE
+        if (workerIds.length > 0) {
+          await this.prisma.worker.updateMany({
+            where: {
+              id: { in: workerIds },
+              status: { not: 'AVALIABLE' },
+            },
+            data: { status: 'AVALIABLE' },
+          });
+        }
+      }
 
       // 3. Manejar las relaciones de trabajadores si se proporcionaron
       if (workers) {
@@ -319,47 +343,46 @@ export class OperationService {
     }
   }
 
-    /**
+  /**
    * Encuentra todas las operaciones activas (IN_PROGRESS y PENDING) sin filtros de fecha
    * @returns Lista de operaciones activas o mensaje de error
    */
   async findActiveOperations() {
     try {
-
       const response = await this.prisma.operation.findMany({
         where: {
           status: {
-            in: ['INPROGRESS', 'PENDING']
-          }
+            in: ['INPROGRESS', 'PENDING'],
+          },
         },
         include: {
           task: {
             select: {
               id: true,
-              name: true
-            }
+              name: true,
+            },
           },
           client: {
-            select:{
+            select: {
               id: true,
-              name: true
-            }
+              name: true,
+            },
           },
           workers: {
             select: {
-              id_worker: true
-            }
-          }
+              id_worker: true,
+            },
+          },
         },
         orderBy: {
-          dateStart: 'asc'  // Ordenar por fecha de inicio ascendente
-        }
+          dateStart: 'asc', // Ordenar por fecha de inicio ascendente
+        },
       });
-  
+
       if (response.length === 0) {
         return { message: 'No active operations found', status: 404 };
       }
-  
+
       return response;
     } catch (error) {
       console.error('Error finding active operations:', error);
@@ -367,30 +390,31 @@ export class OperationService {
     }
   }
 
-  async findOperationByUser(id_user: number){
+  async findOperationByUser(id_user: number) {
     try {
       const response = await this.prisma.operation.findMany({
         where: {
-          id_user
-        }, include:{
+          id_user,
+        },
+        include: {
           jobArea: {
             select: {
               id: true,
-              name: true
-            }
+              name: true,
+            },
           },
           task: {
             select: {
               id: true,
-              name: true
-            }
+              name: true,
+            },
           },
           workers: {
             select: {
-              id_worker: true
-            }
-          }
-        }
+              id_worker: true,
+            },
+          },
+        },
       });
       if (response.length === 0) {
         return { message: 'No operations found for this user', status: 404 };

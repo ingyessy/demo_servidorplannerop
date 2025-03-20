@@ -107,8 +107,8 @@ model Client {
 
 model CalledAttention {
   id Int @id @default(autoincrement())
-  name String 
   description String?
+  type Failures?
   id_user Int
   user User @relation(fields: [id_user], references: [id])
   id_worker Int
@@ -135,4 +135,10 @@ enum StatusOperation {
   INPROGRESS
   COMPLETED
   CANCELED
+}
+
+enum Failures {
+  INASSISTANCE
+  IRRESPECTFUL
+  ABANDONMENT
 }

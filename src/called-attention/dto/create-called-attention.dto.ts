@@ -1,12 +1,9 @@
 import { ApiHideProperty, ApiProperty } from "@nestjs/swagger";
+import { Failures } from "@prisma/client";
 import { Type } from "class-transformer";
-import { IsNumber, IsOptional, IsString } from "class-validator";
+import { IsEnum, IsNumber, IsOptional, IsString } from "class-validator";
 
 export class CreateCalledAttentionDto {
-    @IsString()
-    @ApiProperty({ example: 'Limpieza de tanque' })
-    name: string;
-
     @ApiProperty({ example: 'Se necesita limpiar el tanque de agua' })
     @IsString()
     description: string;
@@ -16,6 +13,13 @@ export class CreateCalledAttentionDto {
     @IsOptional()
     @Type(() => Number)
     id_user?: number;
+
+    @ApiProperty({ example: `${Object.values(Failures).join(', ')}` })
+    @IsOptional() 
+    @IsEnum(Failures,{
+        message:`status debe ser uno de los siguientes valores: ${Object.values(Failures).join(', ')}`,
+    })
+    type: Failures
 
     @ApiProperty({ example: '21' })
     @IsNumber()
