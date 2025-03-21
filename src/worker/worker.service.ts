@@ -52,6 +52,21 @@ export class WorkerService {
       throw new Error(error.message || String(error));
     }
   }
+ /**
+  * obtener trabajador por dni
+  * @param dni numero de identificacion del trabajador a buscar
+  * @returns respuesta de la busqueda del trabajador
+  */
+ async finDni(dni: string){
+  const response = await this.prisma.worker.findFirst({
+    where:{dni}
+  });
+  if (!response){
+    return {message:"Not found", status:404}
+  }
+  return response;
+ }
+
   /**
    * obtener todos los trabajadores
    * @returns resupuesta de la busqueda de todos los trabajadores

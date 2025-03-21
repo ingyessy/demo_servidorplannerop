@@ -4,7 +4,7 @@ import { Type } from "class-transformer";
 import { IsEnum, IsNumber, IsOptional, IsString } from "class-validator";
 
 export class CreateCalledAttentionDto {
-    @ApiProperty({ example: 'Se necesita limpiar el tanque de agua' })
+    @ApiProperty({ example: 'Falta de respecto' })
     @IsString()
     description: string;
 
@@ -17,7 +17,7 @@ export class CreateCalledAttentionDto {
     @ApiProperty({ example: `${Object.values(Failures).join(', ')}` })
     @IsOptional() 
     @IsEnum(Failures,{
-        message:`status debe ser uno de los siguientes valores: ${Object.values(Failures).join(', ')}`,
+        message:`type debe ser uno de los siguientes valores: ${Object.values(Failures).join(', ')}`,
     })
     type: Failures
 

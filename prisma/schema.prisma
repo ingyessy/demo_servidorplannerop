@@ -110,6 +110,7 @@ model CalledAttention {
   description String?
   type Failures?
   id_user Int
+  createAt DateTime @default(now())
   user User @relation(fields: [id_user], references: [id])
   id_worker Int
   worker Worker @relation(fields: [id_worker], references: [id])
