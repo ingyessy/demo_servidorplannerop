@@ -39,6 +39,11 @@ export class OperationService {
               id_worker: true,
             },
           },
+          inChargeOperation: {
+            select: {
+              id_user: true,
+            },
+          },
         },
       });
 
@@ -78,6 +83,11 @@ export class OperationService {
               id_worker: true,
             },
           },
+          inChargeOperation: {
+            select: {
+              id_user: true,
+            },
+          },
         },
       });
       if (!response) {
@@ -104,7 +114,7 @@ export class OperationService {
       }
 
       // 1. Extraer los datos de actualización
-      const { workers, ...directFields } = updateOperationDto;
+      const { workers, inCharged, ...directFields } = updateOperationDto;
 
       // verificar si se esta cambiando el estado a COMPLETED
       const isCompletingOperation = directFields.status === 'COMPLETED';
@@ -226,8 +236,77 @@ export class OperationService {
           }
         }
       }
+      // 4 Manejar las relaciones de encargados si se proporcionaron
+      if (inCharged) {
+        //4.1 Manejar Conect de inCharged
+        if (inCharged.connect && Array.isArray(inCharged.connect)) {
+          const inChargedIds = inCharged.connect.map((item) => item.id);
 
-      // 4. Obtener la operación actualizada con sus relaciones
+          if (inChargedIds.length > 0) {
+            const inChargedValidation =
+              await this.validationService.validateAllIds({ inChargedIds });
+            if (
+              inChargedValidation &&
+              'status' in inChargedValidation &&
+              inChargedValidation.status === 404
+            ) {
+              return inChargedValidation;
+            }
+
+            //obtener los encargados que ya estan asignados a esta operacion
+            const currentInCharged =
+              await this.prisma.inChargeOperation.findMany({
+                where: { id_operation: id },
+                select: { id_user: true },
+              });
+
+            const currentInChargedIds = currentInCharged.map(
+              (inCharged) => inCharged.id_user,
+            );
+
+            // Filtrar para solo añadir encargados que no estan ya asignados
+            const inChargedToAdd = inChargedIds.filter(
+              (inChargedId) => !currentInChargedIds.includes(inChargedId),
+            );
+            if (inChargedToAdd.length > 0) {
+              // Crear nuevas relaciones
+              await this.prisma.inChargeOperation.createMany({
+                data: inChargedToAdd.map((inChargedId) => ({
+                  id_operation: id,
+                  id_user: inChargedId,
+                })),
+                skipDuplicates: true, // Evitar duplicados
+              });
+            }
+          }
+        }
+
+        // 4.2 Manejar Disconect de inCharged
+        if (inCharged?.disconnect && Array.isArray(inCharged.disconnect)) {
+          const inChargedIds = inCharged.disconnect.map((item) => item.id);
+
+          if (inChargedIds.length > 0) {
+            const inChargedValidation =
+              await this.validationService.validateAllIds({ inChargedIds });
+            if (
+              inChargedValidation &&
+              'status' in inChargedValidation &&
+              inChargedValidation.status === 404
+            ) {
+              return inChargedValidation;
+            }
+            // Eliminar solo las relaciones especificadas
+            await this.prisma.inChargeOperation.deleteMany({
+              where: {
+                id_operation: id,
+                id_user: { in: inChargedIds },
+              },
+            });
+          }
+        }
+      }
+
+      // 5. Obtener la operación actualizada con sus relaciones
       const updatedOperation = await this.findOne(id);
 
       return updatedOperation;
@@ -271,12 +350,13 @@ export class OperationService {
         id_task: createOperationDto.id_task,
         id_client: createOperationDto.id_client,
         workerIds: createOperationDto.workerIds,
+        inChargedIds: createOperationDto.inChargedIds,
       });
       // Si hay un error (tiene propiedad status), retornarlo
       if (validation && 'status' in validation && validation.status === 404) {
         return validation;
       }
-      const { workerIds, ...operationData } = createOperationDto;
+      const { workerIds, inChargedIds, ...operationData } = createOperationDto;
 
       // Crear la operación
 
@@ -302,6 +382,17 @@ export class OperationService {
           data: {
             status: 'ASSIGNED',
           },
+        });
+      }
+
+      // Asignar responsables si existen
+      if (inChargedIds && inChargedIds.length > 0) {
+        const inChargedOperations = inChargedIds.map((inChargedId) => ({
+          id_operation: operation.id,
+          id_user: inChargedId,
+        }));
+        await this.prisma.inChargeOperation.createMany({
+          data: inChargedOperations,
         });
       }
 

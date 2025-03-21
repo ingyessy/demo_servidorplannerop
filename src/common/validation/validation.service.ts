@@ -18,6 +18,7 @@ export class ValidationService {
     code_worker,
     dni_worker,
     workerIds,
+    inChargedIds,
     phone_worker,
   }: {
     id_user?: number;
@@ -28,6 +29,7 @@ export class ValidationService {
     code_worker?: string;
     phone_worker?: string;
     workerIds?: number[];
+    inChargedIds?: number[];
   }) {
     try {
       // 1. Validar usuario si se proporciona
@@ -144,6 +146,35 @@ export class ValidationService {
           console.log('Workers not found:', nonExistingWorkerIds);
           return {
             message: `Workers not found: ${nonExistingWorkerIds.join(', ')}`,
+            status: 404,
+          };
+        }
+      }
+
+      // 9. Validar que todos los encargados existan si se proporcionan IDs
+      if (inChargedIds && inChargedIds.length > 0) {
+        const existingInCharged = await this.prisma.user.findMany({
+          where: {
+            id: {
+              in: inChargedIds,
+            },
+          },
+          select: {
+            id: true,
+          },
+        });
+
+        const existingInChargedIds = existingInCharged.map(
+          (inChargedId) => inChargedId.id,
+        );
+        const nonExistingInChargedIds = inChargedIds.filter(
+          (inChargedIds) => !existingInChargedIds.includes(inChargedIds),
+        );
+
+        if (nonExistingInChargedIds.length > 0) {
+          console.log('InCharged not found:', nonExistingInChargedIds);
+          return {
+            message: `InCharged not found: ${nonExistingInChargedIds.join(', ')}`,
             status: 404,
           };
         }
