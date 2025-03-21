@@ -79,5 +79,6 @@ export class CreateOperationDto {
     @ApiProperty({ type: [Number], example: [1, 2, 3] })
     @IsArray()
     @IsNumber({}, { each: true })
+    @IsOptional()
     inChargedIds?: number[];
 }
