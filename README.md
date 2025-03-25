@@ -20,9 +20,10 @@
 
 ## 📋 Descripción
 
-**ServidorCargoPlanner** es un sistema de gestión diseñado específicamente para optimizar la planificación de operaciones y la asignación de trabajadores en entornos empresariales. 
+**ServidorCargoPlanner** es un sistema de gestión diseñado específicamente para optimizar la planificación de operaciones y la asignación de trabajadores en entornos empresariales.
 
 Esta solución integral permite a las organizaciones:
+
 - Organizar eficientemente sus operaciones diarias
 - Asignar personal basado en disponibilidad y habilidades
 - Monitorear en tiempo real el estado de cada operación
@@ -150,15 +151,15 @@ $ npm run doc
 
 ## 📡 Endpoints principales
 
-| Método | Endpoint | Descripción |
-|--------|----------|-------------|
-| GET | `/operations` | Obtener todas las operaciones |
-| POST | `/operations` | Crear una nueva operación |
-| GET | `/workers` | Obtener todos los trabajadores |
-| POST | `/workers` | Registrar un nuevo trabajador |
-| POST | `/auth/login` | Iniciar sesión |
-| POST | `/auth/logout` | Cerrar sesión |
-| GET | `/areas` | Obtener todas las áreas de trabajo |
+| Método | Endpoint       | Descripción                        |
+| ------ | -------------- | ---------------------------------- |
+| GET    | `/operations`  | Obtener todas las operaciones      |
+| POST   | `/operations`  | Crear una nueva operación          |
+| GET    | `/workers`     | Obtener todos los trabajadores     |
+| POST   | `/workers`     | Registrar un nuevo trabajador      |
+| POST   | `/auth/login`  | Iniciar sesión                     |
+| POST   | `/auth/logout` | Cerrar sesión                      |
+| GET    | `/areas`       | Obtener todas las áreas de trabajo |
 
 ## 💻 Tecnologías
 
@@ -186,8 +187,8 @@ Este proyecto está licenciado bajo la Licencia MIT.
 
 Para preguntas o sugerencias, puedes contactar al equipo de desarrollo:
 
-- Email: [deyler456@gmail.com] [olvadis2004@gmail.com]
-- GitHub: [[KeniBeck](https://github.com/KeniBeck/)] [[GhostRiderDev](https://github.com/GhostRiderDev)]
+- Email: [<a style="color:#60a5fa">deyler456@gmail.com</a>] [<a style="color:#60a5fa">olvadis2004@gmail.com</a>]
+- GitHub: [[<a style="color: #60a5fa">KeniBeck</a>](https://github.com/KeniBeck/)] [<a style="color:#60a5fa">[<a style="color:#60a5fa">GhostRiderDev</a>](https://github.com/GhostRiderDev)]
 
 ---
 
