@@ -112,10 +112,6 @@ export class OperationService {
       if (validate['status'] === 404) {
         return validate;
       }
-      if (updateOperationDto.inCharged === undefined) {
-        return { message: 'InCharged is required', status: 400 };
-      }
-
       const validateIds = await this.validationService.validateAllIds({
         inChargedIds: updateOperationDto.inCharged?.connect?.map(item => item.id),
       });
