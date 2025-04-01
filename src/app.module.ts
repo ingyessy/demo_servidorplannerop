@@ -13,6 +13,8 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { ClientModule } from './client/client.module';
 import { ValidationModule } from './common/validation/validation.module';
 import { CalledAttentionModule } from './called-attention/called-attention.module';
+import { OperationWorkerModule } from './operation-worker/operation-worker.module';
+import { OperationInChargeModule } from './in-charged/in-charged.module';
 
 
 
@@ -34,6 +36,8 @@ import { CalledAttentionModule } from './called-attention/called-attention.modul
     ClientModule,
     ValidationModule,
     CalledAttentionModule,
+    OperationWorkerModule,
+    OperationInChargeModule,
   ],
   providers: [ PrismaService],
 })
