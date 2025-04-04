@@ -1,7 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { UpdateOperationService } from './services/update-operation';
-import { UpdateWorkerService } from './services/update-worker';
+import { UpdateOperationService } from './services/update-operation.service';
+import { UpdateWorkerService } from './services/update-worker.service';
+import { UpdateOperationWorkerService } from './services/update-operation-worker.service';
 /**
  * Servicio para gestionar Cron Jobs
  * @class OperationsCronService
@@ -13,6 +14,7 @@ export class OperationsCronService {
   constructor(
     private updateOperation: UpdateOperationService,
     private updateWorker: UpdateWorkerService,
+    private updateOperationWorker: UpdateOperationWorkerService,
   ) {}
   /**
    * Actualiza las operaciones en progreso
@@ -55,6 +57,18 @@ export class OperationsCronService {
   async handleUpdateWorkersWithFailures() {
     try {
       await this.updateWorker.updateWorkerFailures();
+    } catch (error) {
+      this.logger.error('Error in cron job:', error);
+    }
+  }
+
+  /**
+   * Actualizar trabajadores según su programación
+   */
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async handleUpdateWorkersScheduleState() {
+    try {
+      await this.updateOperationWorker.updateWorkersScheduleState();
     } catch (error) {
       this.logger.error('Error in cron job:', error);
     }

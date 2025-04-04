@@ -1,5 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsArray, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsNumber, IsOptional, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
+import { WorkerScheduleDto } from './worker-schedule.dto';
 
 export class AssignWorkersDto {
   @ApiProperty({
@@ -10,31 +12,40 @@ export class AssignWorkersDto {
   id_operation: number;
 
   @ApiProperty({
-    description: 'IDs de los trabajadores a asignar',
+    description: 'IDs de los trabajadores a asignar (sin programación)',
     example: [1, 2, 3],
-    type: [Number]
+    type: [Number],
+    required: false
   })
+  @IsOptional()
   @IsArray()
   @IsNumber({}, { each: true })
-  workerIds: number[];
+  workerIds?: number[];
 
-  @ApiProperty({example: '2023-10-01'})
+  @ApiProperty({
+    description: 'Grupos de trabajadores con programación compartida',
+    type: [WorkerScheduleDto],
+    required: false,
+    example: [
+      {
+        workerIds: [1, 2],
+        dateStart: "2023-10-01", 
+        dateEnd: "2023-10-15",
+        timeStart: "08:00",
+        timeEnd: "12:00"
+      },
+      {
+        workerIds: [3, 4],
+        dateStart: "2023-10-01",
+        dateEnd: "2023-10-15",
+        timeStart: "13:00",
+        timeEnd: "17:00"
+      }
+    ]
+  })
   @IsOptional()
-  @IsString()
-  dateStart?: string;
-
-  @ApiProperty({example: '2023-10-31'})
-  @IsOptional()
-  @IsString()
-  dateEnd?: string;
-
-  @ApiProperty({example: '01:00'})
-  @IsOptional()
-  @IsString()
-  timeStart?: string;
-  
-  @ApiProperty({example: '01:54'})
-  @IsOptional()
-  @IsString()
-  timeEnd?: string;
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => WorkerScheduleDto)
+  workersWithSchedule?: WorkerScheduleDto[];
 }

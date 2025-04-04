@@ -1,7 +1,8 @@
 import { ApiHideProperty, ApiProperty } from "@nestjs/swagger"
 import {  StatusOperation } from "@prisma/client"
 import { Type } from "class-transformer"
-import { IsArray, IsEnum, IsNumber, IsOptional, IsString, Matches } from "class-validator"
+import { IsArray, IsEnum, IsNumber, IsOptional, IsString, Matches, ValidateNested } from "class-validator"
+import { WorkerScheduleDto } from "src/operation-worker/dto/worker-schedule.dto"
 
 export class CreateOperationDto {
 
@@ -73,8 +74,29 @@ export class CreateOperationDto {
 
     @ApiProperty({ type: [Number], example: [1, 2, 3] })
     @IsArray()
+    @IsOptional()
     @IsNumber({}, { each: true })
     workerIds?: number[];
+
+    @ApiProperty({
+      description: 'Grupos de trabajadores con programación compartida',
+      type: [WorkerScheduleDto],
+      required: false,
+      example: [
+        {
+          workerIds: [3, 4, 5],
+          dateStart: "2023-10-01",
+          dateEnd: "2023-10-10",
+          timeStart: "08:00",
+          timeEnd: "17:00"
+        }
+      ]
+    })
+    @IsOptional()
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => WorkerScheduleDto)
+    groups?: WorkerScheduleDto[];
 
     @ApiProperty({ type: [Number], example: [1, 2, 3] })
     @IsArray()
