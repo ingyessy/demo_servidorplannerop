@@ -1,9 +1,10 @@
-import { Controller, Post, Body, Delete, Param, Get, ParseIntPipe, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, Delete, Param, Get, ParseIntPipe, UseGuards, UsePipes } from '@nestjs/common';
 import { OperationWorkerService } from './operation-worker.service';
 import { AssignWorkersDto } from './dto/assign-workers.dto';
 import { RemoveWorkersDto } from './dto/remove-workers.dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { DateTransformPipe } from 'src/pipes/date-transform/date-transform.pipe';
 
 @ApiTags('Operation Workers')
 @Controller('operation-worker')
@@ -16,6 +17,7 @@ export class OperationWorkerController {
   @ApiOperation({ summary: 'Asignar trabajadores a una operación' })
   @ApiResponse({ status: 201, description: 'Trabajadores asignados exitosamente' })
   @ApiResponse({ status: 404, description: 'Operación o trabajadores no encontrados' })
+  @UsePipes(new DateTransformPipe())
   assignWorkers(@Body() assignWorkersDto: AssignWorkersDto) {
     return this.operationWorkerService.assignWorkersToOperation(assignWorkersDto);
   }

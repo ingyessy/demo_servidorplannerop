@@ -19,6 +19,7 @@ import { DateTransformPipe } from 'src/pipes/date-transform/date-transform.pipe'
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
+import { StatusOperation } from '@prisma/client';
 
 @Controller('operation')
 @UseGuards(JwtAuthGuard)
@@ -44,12 +45,30 @@ export class OperationController {
     return response;
   }
 
-  @Get('by-status')
-  async findByStatus(){
-    const response = await this.operationService.findActiveOperations();
+   @Get('by-status')
+  async findByStatus(@Query('status') statusParam: StatusOperation | StatusOperation[]) {
+    // Si no se proporciona un parámetro, usar los estados por defecto
+    const statuses = statusParam 
+      ? (Array.isArray(statusParam) ? statusParam : [statusParam]) 
+      : [StatusOperation.INPROGRESS, StatusOperation.PENDING];
+    
+    // Validar que todos los estados sean del enum StatusOperation
+    const validStatuses = Object.values(StatusOperation);
+    const filteredStatuses = statuses.filter(status => 
+      validStatuses.includes(status as StatusOperation)
+    ) as StatusOperation[];
+    
+    // Si después de filtrar no quedan estados válidos, usar los por defecto
+    const statusesToUse = filteredStatuses.length > 0 
+      ? filteredStatuses 
+      : [StatusOperation.INPROGRESS, StatusOperation.PENDING];
+    
+    const response = await this.operationService.findActiveOperations(statusesToUse);
+    
     if (response["status"] === 404) {
       throw new NotFoundException(response["message"]);
-    }  
+    }
+    
     return response;
   }
 

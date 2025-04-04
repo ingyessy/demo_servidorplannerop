@@ -10,7 +10,6 @@ import {
   NotFoundException,
   UseGuards,
   UsePipes,
-  Request,
 } from '@nestjs/common';
 import { WorkerService } from './worker.service';
 import { CreateWorkerDto } from './dto/create-worker.dto';
