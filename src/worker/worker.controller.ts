@@ -45,9 +45,20 @@ export class WorkerController {
     return response;
   }
 
+
+
   @Get()
   findAll() {
     return this.workerService.findAll();
+  }
+
+  @Get(':dni')
+  async findDni(@Param('dni')dni:string){
+    const response = await this.workerService.finDni(dni);
+    if (response["status"] === 404) {
+      throw new NotFoundException(response["message"]);
+    }
+    return response;
   }
 
   @Get(':id')

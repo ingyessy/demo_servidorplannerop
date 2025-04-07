@@ -22,12 +22,14 @@ export class CreateWorkerDto {
   @ApiProperty({example:"5"})
   @Type(() => Number)
   @IsNumber()
-  hoursWorked: number;
+  @IsOptional()
+  hoursWorked?: number;
 
   @ApiProperty({example:"3"})
   @Type(() => Number)
   @IsNumber()
-  failures: number;
+  @IsOptional()
+  failures?: number;
 
   @ApiProperty({ example: 'John' })
   @IsString()

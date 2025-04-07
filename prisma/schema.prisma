@@ -14,19 +14,21 @@ datasource db {
 }
 
 model User {
-  id         Int         @id @default(autoincrement())
-  dni        String      @unique
-  name       String
-  username   String      @unique
-  password   String
-  phone      String
-  occupation String
-  role       Role        @default(ADMIN)
-  areas      JobArea[]
-  worker     Worker[]
-  operation  Operation[]
-  task       Task[]
-  client     Client[]
+  id                Int                 @id @default(autoincrement())
+  dni               String              @unique
+  name              String
+  username          String              @unique
+  password          String
+  phone             String
+  occupation        String
+  role              Role                @default(ADMIN)
+  areas             JobArea[]
+  worker            Worker[]
+  operation         Operation[]
+  task              Task[]
+  client            Client[]
+  calledAttention   CalledAttention[]
+  inChargeOperation InChargeOperation[]
 }
 
 model JobArea {
@@ -42,7 +44,7 @@ model Worker {
   id               Int                @id @default(autoincrement())
   dni              String             @unique
   code             String             @unique
-  phone            String?            @unique
+  phone            String?
   name             String
   createAt         DateTime           @default(now())
   updateAt         DateTime           @updatedAt
@@ -57,26 +59,28 @@ model Worker {
   id_user          Int
   user             User               @relation(fields: [id_user], references: [id])
   operations       Operation_Worker[]
+  calledAttention  CalledAttention[]
 }
 
 model Operation {
-  id        Int                @id @default(autoincrement())
-  status    StatusOperation    @default(PENDING)
-  dateStart DateTime           @db.Date
-  dateEnd   DateTime?          @db.Date
-  timeStrat String
-  timeEnd   String?
-  zone      Int
-  motorShip String?
-  id_user   Int
-  user      User               @relation(fields: [id_user], references: [id])
-  id_area   Int
-  jobArea   JobArea            @relation(fields: [id_area], references: [id])
-  id_task   Int
-  task      Task               @relation(fields: [id_task], references: [id])
-  workers   Operation_Worker[]
-  id_client Int
-  client    Client             @relation(fields: [id_client], references: [id])
+  id                Int                 @id @default(autoincrement())
+  status            StatusOperation     @default(PENDING)
+  dateStart         DateTime            @db.Date
+  dateEnd           DateTime?           @db.Date
+  timeStrat         String
+  timeEnd           String?
+  zone              Int
+  motorShip         String?
+  id_user           Int
+  user              User                @relation(fields: [id_user], references: [id])
+  id_area           Int
+  jobArea           JobArea             @relation(fields: [id_area], references: [id])
+  id_task           Int
+  task              Task                @relation(fields: [id_task], references: [id])
+  workers           Operation_Worker[]
+  id_client         Int
+  client            Client              @relation(fields: [id_client], references: [id])
+  inChargeOperation InChargeOperation[]
 }
 
 model Operation_Worker {
@@ -85,6 +89,10 @@ model Operation_Worker {
   operation    Operation @relation(fields: [id_operation], references: [id])
   id_worker    Int
   worker       Worker    @relation(fields: [id_worker], references: [id])
+  timeStart    String?
+  timeEnd      String?
+  dateStart    DateTime? @db.Date
+  dateEnd      DateTime? @db.Date
 }
 
 model Task {
@@ -103,9 +111,30 @@ model Client {
   operations Operation[]
 }
 
+model CalledAttention {
+  id          Int       @id @default(autoincrement())
+  description String?
+  type        Failures?
+  id_user     Int
+  createAt    DateTime  @default(now())
+  user        User      @relation(fields: [id_user], references: [id])
+  id_worker   Int
+  worker      Worker    @relation(fields: [id_worker], references: [id])
+}
+
+model InChargeOperation {
+  id           Int       @id @default(autoincrement())
+  id_user      Int
+  user         User      @relation(fields: [id_user], references: [id])
+  id_operation Int
+  operation    Operation @relation(fields: [id_operation], references: [id])
+}
+
 enum Role {
   ADMIN
   SUPERADMIN
+  GH
+  SUPERVISOR
 }
 
 enum Status {
@@ -121,4 +150,10 @@ enum StatusOperation {
   INPROGRESS
   COMPLETED
   CANCELED
+}
+
+enum Failures {
+  INASSISTANCE
+  IRRESPECTFUL
+  ABANDONMENT
 }

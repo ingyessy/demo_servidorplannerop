@@ -20,9 +20,10 @@
 
 ## 📋 Descripción
 
-**ServidorCargoPlanner** es un sistema de gestión diseñado específicamente para optimizar la planificación de operaciones y la asignación de trabajadores en entornos empresariales. 
+**ServidorCargoPlanner** es un sistema de gestión diseñado específicamente para optimizar la planificación de operaciones y la asignación de trabajadores en entornos empresariales.
 
 Esta solución integral permite a las organizaciones:
+
 - Organizar eficientemente sus operaciones diarias
 - Asignar personal basado en disponibilidad y habilidades
 - Monitorear en tiempo real el estado de cada operación
@@ -102,8 +103,6 @@ DATABASE_URL="postgresql://usuario:contraseña@localhost:5432/plannerop?schema=p
 SECRET_JWT="tu_clave_secreta_aqui"
 EXPIRES_IN="1d"
 
-# Puerto de la aplicación
-PORT=3000
 ```
 
 ### 2. Configuración de la base de datos
@@ -152,14 +151,15 @@ $ npm run doc
 
 ## 📡 Endpoints principales
 
-| Método | Endpoint | Descripción |
-|--------|----------|-------------|
-| GET | `/operations` | Obtener todas las operaciones |
-| POST | `/operations` | Crear una nueva operación |
-| GET | `/workers` | Obtener todos los trabajadores |
-| POST | `/workers` | Registrar un nuevo trabajador |
-| POST | `/auth/login` | Iniciar sesión |
-| GET | `/areas` | Obtener todas las áreas de trabajo |
+| Método | Endpoint       | Descripción                        |
+| ------ | -------------- | ---------------------------------- |
+| GET    | `/operations`  | Obtener todas las operaciones      |
+| POST   | `/operations`  | Crear una nueva operación          |
+| GET    | `/workers`     | Obtener todos los trabajadores     |
+| POST   | `/workers`     | Registrar un nuevo trabajador      |
+| POST   | `/auth/login`  | Iniciar sesión                     |
+| POST   | `/auth/logout` | Cerrar sesión                      |
+| GET    | `/areas`       | Obtener todas las áreas de trabajo |
 
 ## 💻 Tecnologías
 
@@ -187,8 +187,8 @@ Este proyecto está licenciado bajo la Licencia MIT.
 
 Para preguntas o sugerencias, puedes contactar al equipo de desarrollo:
 
-- Email: [deyler456@gmail.com] [olvadis2004@gmail.com]
-- GitHub: [[KeniBeck](https://github.com/KeniBeck/)] [[GhostRiderDev](https://github.com/GhostRiderDev)]
+- Email: <a style="color:#60a5fa">deyler456@gmail.com</a><a style="color:#60a5fa;  margin-left:10px;">olvadis2004@gmail.com</a>
+- GitHub: <a style="color: #60a5fa;" href="https://github.com/KeniBeck/">KeniBeck</a><a style="color:#60a5fa;  margin-left:10px;"><a style="color:#60a5fa" href="https://github.com/GhostRiderDev">GhostRiderDev</a>
 
 ---
 

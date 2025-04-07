@@ -104,6 +104,7 @@ export class UpdateOperationService {
       this.logger.debug(`Found ${inProgressOperations.length} in-progress operations with end time`);
       
       let updatedCount = 0;
+      let releasedWorkersCount = 0;
 
       for (const operation of inProgressOperations) {
         // Verificar que tenemos todos los datos necesarios
@@ -120,15 +121,44 @@ export class UpdateOperationService {
         const minutesDiff = differenceInMinutes(now, endDateTime);
         this.logger.debug(`Operation ${operation.id}: ${minutesDiff} minutes since end time`);
 
+   
         if (minutesDiff >= 10) {
-          // Actualizar el estado a COMPLETED
+          // Paso 1: Obtener los trabajadores de esta operación desde la tabla intermedia
+          const operationWorkers = await this.prisma.operation_Worker.findMany({
+            where: { id_operation: operation.id },
+            select: { id_worker: true },
+          });
+          
+          const workerIds = operationWorkers.map(ow => ow.id_worker);
+          this.logger.debug(`Found ${workerIds.length} workers for operation ${operation.id}`);
+          
+          // Paso 2: Actualizar el estado de los trabajadores a AVALIABLE
+          if (workerIds.length > 0) {
+            const result = await this.prisma.worker.updateMany({
+              where: {
+                id: { in: workerIds },
+                status: { not: 'AVALIABLE' }
+              },
+              data: { status: 'AVALIABLE' },
+            });
+            
+            releasedWorkersCount += result.count;
+            this.logger.debug(`Released ${result.count} workers from operation ${operation.id}`);
+          }
+          
+          // Paso 3: Actualizar el estado de la operación a COMPLETED
           await this.prisma.operation.update({
             where: { id: operation.id },
             data: { status: 'COMPLETED' },
           });
+          
           updatedCount++;
         }
+        
+      
       }
+
+      
 
       if (updatedCount > 0) {
         this.logger.debug(`Updated ${updatedCount} operations to COMPLETED status`);

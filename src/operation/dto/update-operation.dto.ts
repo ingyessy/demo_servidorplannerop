@@ -9,7 +9,8 @@ class OperationUpdateBaseDto extends OmitType(CreateOperationDto, [
   'id_area',
   'id_task', 
   'id_client',
-  'workerIds'
+  'workerIds',
+  'inChargedIds'
 ] as const) {}
 
 // Hacemos los campos restantes opcionales
@@ -27,6 +28,21 @@ export class UpdateOperationDto extends PartialType(OperationUpdateBaseDto) {
   })
   @IsOptional()
   workers?: {
+    connect?: { id: number }[];
+    disconnect?: { id: number }[];
+  };
+
+  // Si aún necesitas actualizar inCharged, usa un formato que Prisma pueda entender
+  @ApiProperty({ 
+    type: Object, 
+    required: false,
+    example: { 
+      connect: [{ id: 1 }, { id: 2 }],
+      disconnect: [{ id: 3 }]
+    } 
+  })
+  @IsOptional()
+  inCharged?: {
     connect?: { id: number }[];
     disconnect?: { id: number }[];
   };

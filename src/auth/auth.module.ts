@@ -19,7 +19,7 @@ import { CacheModule } from '@nestjs/cache-manager';
       inject: [ConfigService],
       useFactory: (configService: ConfigService)=>({
         secret: configService.get<string>('SECRET_JWT'),
-        signOptions: {expiresIn: '24h'},
+        signOptions: {expiresIn: configService.get<string>('EXPIRES_IN')},
       }),
     }),
   ],
