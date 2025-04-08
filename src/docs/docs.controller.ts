@@ -7,7 +7,7 @@ export class DocsController {
   @Get('login')
   @Public()
   getLoginPage(@Res() res: Response) {
-    return res.sendFile(join(process.cwd(), 'public', 'login.html'));
+    return res.redirect('/login.html'); // Redirige a la página de login
   }
 
   @Get('docs')

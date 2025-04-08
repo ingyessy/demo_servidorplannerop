@@ -60,6 +60,7 @@ document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('loginForm').style.display = 'none';
             document.getElementById('successMsg').style.display = 'block';
             document.getElementById('errorMsg').style.display = 'none';
+            window.location.reload();
           } else {
             document.getElementById('errorMsg').textContent =
               'Credenciales incorrectas';
