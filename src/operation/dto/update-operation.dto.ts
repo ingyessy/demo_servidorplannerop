@@ -11,7 +11,8 @@ class OperationUpdateBaseDto extends OmitType(CreateOperationDto, [
   'id_task', 
   'id_client',
   'workerIds',
-  'inChargedIds'
+  'inChargedIds',
+  'groups'
 ] as const) {}
 
 // Tipo para conectar trabajadores simples (por ID)
