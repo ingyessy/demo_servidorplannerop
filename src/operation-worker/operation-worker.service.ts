@@ -226,6 +226,7 @@ async assignWorkersToOperation(assignWorkersDto: AssignWorkersDto) {
           data: { status: 'AVALIABLE' },
         });
 
+
         return {
           message: `${workerIds.length} workers removed from operation ${id_operation}`,
           removedWorkers: workerIds,

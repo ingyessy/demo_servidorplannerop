@@ -75,6 +75,15 @@ export class CalledAttentionService {
             gte: threeMonthsAgo,
             lte: maxDate,
           },
+        
+        },
+        include:{
+          worker:{
+            select:{
+              dni:true,
+              name:true,
+            }
+          }
         },
         orderBy: {
           createAt: 'desc', // Ordenar por fecha de creación descendente (más reciente primero)
