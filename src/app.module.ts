@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/common';
 import { UserModule } from './user/user.module';
 import { PrismaService } from './prisma/prisma.service';
 import { AreaModule } from './area/area.module';
@@ -15,6 +15,11 @@ import { ValidationModule } from './common/validation/validation.module';
 import { CalledAttentionModule } from './called-attention/called-attention.module';
 import { OperationWorkerModule } from './operation-worker/operation-worker.module';
 import { OperationInChargeModule } from './in-charged/in-charged.module';
+import { DocsController } from './docs/docs.controller';
+import { DocsModule } from './docs/docs.module';
+import { APP_GUARD } from '@nestjs/core';
+import { JwtBlacklistGuard } from './auth/guards/jwt-blacklist.guard';
+import { DocsAuthMiddleware } from './common/middleware/docs-auth.middleware';
 
 
 
@@ -38,7 +43,19 @@ import { OperationInChargeModule } from './in-charged/in-charged.module';
     CalledAttentionModule,
     OperationWorkerModule,
     OperationInChargeModule,
+    DocsModule,
   ],
-  providers: [ PrismaService],
+  providers: [ PrismaService, DocsAuthMiddleware,{provide: APP_GUARD, useClass: JwtBlacklistGuard}],
+  controllers: [DocsController],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+    .apply(DocsAuthMiddleware)
+    .exclude(
+      { path: 'login', method: RequestMethod.ALL },
+      { path: 'login.html', method: RequestMethod.ALL }
+    )
+    .forRoutes('docs', 'docs/*', 'api', 'api/*');
+  }
+}

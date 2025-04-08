@@ -81,6 +81,8 @@ model Operation {
   id_client         Int
   client            Client              @relation(fields: [id_client], references: [id])
   inChargeOperation InChargeOperation[]
+  createAt           DateTime           @default(now())
+  updateAt           DateTime           @default(now()) @updatedAt
 }
 
 model Operation_Worker {
@@ -141,8 +143,8 @@ enum Status {
   AVALIABLE
   ASSIGNED
   UNAVALIABLE
-  DEACTIVATED
-  DISABLE // incapacitado
+  DEACTIVATED //no se usa 
+  DISABLE
 }
 
 enum StatusOperation {

@@ -12,8 +12,8 @@ import { ValidationService } from 'src/common/validation/validation.service';
 export class CalledAttentionService {
   /**
    *  Constructor del servicio
-   * @param prisma 
-   * @param validation 
+   * @param prisma
+   * @param validation
    */
   constructor(
     private prisma: PrismaService,
@@ -50,21 +50,60 @@ export class CalledAttentionService {
   }
 
   /**
-   * Obtener todas las atenciones llamadas
-   * @returns respuesta de la busqueda de todas las atenciones llamadas
+   * Obtener todas las atenciones llamadas de trabajadores activos de los últimos 3 meses
+   * @returns respuesta de la busqueda de todas las atenciones llamadas activas recientes
    */
   async findAll() {
     try {
-      const response = await this.prisma.calledAttention.findMany();
-      if (!response) {
-        return { message: 'Called Attention not found', status: 404 };
+      // Calcular la fecha de hace 3 meses
+      const threeMonthsAgo = new Date();
+      threeMonthsAgo.setDate(threeMonthsAgo.getDate() - 40);
+
+      const maxDate = new Date();
+      maxDate.setDate(maxDate.getDate() + 1);
+
+      const response = await this.prisma.calledAttention.findMany({
+        where: {
+          // Filtrar por estado del trabajador
+          worker: {
+            status: {
+              notIn: ['UNAVALIABLE', 'DEACTIVATED'],
+            },
+          },
+          // Filtrar por fecha (mes actual)
+          createAt: {
+            gte: threeMonthsAgo,
+            lte: maxDate,
+          },
+        
+        },
+        include:{
+          worker:{
+            select:{
+              dni:true,
+              name:true,
+            }
+          }
+        },
+        orderBy: {
+          createAt: 'desc', // Ordenar por fecha de creación descendente (más reciente primero)
+        },
+      });
+
+      if (response.length === 0) {
+        return {
+          message: 'No active called attentions found in the last 3 months',
+          status: 404,
+        };
       }
+
       return response;
     } catch (error) {
+      console.error('Error finding called attentions:', error);
       throw new Error(error.message);
     }
   }
-  
+
   /**
    * Obtener una atencion llamada por ID
    * @param id ID de la atencion llamada a buscar

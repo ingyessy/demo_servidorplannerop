@@ -1,191 +1,55 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Acceso a Documentación - ServidorCargoPlanner</title>
-  <style>
-    body {
-      font-family: 'Segoe UI', sans-serif;
-      background-color: #f8f9fa;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      margin: 0;
-      padding: 20px;
-    }
-    .container {
-      background-color: white;
-      border-radius: 10px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-      width: 100%;
-      max-width: 400px;
-      padding: 30px;
-    }
-    h1 {
-      color: #4361ee;
-      margin-top: 0;
-    }
-    .form-group {
-      margin-bottom: 20px;
-    }
-    label {
-      display: block;
-      margin-bottom: 5px;
-      font-weight: 500;
-    }
-    input {
-      width: 100%;
-      padding: 10px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      font-size: 16px;
-      box-sizing: border-box;
-    }
-    button {
-      background-color: #4361ee;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      padding: 12px 20px;
-      font-size: 16px;
-      cursor: pointer;
-      width: 100%;
-    }
-    button:hover {
-      background-color: #3a56d4;
-    }
-    .error {
-      color: #dc3545;
-      margin-top: 20px;
-    }
-    .success {
-      margin-top: 20px;
-      padding: 15px;
-      background-color: #f8f9fa;
-      border-left: 4px solid #4361ee;
-    }
-    .actions {
-      margin-top: 20px;
-      display: flex;
-      gap: 10px;
-    }
-    .actions button {
-      flex: 1;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h1>Acceso a Documentación</h1>
-    <p>Inicia sesión para acceder a la documentación.</p>
-    
-    <div id="loginForm">
-      <div class="form-group">
-        <label for="username">Usuario</label>
-        <input type="text" id="username" placeholder="Nombre de usuario">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Acceso a Documentación - ServidorCargoPlanner</title>
+    <link rel="stylesheet" href="./style/style.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <div class="father-container">
+    <div class="container">
+      <div class="encabezado">
+        <div class="title">Acceso a Documentación</div>
+        <!-- <div class="parrafo">Inicia sesión para acceder a la documentación.</div> -->
       </div>
-      
-      <div class="form-group">
-        <label for="password">Contraseña</label>
-        <input type="password" id="password" placeholder="Contraseña">
+     
+
+      <div id="loginForm">
+        <div class="form-group">
+          <label for="username">Usuario</label>
+          <input type="text" id="username" placeholder="Nombre de usuario" />
+        </div>
+
+        <div class="form-group">
+          <label for="password">Contraseña</label>
+          <input type="password" id="password" placeholder="Contraseña" />
+        </div>
+
+        <button id="loginBtn">Iniciar Sesión</button>
+
+        <div id="errorMsg" class="error" style="display: none"></div>
       </div>
-      
-      <button id="loginBtn">Iniciar Sesión</button>
-      
-      <div id="errorMsg" class="error" style="display: none;"></div>
+
+      <div id="successMsg" class="success" style="display: none">
+        <p>✅ Has iniciado sesión correctamente.</p>
+        <div class="actions">
+          <button id="apiBtn">⚙️ API Docs</button>
+          <button id="docsBtn">📓 Documentación</button>
+        </div>
+      </div>
     </div>
-    
-    <div id="successMsg" class="success" style="display: none;">
-      <p>Has iniciado sesión correctamente.</p>
-      <div class="actions">
-        <button id="apiBtn">Ver API Docs</button>
-        <button id="docsBtn">Ver Documentación</button>
-      </div>
+
+    <div class="container-image">
+      <img src="./assets/image3-removebg-preview.png" alt="image-container">
     </div>
   </div>
 
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      const token = localStorage.getItem('auth_token');
-      
-      // Si ya hay token, verificar si es válido
-      if (token) {
-        fetch('/api', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        })
-        .then(response => {
-          if (response.ok) {
-            // Token válido, mostrar opciones
-            document.getElementById('loginForm').style.display = 'none';
-            document.getElementById('successMsg').style.display = 'block';
-          } else {
-            // Token inválido, limpiar
-            localStorage.removeItem('auth_token');
-          }
-        });
-      }
-      
-      // Botón de login
-      document.getElementById('loginBtn').addEventListener('click', async () => {
-        const username = document.getElementById('username').value;
-        const password = document.getElementById('password').value;
-        
-        if (!username || !password) {
-          document.getElementById('errorMsg').textContent = 'Por favor ingresa usuario y contraseña';
-          document.getElementById('errorMsg').style.display = 'block';
-          return;
-        }
-        
-        try {
-          const response = await fetch('/login', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ username, password })
-          });
-          
-          const data = await response.json();
-          console.log(data);
-          
-          if (response.ok && data.access_token) {
-            // Guardar token
-            localStorage.setItem('auth_token', data.access_token);
-            
-            // Mostrar mensaje de éxito
-            document.getElementById('loginForm').style.display = 'none';
-            document.getElementById('successMsg').style.display = 'block';
-            document.getElementById('errorMsg').style.display = 'none';
-          } else {
-            document.getElementById('errorMsg').textContent = 'Credenciales incorrectas';
-            document.getElementById('errorMsg').style.display = 'block';
-          }
-        } catch (error) {
-          document.getElementById('errorMsg').textContent = 'Error al conectar con el servidor';
-          document.getElementById('errorMsg').style.display = 'block';
-        }
-      });
-      
-      // Enter para enviar
-      document.getElementById('password').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-          document.getElementById('loginBtn').click();
-        }
-      });
-      
-      // Botones de navegación
-      document.getElementById('apiBtn').addEventListener('click', () => {
-        window.location.href = '/api';
-      });
-      
-      document.getElementById('docsBtn').addEventListener('click', () => {
-        window.location.href = '/docs';
-      });
-    });
-  </script>
-</body>
+    <script src="./js/script.js">
+     
+    </script>
+  </body>
 </html>
