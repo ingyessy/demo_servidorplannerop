@@ -4,15 +4,19 @@ import { CreateLoginDto } from './dto/create-login.dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { Public } from 'src/auth/decorators/public.decorator';
+import {Throttle, ThrottlerGuard } from '@nestjs/throttler';
+
 
 @ApiTags('login')
 @Controller('login')
+@UseGuards(ThrottlerGuard) // Protege todas las rutas de este controlador
 export class LoginController {
   constructor(private readonly loginService: LoginService) {}
 
   @Post()
   @HttpCode(HttpStatus.OK)
   @Public()
+  @Throttle({ default: { limit: 5, ttl: 60000 } }) 
   @ApiOperation({ summary: 'Iniciar sesión' })
   @ApiResponse({ status: 200, description: 'Login exitoso' })
   @ApiResponse({ status: 401, description: 'Credenciales inválidas' })

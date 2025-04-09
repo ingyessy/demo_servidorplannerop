@@ -11,6 +11,11 @@ export class WorkerScheduleDto {
   @IsNumber({}, { each: true })
   workerIds: number[]; // Cambiamos de id único a un array de IDs
 
+  @ApiProperty({example:'ezHU785s2'})
+  @IsOptional()
+  @IsString()
+  id_group?: string;
+
   @ApiProperty({
     description: 'Fecha de inicio para estos trabajadores',
     example: '2023-10-01',
