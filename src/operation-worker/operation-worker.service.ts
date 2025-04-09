@@ -5,6 +5,7 @@ import { ValidationService } from '../common/validation/validation.service';
 import { AssignWorkersDto } from './dto/assign-workers.dto';
 import { RemoveWorkersDto } from './dto/remove-workers.dto';
 import { WorkerScheduleDto } from './dto/worker-schedule.dto';
+import { v4 as uuidv4 } from 'uuid'; 
 
 @Injectable()
 export class OperationWorkerService {
@@ -138,12 +139,13 @@ async assignWorkersToOperation(assignWorkersDto: AssignWorkersDto) {
     if (scheduledGroupsToProcess.length > 0) {
       // Para cada grupo de trabajadores con programación
       scheduledGroupsToProcess.forEach(group => {
-        // Preparar los datos de programación para este grupo
+        const groupId = group.id_group || uuidv4(); // Generar un ID único si no se proporciona
         const groupSchedule = {
           dateStart: group.dateStart ? parseDate(group.dateStart) : null,
           dateEnd: group.dateEnd ? parseDate(group.dateEnd) : null,
           timeStart: group.timeStart || null,
-          timeEnd: group.timeEnd || null
+          timeEnd: group.timeEnd || null,
+          id_group: groupId
         };
         
         // Crear una promesa de creación para cada trabajador en el grupo

@@ -95,6 +95,7 @@ model Operation_Worker {
   timeEnd      String?
   dateStart    DateTime? @db.Date
   dateEnd      DateTime? @db.Date
+  id_group     String?
 }
 
 model Task {

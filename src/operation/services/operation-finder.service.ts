@@ -29,7 +29,8 @@ export class OperationFinderService {
         timeStart: true,
         timeEnd: true,
         dateStart: true,
-        dateEnd: true
+        dateEnd: true,
+        id_group: true,
       },
     },
     inChargeOperation: {

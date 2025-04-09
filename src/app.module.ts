@@ -1,4 +1,9 @@
-import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/common';
+import {
+  MiddlewareConsumer,
+  Module,
+  NestModule,
+  RequestMethod,
+} from '@nestjs/common';
 import { UserModule } from './user/user.module';
 import { PrismaService } from './prisma/prisma.service';
 import { AreaModule } from './area/area.module';
@@ -20,11 +25,22 @@ import { DocsModule } from './docs/docs.module';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtBlacklistGuard } from './auth/guards/jwt-blacklist.guard';
 import { DocsAuthMiddleware } from './common/middleware/docs-auth.middleware';
-
-
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { CustomThrottlerGuard } from './common/guards/throttler.guard';
+import { CacheModule } from '@nestjs/cache-manager';
 
 @Module({
   imports: [
+    CacheModule.register({
+      isGlobal: true,
+      ttl: 60000,
+    }),
+    ThrottlerModule.forRoot( {  throttlers: [
+      {
+        ttl: 60000,
+        limit: 5,
+      },
+    ]}),
     ConfigModule.forRoot({
       isGlobal: true,
     }),
@@ -45,17 +61,22 @@ import { DocsAuthMiddleware } from './common/middleware/docs-auth.middleware';
     OperationInChargeModule,
     DocsModule,
   ],
-  providers: [ PrismaService, DocsAuthMiddleware,{provide: APP_GUARD, useClass: JwtBlacklistGuard}],
+  providers: [
+    PrismaService,
+    DocsAuthMiddleware,
+    {provide: APP_GUARD, useClass: CustomThrottlerGuard},
+    { provide: APP_GUARD, useClass: JwtBlacklistGuard },
+  ],
   controllers: [DocsController],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
-    .apply(DocsAuthMiddleware)
-    .exclude(
-      { path: 'login', method: RequestMethod.ALL },
-      { path: 'login.html', method: RequestMethod.ALL }
-    )
-    .forRoutes('docs', 'docs/*', 'api', 'api/*');
+      .apply(DocsAuthMiddleware)
+      .exclude(
+        { path: 'login', method: RequestMethod.ALL },
+        { path: 'login.html', method: RequestMethod.ALL },
+      )
+      .forRoutes('docs', 'docs/*path', 'api', 'api/*path');
   }
 }
