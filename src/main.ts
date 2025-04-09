@@ -10,15 +10,14 @@ import { DocsAuthMiddleware } from './common/middleware/docs-auth.middleware';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
-  
-  // Middleware para procesar cookies - IMPORTANTE: colocar antes de otras configuraciones
+  app.set('trust proxy', 'loopback');
   app.use(cookieParser());
   
   const authService = app.get(AuthService);
 
   const docsAuthMiddleware = new DocsAuthMiddleware(authService);
-
   app.use(docsAuthMiddleware.use.bind(docsAuthMiddleware));
+  
   app.enableCors({
     origin: '*',
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
