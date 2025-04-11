@@ -42,4 +42,16 @@ export class LoginService {
       throw new Error(error);
     }
   }
+
+  async validationToken(token: string) {
+    try {
+      const user = await this.authService.getTokenExpirationTime(token);
+      if (!user) {
+        throw new UnauthorizedException('Invalid token');
+      }
+      return user;
+    } catch (error) {
+      throw new Error(error);
+    }
+  }
 }

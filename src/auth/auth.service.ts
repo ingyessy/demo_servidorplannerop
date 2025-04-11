@@ -163,4 +163,31 @@ export class AuthService {
       return null;
     }
   }
+
+    /**
+   * Obtiene el tiempo restante de validez de un token en segundos
+   * @param token Token JWT
+   * @returns Tiempo en segundos hasta expiración (0 si ya expiró)
+   */
+    getTokenExpirationTime(token: string): number {
+      try {
+        const decodedToken = this.jwtService.decode(token) as { exp: number };
+        if (!decodedToken || !decodedToken.exp) {
+          return 0;
+        }
+        
+        const expirationTime = decodedToken.exp * 1000; // Convertir a milisegundos
+        const currentTime = Date.now();
+        
+        // Si ya expiró, retornar 0
+        if (expirationTime <= currentTime) {
+          return 0;
+        }
+        
+        // Retornar tiempo restante en segundos
+        return Math.floor((expirationTime - currentTime) / 1000);
+      } catch (error) {
+        return 0;
+      }
+    }
 }
