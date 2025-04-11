@@ -1,10 +1,10 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards, Request, UnauthorizedException } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards, Request, UnauthorizedException, Get } from '@nestjs/common';
 import { LoginService } from './login.service';
 import { CreateLoginDto } from './dto/create-login.dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { Public } from 'src/auth/decorators/public.decorator';
-import {Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerGuard } from '@nestjs/throttler';
 
 
 @ApiTags('login')
@@ -16,7 +16,6 @@ export class LoginController {
   @Post()
   @HttpCode(HttpStatus.OK)
   @Public()
-  @Throttle({ default: { limit: 5, ttl: 60000 } }) 
   @ApiOperation({ summary: 'Iniciar sesión' })
   @ApiResponse({ status: 200, description: 'Login exitoso' })
   @ApiResponse({ status: 401, description: 'Credenciales inválidas' })
@@ -40,5 +39,14 @@ export class LoginController {
     const token = authHeader.split(' ')[1];
     
     return this.loginService.logout(token);
+  }
+
+  @Get('validation')
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Obtener información de la sesión' })
+  async validationToken(@Request() req){
+    const authHeader = req.headers.authorization;
+    const token = authHeader.split(' ')[1];
+    return this.loginService.validationToken(token);
   }
 }
