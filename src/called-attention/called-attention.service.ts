@@ -75,15 +75,14 @@ export class CalledAttentionService {
             gte: threeMonthsAgo,
             lte: maxDate,
           },
-        
         },
-        include:{
-          worker:{
-            select:{
-              dni:true,
-              name:true,
-            }
-          }
+        include: {
+          worker: {
+            select: {
+              dni: true,
+              name: true,
+            },
+          },
         },
         orderBy: {
           createAt: 'desc', // Ordenar por fecha de creación descendente (más reciente primero)
@@ -121,6 +120,113 @@ export class CalledAttentionService {
       }
       return response;
     } catch (error) {
+      throw new Error(error.message);
+    }
+  }
+
+  /**
+   * Obtener atenciones llamadas con paginación y prefetch de páginas adicionales
+   * @param page Número de página (por defecto: 1)
+   * @param limit Elementos por página (por defecto: 10, máximo: 50)
+   * @returns Respuesta paginada con los datos actuales y prefetch de las siguientes 2 páginas
+   */
+  async findAllPaginated(page: number = 1, limit: number = 10) {
+    try {
+      // Validar y ajustar los parámetros de paginación
+      const pageNumber = Math.max(1, page); // Asegura que la página sea al menos 1
+      const itemsPerPage = Math.min(50, Math.max(1, limit)); // Limita entre 1 y 50 elementos
+      const skip = (pageNumber - 1) * itemsPerPage;
+
+      // Obtener el total de registros para el cálculo de páginas
+      const totalItems = await this.prisma.calledAttention.count();
+
+      // Calcular el total de páginas
+      const totalPages = Math.ceil(totalItems / itemsPerPage);
+
+      // Determinar cuántas páginas adicionales podemos cargar (máximo 2)
+      const additionalPagesToFetch = Math.min(2, totalPages - pageNumber);
+
+      // Calcular el total de elementos a recuperar (página actual + páginas adicionales)
+      const totalItemsToFetch = itemsPerPage * (1 + additionalPagesToFetch);
+
+      // Obtener los elementos de la página actual y las siguientes (si hay)
+      const allItems = await this.prisma.calledAttention.findMany({
+        include: {
+          worker: {
+            select: {
+              dni: true,
+              name: true,
+              status: true,
+            },
+          },
+          user: {
+            select: {
+              username: true,
+            },
+          },
+        },
+        orderBy: {
+          createAt: 'desc',
+        },
+        skip: skip,
+        take: totalItemsToFetch,
+      });
+
+      // Si no hay elementos
+      if (allItems.length === 0) {
+        return {
+          message: 'No called attentions found for the requested page',
+          status: 404,
+          pagination: {
+            totalItems: 0,
+            itemsPerPage,
+            currentPage: pageNumber,
+            totalPages: 0,
+            hasNextPage: false,
+            hasPreviousPage: false,
+          },
+          items: [],
+          nextPages: [],
+        };
+      }
+
+      // Separar los elementos entre la página actual y las páginas siguientes
+      const currentPageItems = allItems.slice(0, itemsPerPage);
+
+      // Organizar los elementos de las páginas adicionales
+      type PageItem = {
+        pageNumber: number;
+        items: typeof allItems;
+      };
+      const nextPagesItems: PageItem[] = [];
+      for (let i = 0; i < additionalPagesToFetch; i++) {
+        const startIndex = (i + 1) * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage;
+        const pageItems = allItems.slice(startIndex, endIndex);
+
+        if (pageItems.length > 0) {
+          nextPagesItems.push({
+            pageNumber: pageNumber + i + 1,
+            items: pageItems,
+          });
+        }
+      }
+
+      // Construir la respuesta paginada
+      return {
+        pagination: {
+          totalItems,
+          itemsPerPage,
+          currentPage: pageNumber,
+          totalPages,
+          hasNextPage: pageNumber < totalPages,
+          hasPreviousPage: pageNumber > 1,
+        },
+        items: currentPageItems,
+        nextPages: nextPagesItems,
+      };
+    } catch (error) {
+      console.error('Error finding called attentions with pagination:', error);
       throw new Error(error.message);
     }
   }
