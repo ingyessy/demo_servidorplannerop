@@ -27,6 +27,7 @@ export class OperationTransformerService {
     const inCharge =
       inChargeOperation?.map((ic) => ({
         id: ic.id_user,
+        name: ic.user.name,
       })) || [];
 
     const workerGroups = this.groupWorkersByScheduleAndGroup(workersWithSchedule);

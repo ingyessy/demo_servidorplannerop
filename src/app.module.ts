@@ -22,25 +22,11 @@ import { OperationWorkerModule } from './operation-worker/operation-worker.modul
 import { OperationInChargeModule } from './in-charged/in-charged.module';
 import { DocsController } from './docs/docs.controller';
 import { DocsModule } from './docs/docs.module';
-import { APP_GUARD } from '@nestjs/core';
-import { JwtBlacklistGuard } from './auth/guards/jwt-blacklist.guard';
 import { DocsAuthMiddleware } from './common/middleware/docs-auth.middleware';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
-import { CustomThrottlerGuard } from './common/guards/throttler.guard';
-import { CacheModule } from '@nestjs/cache-manager';
+import { CommonModule } from './common/common.module';
 
 @Module({
   imports: [
-    CacheModule.register({
-      isGlobal: true,
-      ttl: 60000,
-    }),
-    ThrottlerModule.forRoot( {  throttlers: [
-      {
-        ttl: 60000,
-        limit: 20,
-      },
-    ]}),
     ConfigModule.forRoot({
       isGlobal: true,
     }),
@@ -60,12 +46,11 @@ import { CacheModule } from '@nestjs/cache-manager';
     OperationWorkerModule,
     OperationInChargeModule,
     DocsModule,
+    CommonModule,
   ],
   providers: [
     PrismaService,
-    DocsAuthMiddleware,
-    {provide: APP_GUARD, useClass: CustomThrottlerGuard},
-    { provide: APP_GUARD, useClass: JwtBlacklistGuard },
+    DocsAuthMiddleware
   ],
   controllers: [DocsController],
 })

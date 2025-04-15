@@ -6,6 +6,7 @@ import { OperationWorkerService } from 'src/operation-worker/operation-worker.se
 import { StatusOperation } from '@prisma/client';
 import { OperationFinderService } from './services/operation-finder.service';
 import { OperationRelationService } from './services/operation-relation.service';
+import { OperationFilterDto } from './dto/fliter-operation.dto';
 
 /**
  * Servicio para gestionar operaciones
@@ -57,6 +58,12 @@ export class OperationService {
    */
   async findOperationByUser(id_user: number) {
     return await this.finderService.findByUser(id_user);
+  }
+   /**
+   * Obtener operaciones con paginación y filtros opcionales
+   */
+   async findAllPaginated(page: number = 1, limit: number = 10, filters?: OperationFilterDto) {
+    return this.finderService.findAllPaginated(page, limit, filters);
   }
   /**
    * Crea una nueva operación y asigna trabajadores
