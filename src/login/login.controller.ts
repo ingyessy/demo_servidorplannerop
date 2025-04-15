@@ -4,12 +4,12 @@ import { CreateLoginDto } from './dto/create-login.dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { Public } from 'src/auth/decorators/public.decorator';
-import { ThrottlerGuard } from '@nestjs/throttler';
+
 
 
 @ApiTags('login')
 @Controller('login')
-@UseGuards(ThrottlerGuard) // Protege todas las rutas de este controlador
+
 export class LoginController {
   constructor(private readonly loginService: LoginService) {}
 
