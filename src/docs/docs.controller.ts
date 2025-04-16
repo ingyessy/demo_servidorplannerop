@@ -1,8 +1,7 @@
 import { Controller, Get, Res, UseGuards } from '@nestjs/common';
 import { Response } from 'express';
 import { Public } from '../auth/decorators/public.decorator';
-import { CustomThrottlerGuard } from '../common/guards/throttler.guard';
-import { ThrottlerGuard, Throttle } from '@nestjs/throttler';
+
 @Controller()
 export class DocsController {
   @Get('login')

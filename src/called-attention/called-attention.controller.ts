@@ -51,6 +51,29 @@ export class CalledAttentionController {
     return response;
   }
 
+  @Get('paginated')
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Número de página para paginación',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Número de registros por página',
+  })
+  async findPaginated(
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
+  ) {
+    const response = await this.calledAttentionService.findAllPaginated(
+      page,
+      limit,
+    );
+    return response;
+  }
   @Get()
   @ApiQuery({
     name: 'format',
