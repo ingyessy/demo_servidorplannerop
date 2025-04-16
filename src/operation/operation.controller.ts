@@ -119,7 +119,14 @@ export class OperationController {
           throw new BadRequestException('Invalid dateEnd format');
         }
       }
-      
+      if(status && !Array.isArray(status)) {
+        if (Object.values(StatusOperation).includes(status as StatusOperation)) {
+          status = [status as StatusOperation];
+        }
+        else {
+          throw new BadRequestException('Invalid status value');
+        }
+      }
       // Construir el objeto de filtros
       const filters: OperationFilterDto = {};
       

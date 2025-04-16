@@ -6,7 +6,6 @@ export class OperationTransformerService {
     if (!operation) return null;
 
     const { id_area, id_task, workers, inChargeOperation, ...rest } = operation;
-    console.log(workers)
     // Transformar trabajadores incluyendo el groupId
     const workersWithSchedule =
       workers?.map((w) => ({
