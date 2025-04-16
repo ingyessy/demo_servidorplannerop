@@ -19,8 +19,8 @@ export class UserService {
     try {
       const validationUser = await this.findOne(createUserDto.dni);
       const userByUsername = await this.findByUsername(createUserDto.username);
-      if (validationUser["status"] != 404 || userByUsername != null) {
-        return {message:'User already DNI exists', status: 409};
+      if (validationUser['status'] != 404 || userByUsername != null) {
+        return { message: 'User already DNI exists', status: 409 };
       }
 
       const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
@@ -57,7 +57,7 @@ export class UserService {
         },
       });
       if (!response) {
-        return {message:'User not found', status: 404};
+        return { message: 'User not found', status: 404 };
       }
       return response;
     } catch (error) {
@@ -75,7 +75,7 @@ export class UserService {
         where: { id },
       });
       if (!response) {
-        return {message:'User not found', status: 404};
+        return { message: 'User not found', status: 404 };
       }
       return response;
     } catch (error) {
@@ -91,8 +91,16 @@ export class UserService {
   async update(dni: string, updateUserDto: UpdateUserDto) {
     try {
       const validateUser = await this.findOne(dni);
-      if (validateUser["status"] === 404) {
+      if (validateUser['status'] === 404) {
         return validateUser;
+      }
+      if (updateUserDto.username) {
+        const validateUserByUsername = await this.findByUsername(
+          updateUserDto.username,
+        );
+        if (validateUserByUsername && validateUserByUsername.dni != dni) {
+          return { message: 'User already exists', status: 409 };
+        }
       }
 
       const dataUpdate = { ...updateUserDto };
@@ -114,7 +122,7 @@ export class UserService {
   }
   /**
    * eliminar un usuario
-   * @param dni numero de identificacion del usuario a eliminar 
+   * @param dni numero de identificacion del usuario a eliminar
    * @returns respuesta de la eliminacion del usuario
    */
   async remove(dni: string) {
