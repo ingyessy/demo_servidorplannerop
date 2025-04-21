@@ -36,6 +36,12 @@ export class OperationFinderService {
         dateStart: true,
         dateEnd: true,
         id_group: true,
+        worker: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
       },
     },
     inChargeOperation: {
@@ -217,6 +223,17 @@ export class OperationFinderService {
       if (filters?.userId) {
         whereClause.id_user = filters.userId;
       }
+
+      if (filters?.inChargedId) {
+        whereClause.inChargeOperation = {
+          some: {
+            id_user: Array.isArray(filters.inChargedId)
+              ? { in: filters.inChargedId }
+              : filters.inChargedId
+          }
+        };
+      }
+  
 
       // Filtro de búsqueda por texto - buscar en campos relevantes
       if (filters?.search) {

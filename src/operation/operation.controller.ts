@@ -82,6 +82,7 @@ export class OperationController {
   @ApiQuery({ name: 'dateEnd', required: false, type: Date, description: 'Fecha de fin máxima' })
   @ApiQuery({ name: 'jobAreaId', required: false, type: Number, description: 'ID del área de trabajo' })
   @ApiQuery({ name: 'userId', required: false, type: Number, description: 'ID del usuario asociado' })
+  @ApiQuery({ name: 'inChargedId', required: false, type: Number, description: 'ID del usuario encargado' })
   @ApiQuery({ name: 'search', required: false, type: String, description: 'Texto para búsqueda en descripción, tarea o área' })
   @ApiResponse({ 
     status: 200, 
@@ -99,6 +100,7 @@ export class OperationController {
     @Query('dateEnd') dateEndStr?: string,
     @Query('jobAreaId', new DefaultValuePipe(0), ParseIntPipe) jobAreaId?: number,
     @Query('userId', new DefaultValuePipe(0), ParseIntPipe) userId?: number,
+    @Query('inChargedId', new DefaultValuePipe(0), ParseIntPipe) inChargedId?: number,
     @Query('search') search?: string,
   ) {
     try {
@@ -135,6 +137,7 @@ export class OperationController {
       if (dateEnd) filters.dateEnd = dateEnd;
       if (jobAreaId && jobAreaId > 0) filters.jobAreaId = jobAreaId;
       if (userId && userId > 0) filters.userId = userId;
+      if (inChargedId && inChargedId > 0) filters.inChargedId = inChargedId;
       if (search && search.trim() !== '') filters.search = search.trim();
       
       // Llamar al servicio con los filtros
