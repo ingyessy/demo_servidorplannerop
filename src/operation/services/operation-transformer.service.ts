@@ -10,6 +10,7 @@ export class OperationTransformerService {
     const workersWithSchedule =
       workers?.map((w) => ({
         id: w.id_worker,
+        name: w.worker.name,
         groupId: w.id_group, // Incluir el ID del grupo
         schedule: {
           dateStart: w.dateStart
@@ -46,6 +47,7 @@ export class OperationTransformerService {
     const groupedByGroupId = {};
 
     workers.forEach((worker) => {
+
       const { groupId = 'default', ...workerData } = worker;
       
       if (!groupedByGroupId[groupId]) {
@@ -57,7 +59,8 @@ export class OperationTransformerService {
       }
 
       groupedByGroupId[groupId].workers.push({
-        id: workerData.id
+        id: workerData.id,
+        name: workerData.name,
       });
     });
 

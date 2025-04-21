@@ -1,6 +1,14 @@
-import { StatusOperation } from "@prisma/client";
-import { IsOptional, IsString, IsDate, IsNumber, IsArray, IsEnum, ValidateNested } from "class-validator";
-import { Transform, Type } from "class-transformer";
+import { StatusOperation } from '@prisma/client';
+import {
+  IsOptional,
+  IsString,
+  IsDate,
+  IsNumber,
+  IsArray,
+  IsEnum,
+  ValidateNested,
+} from 'class-validator';
+import { Transform, Type } from 'class-transformer';
 
 export class OperationFilterDto {
   @IsOptional()
@@ -27,7 +35,7 @@ export class OperationFilterDto {
   @Transform(({ value }) => {
     // Si es un string que contiene comas, dividirlo y convertirlo a un array de números
     if (typeof value === 'string' && value.includes(',')) {
-      return value.split(',').map(id => parseInt(id.trim(), 10));
+      return value.split(',').map((id) => parseInt(id.trim(), 10));
     }
     // Si es un único valor numérico como string, convertirlo a número
     else if (typeof value === 'string') {
@@ -37,6 +45,21 @@ export class OperationFilterDto {
     return value;
   })
   userId?: number | number[];
+
+  @IsOptional()
+  @Transform(({ value }) => {
+    // Si es un string que contiene comas, dividirlo y convertirlo a un array de números
+    if (typeof value === 'string' && value.includes(',')) {
+      return value.split(',').map((id) => parseInt(id.trim(), 10));
+    }
+    // Si es un único valor numérico como string, convertirlo a número
+    else if (typeof value === 'string') {
+      return parseInt(value, 10);
+    }
+    // Si ya es un número o un array, devolverlo tal cual
+    return value;
+  })
+  inChargedId?: number | number[];
 
   @IsOptional()
   @IsString()
