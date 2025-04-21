@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { StatusOperation } from '@prisma/client';
+import { StatusActivation, StatusOperation } from '@prisma/client';
 import { OperationTransformerService } from './operation-transformer.service';
 import { PaginationService } from 'src/common/services/pagination.service';
 import { OperationFilterDto } from '../dto/fliter-operation.dto';
@@ -58,6 +58,12 @@ export class OperationFinderService {
     },
   };
 
+  private readonly defaultWhere = {
+    status:{
+      not: StatusOperation.DEACTIVATED,
+    },
+  };
+
   constructor(
     private prisma: PrismaService,
     private transformer: OperationTransformerService,
@@ -71,6 +77,7 @@ export class OperationFinderService {
   async findAll() {
     try {
       const response = await this.prisma.operation.findMany({
+        where: this.defaultWhere,
         include: this.defaultInclude,
       });
 
@@ -91,7 +98,7 @@ export class OperationFinderService {
   async findOne(id: number) {
     try {
       const response = await this.prisma.operation.findUnique({
-        where: { id },
+        where: { id, status: { not: StatusOperation.DEACTIVATED } },
         include: this.defaultInclude,
       });
 
@@ -165,6 +172,11 @@ export class OperationFinderService {
                 lte: end,
               },
             },
+            {
+              status: {
+                not: StatusOperation.DEACTIVATED,
+              },
+            },
           ],
         },
         include: this.defaultInclude,
@@ -201,7 +213,11 @@ export class OperationFinderService {
       const skip = (pageNumber - 1) * itemsPerPage;
 
       // Construir el objeto de filtros para la consulta
-      const whereClause: any = {};
+      const whereClause: any = {
+        status:{
+          not: StatusOperation.DEACTIVATED
+        }
+      };
 
       // Aplicar filtros si están definidos
       if (filters?.status && filters.status.length > 0) {
@@ -217,7 +233,7 @@ export class OperationFinderService {
       }
 
       if (filters?.jobAreaId) {
-        whereClause.id_jobArea = filters.jobAreaId;
+        whereClause.id_area = filters.jobAreaId;
       }
 
       if (filters?.userId) {
@@ -318,7 +334,7 @@ export class OperationFinderService {
   async findByUser(id_user: number) {
     try {
       const response = await this.prisma.operation.findMany({
-        where: { id_user },
+        where: { id_user, status: { not: StatusOperation.DEACTIVATED } },
         include: this.defaultInclude,
       });
 
