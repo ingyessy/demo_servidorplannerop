@@ -3,6 +3,7 @@ import { CreateAreaDto } from './dto/create-area.dto';
 import { UpdateAreaDto } from './dto/update-area.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UserService } from 'src/user/user.service';
+import { StatusActivation } from '@prisma/client';
 
 /**
  * Servicio para gestionar areas
@@ -38,7 +39,11 @@ export class AreaService {
    */
   async findAll() {
     try {
-      const response = await this.prisma.jobArea.findMany();
+      const response = await this.prisma.jobArea.findMany({
+        where: {
+          status: StatusActivation.ACTIVE,
+        },
+      });
       return response;
     } catch (error) {
       throw new Error(error);
@@ -54,6 +59,7 @@ export class AreaService {
       const response = await this.prisma.jobArea.findUnique({
         where: {
           id,
+          status: StatusActivation.ACTIVE,
         },
       });
       if (!response) {
