@@ -98,10 +98,6 @@ export class CreateOperationDto {
     @Type(() => WorkerScheduleDto)
     groups?: WorkerScheduleDto[];
 
-    @ApiProperty({ example: "eygg23jss" })
-    @IsOptional()
-    @IsString()
-    id_group?: string
 
     @ApiProperty({ type: [Number], example: [1, 2, 3] })
     @IsArray()
