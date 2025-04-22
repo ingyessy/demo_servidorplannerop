@@ -328,7 +328,7 @@ async assignWorkersToOperation(assignWorkersDto: AssignWorkersDto) {
    * @param workersToUpdate Array de trabajadores con su nueva programación
    * @returns Resultado de la actualización
    */
-  async updateWorkersSchedule(id_operation: number, workersToUpdate: WorkerScheduleDto[]) {
+   async updateWorkersSchedule(id_operation: number, workersToUpdate: WorkerScheduleDto[]) {
     try {
       // Verificar que la operación existe
       const operation = await this.prisma.operation.findUnique({
@@ -339,59 +339,64 @@ async assignWorkersToOperation(assignWorkersDto: AssignWorkersDto) {
         return { message: 'Operation not found', status: 404 };
       }
   
-      // Función para convertir fechas
-      const parseDate = (dateString) => {
-        if (!dateString) return null;
-        return new Date(dateString);
-      };
-  
-      // Para cada grupo de trabajadores
-      const updatePromises: Promise<any>[] = [];
-      let updatedCount = 0;
-  
+      // Para cada grupo de trabajadores a actualizar
       for (const group of workersToUpdate) {
-        const { workerIds, dateStart, dateEnd, timeStart, timeEnd } = group;
-        
+        const { workerIds, dateStart, timeStart } = group;
+  
         if (!workerIds || !Array.isArray(workerIds) || workerIds.length === 0) {
           continue;
         }
   
-        // Buscar las asignaciones existentes para estos trabajadores
-        const existingRecords = await this.findWorkerSchedule(id_operation, workerIds);
-        
-        // Para cada trabajador del grupo
-        for (const workerId of workerIds) {
-          // Encontrar su registro específico
-          const existingRecord = existingRecords.find(record => record.id_worker === workerId);
-          
-          if (existingRecord) {
-            // Aplicar actualizaciones preservando valores existentes si no se proporcionan nuevos
-            
-            const scheduleData = {
-              dateStart: dateStart !== undefined ? (dateStart ? new Date(dateStart) : null) : existingRecord.dateStart,
-              dateEnd: dateEnd !== undefined ? (dateEnd ? new Date(dateEnd) : null) : existingRecord.dateEnd,
-              timeStart: timeStart !== undefined ? timeStart : existingRecord.timeStart,
-              timeEnd: timeEnd !== undefined ? timeEnd : existingRecord.timeEnd
-            };
-            
-            const updatePromise = this.prisma.operation_Worker.update({
-              where: { id: existingRecord.id },
-              data: scheduleData
+        // Buscar un grupo existente con la misma programación
+        const existingGroup = await this.prisma.operation_Worker.findFirst({
+          where: {
+            id_operation,
+            dateStart: dateStart ? new Date(dateStart) : null,
+            timeStart: timeStart || null,
+          },
+        });
+  
+        if (existingGroup) {
+          // Agregar nuevos trabajadores al grupo existente
+          for (const workerId of workerIds) {
+            const alreadyAssigned = await this.prisma.operation_Worker.findFirst({
+              where: {
+                id_operation,
+                id_worker: workerId,
+                id_group: existingGroup.id_group,
+              },
             });
-            
-            updatePromises.push(updatePromise);
-            updatedCount++;
+  
+            if (!alreadyAssigned) {
+              await this.prisma.operation_Worker.create({
+                data: {
+                  id_operation,
+                  id_worker: workerId,
+                  id_group: existingGroup.id_group,
+                  dateStart: existingGroup.dateStart,
+                  timeStart: existingGroup.timeStart,
+                },
+              });
+            }
+          }
+        } else {
+          // Si no existe un grupo, crear uno nuevo
+          const newGroupId = group.id_group || uuidv4();
+          for (const workerId of workerIds) {
+            await this.prisma.operation_Worker.create({
+              data: {
+                id_operation,
+                id_worker: workerId,
+                id_group: newGroupId,
+                dateStart: dateStart ? new Date(dateStart) : null,
+                timeStart: timeStart || null,
+              },
+            });
           }
         }
       }
   
-      // Ejecutar todas las actualizaciones
-      await Promise.all(updatePromises);
-  
-      return { 
-        message: `Updated schedule for ${updatedCount} workers in operation ${id_operation}`,
-        updatedCount 
-      };
+      return { message: 'Workers updated successfully' };
     } catch (error) {
       console.error('Error updating workers schedule:', error);
       throw new Error(error.message);
