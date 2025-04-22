@@ -39,11 +39,7 @@ export class UserService {
    */
   async findAll() {
     try {
-      const response = await this.prisma.user.findMany({
-        where: {
-        status: StatusActivation.ACTIVE,
-        }
-      });
+      const response = await this.prisma.user.findMany();
       return response;
     } catch (error) {
       throw new Error(error);
@@ -59,7 +55,6 @@ export class UserService {
       const response = await this.prisma.user.findUnique({
         where: {
           dni,
-          status: StatusActivation.ACTIVE,
         },
       });
       if (!response) {
@@ -79,7 +74,6 @@ export class UserService {
     try {
       const response = await this.prisma.user.findUnique({
         where: { id ,
-          status: StatusActivation.ACTIVE,
         },
       });
       if (!response) {
@@ -155,7 +149,6 @@ export class UserService {
       const response = await this.prisma.user.findUnique({
         where: {
           username,
-          status: StatusActivation.ACTIVE,
         },
       });
       return response;
