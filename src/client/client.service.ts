@@ -34,8 +34,7 @@ export class ClientService {
    */
   async findAll() {
     try {
-      const response = await this.prisma.client.findMany({ 
-        where: {status: StatusActivation.ACTIVE} });
+      const response = await this.prisma.client.findMany();
 
       return response;
     } catch (error) {
@@ -52,7 +51,6 @@ export class ClientService {
       const response = await this.prisma.client.findUnique({
         where: {
           id: id,
-          status: StatusActivation.ACTIVE,
         },
       });
       if (!response) {
