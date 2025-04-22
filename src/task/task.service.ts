@@ -3,6 +3,7 @@ import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UserService } from 'src/user/user.service';
+import { StatusActivation } from '@prisma/client';
 /**
  * Servicio para gestionar tareas
  * @class TaskService
@@ -48,6 +49,7 @@ export class TaskService {
     try {
       const response = await this.prisma.task.findMany({
         where: {
+          status: StatusActivation.ACTIVE,
           name: {
             equals: name,
             mode: 'insensitive',
@@ -68,7 +70,11 @@ export class TaskService {
    */
   async findAll() {
     try {
-      const response = await this.prisma.task.findMany();
+      const response = await this.prisma.task.findMany({
+        where:{
+          status: StatusActivation.ACTIVE,
+        }
+      });
       return response;
     } catch (error) {
       throw new Error('Error get all Task');
@@ -84,6 +90,7 @@ export class TaskService {
       const response = await this.prisma.task.findUnique({
         where: {
           id: id,
+          status: StatusActivation.ACTIVE,
         },
       });
       if (!response) {

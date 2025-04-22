@@ -22,6 +22,7 @@ model User {
   phone             String
   occupation        String
   role              Role                @default(ADMIN)
+  status            StatusActivation    @default(ACTIVE)
   areas             JobArea[]
   worker            Worker[]
   operation         Operation[]
@@ -34,6 +35,7 @@ model User {
 model JobArea {
   id         Int         @id @default(autoincrement())
   name       String
+  status     StatusActivation      @default(ACTIVE)
   workers    Worker[]
   id_user    Int
   user       User        @relation(fields: [id_user], references: [id])
@@ -81,8 +83,8 @@ model Operation {
   id_client         Int
   client            Client              @relation(fields: [id_client], references: [id])
   inChargeOperation InChargeOperation[]
-  createAt           DateTime           @default(now())
-  updateAt           DateTime           @default(now()) @updatedAt
+  createAt          DateTime            @default(now())
+  updateAt          DateTime            @default(now()) @updatedAt
 }
 
 model Operation_Worker {
@@ -102,6 +104,7 @@ model Task {
   id         Int         @id @default(autoincrement())
   name       String      @unique
   id_user    Int
+  status     StatusActivation @default(ACTIVE)
   user       User        @relation(fields: [id_user], references: [id])
   operations Operation[]
 }
@@ -110,6 +113,7 @@ model Client {
   id         Int         @id @default(autoincrement())
   name       String
   id_user    Int
+  status     StatusActivation @default(ACTIVE)
   user       User        @relation(fields: [id_user], references: [id])
   operations Operation[]
 }
@@ -153,10 +157,16 @@ enum StatusOperation {
   INPROGRESS
   COMPLETED
   CANCELED
+  DEACTIVATED
 }
 
 enum Failures {
   INASSISTANCE
   IRRESPECTFUL
   ABANDONMENT
+}
+
+enum StatusActivation {
+  ACTIVE
+  INACTIVE
 }

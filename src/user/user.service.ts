@@ -3,6 +3,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
+import { StatusActivation } from '@prisma/client';
 /**
  * Servicio para gestionar usuarios
  * @class UserService
@@ -38,7 +39,11 @@ export class UserService {
    */
   async findAll() {
     try {
-      const response = await this.prisma.user.findMany();
+      const response = await this.prisma.user.findMany({
+        where: {
+        status: StatusActivation.ACTIVE,
+        }
+      });
       return response;
     } catch (error) {
       throw new Error(error);
@@ -54,6 +59,7 @@ export class UserService {
       const response = await this.prisma.user.findUnique({
         where: {
           dni,
+          status: StatusActivation.ACTIVE,
         },
       });
       if (!response) {
@@ -72,7 +78,9 @@ export class UserService {
   async findOneById(id: number) {
     try {
       const response = await this.prisma.user.findUnique({
-        where: { id },
+        where: { id ,
+          status: StatusActivation.ACTIVE,
+        },
       });
       if (!response) {
         return { message: 'User not found', status: 404 };
@@ -147,6 +155,7 @@ export class UserService {
       const response = await this.prisma.user.findUnique({
         where: {
           username,
+          status: StatusActivation.ACTIVE,
         },
       });
       return response;
