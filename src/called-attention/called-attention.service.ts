@@ -67,7 +67,7 @@ export class CalledAttentionService {
           // Filtrar por estado del trabajador
           worker: {
             status: {
-              notIn: ['UNAVALIABLE', 'DEACTIVATED'],
+              notIn: ['UNAVALIABLE'],
             },
           },
           // Filtrar por fecha (mes actual)
