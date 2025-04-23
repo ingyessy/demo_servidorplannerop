@@ -49,7 +49,6 @@ export class TaskService {
     try {
       const response = await this.prisma.task.findMany({
         where: {
-          status: StatusActivation.ACTIVE,
           name: {
             equals: name,
             mode: 'insensitive',
@@ -70,11 +69,7 @@ export class TaskService {
    */
   async findAll() {
     try {
-      const response = await this.prisma.task.findMany({
-        where:{
-          status: StatusActivation.ACTIVE,
-        }
-      });
+      const response = await this.prisma.task.findMany();
       return response;
     } catch (error) {
       throw new Error('Error get all Task');
@@ -90,7 +85,6 @@ export class TaskService {
       const response = await this.prisma.task.findUnique({
         where: {
           id: id,
-          status: StatusActivation.ACTIVE,
         },
       });
       if (!response) {
