@@ -198,6 +198,15 @@ export class OperationController {
     return response;
   }
 
+  @Get('by-worker/:id')
+  async findByWorkerId(@Param('id', ParseIntPipe) id: number) {
+    const response = await this.operationService.findByWorker(id);
+    if (response["status"] === 404) {
+      throw new NotFoundException(response["message"]);
+    }
+    return response;
+  }
+
   @Get(':id')
   async findOne(@Param('id', ParseIntPipe) id: number) {
     const response = await this.operationService.findOne(id);
