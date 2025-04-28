@@ -106,6 +106,36 @@ export class OperationFinderService {
       throw new Error(error.message);
     }
   }
+  /**
+   * Encuentra operaciones asociadas a un trabajador específico
+   * @param id_worker - ID del trabajador para buscar operaciones
+   * @returns Lista de operaciones asociadas al trabajador o mensaje de error
+   */
+  async findByWorker(id_worker: number) {
+    try {
+      const response = await this.prisma.operation.findMany({
+        where: {
+          workers: {
+            some: {
+              id_worker,
+            },
+          },
+        },
+        include: this.defaultInclude,
+      });
+
+      if (response.length === 0) {
+        return { message: 'No operations found for this worker', status: 404 };
+      }
+
+      return response.map((op) =>
+        this.transformer.transformOperationResponse(op),
+      );
+    } catch (error) {
+      console.error(`Error finding operations for worker ${id_worker}:`, error);
+      throw new Error(error.message);
+    }
+  }
 
   /**
    * Encuentra todas las operaciones con los estados especificados

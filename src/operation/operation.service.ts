@@ -66,6 +66,14 @@ export class OperationService {
     return this.finderService.findAllPaginated(page, limit, filters);
   }
   /**
+   * Encuentra operaciones asociadas a un trabajador específico
+   * @param id_worker ID del trabajador para buscar operaciones
+   * @returns Lista de operaciones asociadas al trabajador o mensaje de error
+   */
+  async findByWorker(id_worker: number) {
+    return await this.finderService.findByWorker(id_worker);
+  }
+  /**
    * Crea una nueva operación y asigna trabajadores
    * @param createOperationDto - Datos de la operación a crear
    * @returns Operación creada
