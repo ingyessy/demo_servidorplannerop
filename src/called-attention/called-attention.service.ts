@@ -125,6 +125,27 @@ export class CalledAttentionService {
   }
 
   /**
+   * Obtener una atencion llamada por ID sin validacion de existencia
+   * @param id ID de la atencion llamada a buscar
+   * @returns respuesta de la busqueda de la atencion llamada
+   */
+  async findOneByIdWorker(id: number) {
+    try {
+      const response = await this.prisma.calledAttention.findMany({
+        where: {
+          id_worker: id,
+        },
+      });
+      if (!response) {
+        return { message: 'Called Attention not found', status: 404 };
+      }
+      return response;
+    } catch (error) {
+      throw new Error(error.message);
+    }
+  }
+
+  /**
    * Obtener atenciones llamadas con paginación y prefetch de páginas adicionales
    * @param page Número de página (por defecto: 1)
    * @param limit Elementos por página (por defecto: 10, máximo: 50)

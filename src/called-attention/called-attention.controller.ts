@@ -51,6 +51,18 @@ export class CalledAttentionController {
     return response;
   }
 
+  @Get('by-worker/:id')
+  async findWorker(
+    @Param('id', ParseIntPipe) id: number,){
+    const response = await this.calledAttentionService.findOneByIdWorker(id);
+    if (response['status'] === 404) {
+      throw new NotFoundException(response['message']);
+    } else if (response['status'] === 400) {
+      throw new BadRequestException(response['message']);
+    }
+    return response;
+    }
+
   @Get('paginated')
   @ApiQuery({
     name: 'page',
