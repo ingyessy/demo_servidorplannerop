@@ -278,6 +278,12 @@ export class OperationFinderService {
           },
         ];
       }
+      const colombiaTime = new Date(new Date().toLocaleString('en-US', {timeZone: 'America/Bogota'}));
+
+      // hacer where por fecha actual
+      const whereClauseDate = {
+        dateStart: colombiaTime
+      }
   
       // Obtener el total de registros para el cálculo de páginas
       const totalItems = await this.prisma.operation.count({
@@ -287,7 +293,7 @@ export class OperationFinderService {
       // Obtener el total de operaciones "en curso" (INPROGRESS)
       const totalInProgress = await this.prisma.operation.count({
         where: {
-          ...whereClause,
+          ...whereClauseDate,
           status: StatusOperation.INPROGRESS,
         },
       });
@@ -295,7 +301,7 @@ export class OperationFinderService {
       // Obtener el total de operaciones "pendientes" (PENDING)
       const totalPending = await this.prisma.operation.count({
         where: {
-          ...whereClause,
+          ...whereClauseDate,
           status: StatusOperation.PENDING,
         },
       });
@@ -303,7 +309,7 @@ export class OperationFinderService {
       // Obtener el total de operaciones "completadas" (COMPLETED)
       const totalCompleted = await this.prisma.operation.count({
         where: {
-          ...whereClause,
+          ...whereClauseDate,
           status: StatusOperation.COMPLETED,
         },
       });
