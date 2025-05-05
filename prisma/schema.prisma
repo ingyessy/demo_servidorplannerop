@@ -33,12 +33,12 @@ model User {
 }
 
 model JobArea {
-  id         Int         @id @default(autoincrement())
+  id         Int              @id @default(autoincrement())
   name       String
-  status     StatusActivation      @default(ACTIVE)
+  status     StatusActivation @default(ACTIVE)
   workers    Worker[]
   id_user    Int
-  user       User        @relation(fields: [id_user], references: [id])
+  user       User             @relation(fields: [id_user], references: [id])
   operations Operation[]
 }
 
@@ -62,6 +62,7 @@ model Worker {
   user             User               @relation(fields: [id_user], references: [id])
   operations       Operation_Worker[]
   calledAttention  CalledAttention[]
+  feeding         WorkerFeeding[]
 }
 
 model Operation {
@@ -85,6 +86,7 @@ model Operation {
   inChargeOperation InChargeOperation[]
   createAt          DateTime            @default(now())
   updateAt          DateTime            @default(now()) @updatedAt
+  feeding           WorkerFeeding[]
 }
 
 model Operation_Worker {
@@ -101,20 +103,20 @@ model Operation_Worker {
 }
 
 model Task {
-  id         Int         @id @default(autoincrement())
-  name       String      @unique
+  id         Int              @id @default(autoincrement())
+  name       String           @unique
   id_user    Int
   status     StatusActivation @default(ACTIVE)
-  user       User        @relation(fields: [id_user], references: [id])
+  user       User             @relation(fields: [id_user], references: [id])
   operations Operation[]
 }
 
 model Client {
-  id         Int         @id @default(autoincrement())
+  id         Int              @id @default(autoincrement())
   name       String
   id_user    Int
   status     StatusActivation @default(ACTIVE)
-  user       User        @relation(fields: [id_user], references: [id])
+  user       User             @relation(fields: [id_user], references: [id])
   operations Operation[]
 }
 
@@ -135,6 +137,25 @@ model InChargeOperation {
   user         User      @relation(fields: [id_user], references: [id])
   id_operation Int
   operation    Operation @relation(fields: [id_operation], references: [id])
+}
+
+model WorkerFeeding {
+  id           Int           @id @default(autoincrement())
+  id_worker    Int
+  id_operation Int
+  dateFeeding  DateTime      @db.Date
+  type         FeedingStatus
+  createAt     DateTime      @default(now())
+  updateAt     DateTime      @updatedAt
+  worker       Worker        @relation(fields: [id_worker], references: [id])
+  operation    Operation     @relation(fields: [id_operation], references: [id])
+}
+
+enum FeedingStatus {
+  BREAKFAST
+  LUNCH
+  DINNER
+  SNACK
 }
 
 enum Role {

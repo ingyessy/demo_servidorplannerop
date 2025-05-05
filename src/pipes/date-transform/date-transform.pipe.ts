@@ -68,7 +68,7 @@ export class DateTransformPipe implements PipeTransform {
     for (const field of dateFields) {
       // Verificar si el campo existe y no está vacío
       if (
-        result[field] !== undefined && 
+        result[field] !== undefined &&
         result[field] !== null && 
         result[field] !== ''
       ) {
@@ -81,6 +81,32 @@ export class DateTransformPipe implements PipeTransform {
           // Convertir a objeto Date
           result[field] = new Date(result[field]);
         
+        }
+      } else if (result[field] === '') {
+        // Si es una cadena vacía, asignar null para campos opcionales
+        result[field] = null;
+      }
+    }
+
+    // Lista de campos de fecha y hora que necesitan transformación
+    const dateTimeFields = ['dateFeeding'];
+
+    // Procesar campos de fecha y hora
+    for (const field of dateTimeFields) {
+      if (
+        result[field] !== undefined &&
+        result[field] !== null && 
+        result[field] !== ''
+      ) {
+        if (typeof result[field] === 'string') {
+          if (!this.isValidDateTimeFormat(result[field])) {
+            throw new BadRequestException(
+              `${field} debe tener formato YYYY-MM-DD HH:MM o YYYY-MM-DDTHH:MM:SS: ${result[field]}`,
+            );
+          }
+          if (result[field].includes(' ')) {
+            result[field] = result[field].replace(' ', 'T') + ':00.000Z';
+          }
         }
       } else if (result[field] === '') {
         // Si es una cadena vacía, asignar null para campos opcionales
@@ -124,6 +150,27 @@ export class DateTransformPipe implements PipeTransform {
 
     // Verificar que sea una fecha válida
     const date = new Date(dateStr);
+    return date instanceof Date && !isNaN(date.getTime());
+  }
+
+  // Validar formato de fecha y hora (YYYY-MM-DD HH:MM o ISO)
+  private isValidDateTimeFormat(dateTimeStr: string): boolean {
+    // Dos formatos posibles:
+    // 1. ISO format: YYYY-MM-DDTHH:MM:SS.sssZ
+    // 2. Formato simple: YYYY-MM-DD HH:MM
+    
+    // Verificar formato ISO
+    const isoRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?$/;
+    
+    // Verificar formato simple YYYY-MM-DD HH:MM
+    const simpleRegex = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/;
+    
+    if (!isoRegex.test(dateTimeStr) && !simpleRegex.test(dateTimeStr)) {
+      return false;
+    }
+
+    // Verificar que sea una fecha y hora válida
+    const date = new Date(dateTimeStr);
     return date instanceof Date && !isNaN(date.getTime());
   }
 
