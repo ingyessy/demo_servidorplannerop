@@ -9,6 +9,7 @@ import {
   UsePipes,
   UseGuards,
   NotFoundException,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { FeedingService } from './feeding.service';
 import { CreateFeedingDto } from './dto/create-feeding.dto';
@@ -44,12 +45,12 @@ export class FeedingController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateFeedingDto: UpdateFeedingDto) {
-    return this.feedingService.update(+id, updateFeedingDto);
+  update(@Param('id', ParseIntPipe) id: number, @Body() updateFeedingDto: UpdateFeedingDto) {
+    return this.feedingService.update(id, updateFeedingDto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.feedingService.remove(+id);
+  remove(@Param('id', ParseIntPipe) id: number) {
+    return this.feedingService.remove(id);
   }
 }
