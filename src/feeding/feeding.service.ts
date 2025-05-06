@@ -60,11 +60,33 @@ export class FeedingService {
     }
   }
 
+  async findByOperation(id_operation: number) {
+    try {
+      const validation = await this.validation.validateAllIds({
+        id_operation,
+      })
+      if (validation && 'status' in validation && validation.status === 404) {
+        return validation;
+      }
+      const response = await this.prisma.workerFeeding.findMany({
+        where: {
+          id_operation,
+        },
+      });
+      if (!response) {
+        return { message: 'Feeding not found', status: 404 };
+      }
+      return response;
+    } catch (error) {
+      throw new Error(error);
+    }
+  }
+
   async update(id: number, updateFeedingDto: UpdateFeedingDto) {
     try {
       const validation = await this.validation.validateAllIds({
         id_operation: updateFeedingDto.id_operation,
-      })
+      });
       if (validation && 'status' in validation && validation.status === 404) {
         return validation;
       }

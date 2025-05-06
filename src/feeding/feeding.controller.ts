@@ -35,13 +35,29 @@ export class FeedingController {
   }
 
   @Get()
-  findAll() {
-    return this.feedingService.findAll();
+  async findAll() {
+    const response = await this.feedingService.findAll();
+    if (response['status'] === 404) {
+      throw new NotFoundException(response['message']);
+    }
+    return response;
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.feedingService.findOne(+id);
+  async findOne(@Param('id', ParseIntPipe) id: number) {
+    const response = await this.feedingService.findOne(id);
+    if (response['status'] === 404) {
+      throw new NotFoundException(response['message']);
+    }
+    return response;
+  }
+  @Get('operation/:id')
+  async findByOperation(@Param('id', ParseIntPipe) id: number) {
+    const response = await this.feedingService.findByOperation(id);
+    if (response['status'] === 404) {
+      throw new NotFoundException(response['message']);
+    }
+    return response;
   }
 
   @Patch(':id')
@@ -50,7 +66,11 @@ export class FeedingController {
   }
 
   @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.feedingService.remove(id);
+  async remove(@Param('id', ParseIntPipe) id: number) {
+    const response = await this.feedingService.remove(id);
+    if (response['status'] === 404) {
+      throw new NotFoundException(response['message']);
+    }
+    return response;
   }
 }
