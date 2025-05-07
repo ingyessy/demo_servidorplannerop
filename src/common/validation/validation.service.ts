@@ -15,6 +15,7 @@ export class ValidationService {
     id_area,
     id_task,
     id_client,
+    id_operation,
     code_worker,
     dni_worker,
     workerIds,
@@ -25,6 +26,7 @@ export class ValidationService {
     id_area?: number;
     id_task?: number;
     id_client?: number;
+    id_operation?: number;
     dni_worker?: string;
     code_worker?: string;
     phone_worker?: string;
@@ -177,6 +179,17 @@ export class ValidationService {
             message: `InCharged not found: ${nonExistingInChargedIds.join(', ')}`,
             status: 404,
           };
+        }
+      }
+
+      // 10. Validar operación si se proporciona
+      if (id_operation !== undefined) {
+        const operation = await this.prisma.operation.findUnique({
+          where: { id: id_operation },
+        });
+
+        if (!operation) {
+          return { message: 'Operation not found', status: 404 };
         }
       }
 
