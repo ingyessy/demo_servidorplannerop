@@ -60,8 +60,54 @@ export class FeedingService {
     }
   }
 
-  update(id: number, updateFeedingDto: UpdateFeedingDto) {
-    return `This action updates a #${id} feeding`;
+  async findByOperation(id_operation: number) {
+    try {
+      const validation = await this.validation.validateAllIds({
+        id_operation,
+      })
+      if (validation && 'status' in validation && validation.status === 404) {
+        return validation;
+      }
+      const response = await this.prisma.workerFeeding.findMany({
+        where: {
+          id_operation,
+        },
+      });
+      if (!response) {
+        return { message: 'Feeding not found', status: 404 };
+      }
+      return response;
+    } catch (error) {
+      throw new Error(error);
+    }
+  }
+
+  async update(id: number, updateFeedingDto: UpdateFeedingDto) {
+    try {
+      const validation = await this.validation.validateAllIds({
+        id_operation: updateFeedingDto.id_operation,
+      });
+      if (validation && 'status' in validation && validation.status === 404) {
+        return validation;
+      }
+      const validate = await this.findOne(id);
+      if (validate && 'status' in validate && validate.status === 404) {
+        return validate;
+      }
+      const response = await this.prisma.workerFeeding.update({
+        where: {
+          id,
+        },
+        data: {
+          ...updateFeedingDto,
+          id_worker: updateFeedingDto.id_worker,
+          id_operation: updateFeedingDto.id_operation,
+        },
+      });
+      return response;
+    } catch (error) {
+      throw new Error(error);
+    }
   }
 
   async remove(id: number) {
@@ -76,6 +122,8 @@ export class FeedingService {
         },
       });
       return response;
-    } catch (error) {}
+    } catch (error) {
+      throw new Error(error);
+    }
   }
 }

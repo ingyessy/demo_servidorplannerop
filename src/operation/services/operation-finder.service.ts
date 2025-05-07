@@ -46,7 +46,7 @@ export class OperationFinderService {
     },
     inChargeOperation: {
       select: {
-       id_user: true,
+        id_user: true,
         id_operation: true,
         user: {
           select: {
@@ -57,7 +57,6 @@ export class OperationFinderService {
       },
     },
   };
-
 
   constructor(
     private prisma: PrismaService,
@@ -195,7 +194,7 @@ export class OperationFinderService {
               dateEnd: {
                 lte: end,
               },
-            }
+            },
           ],
         },
         include: this.defaultInclude,
@@ -220,7 +219,7 @@ export class OperationFinderService {
    * @param filters Filtros opcionales para las operaciones
    * @returns Respuesta paginada con los datos actuales y prefetch de las siguientes 2 páginas
    */
-   async findAllPaginated(
+  async findAllPaginated(
     page: number = 1,
     limit: number = 10,
     filters?: OperationFilterDto,
@@ -230,33 +229,33 @@ export class OperationFinderService {
       const pageNumber = Math.max(1, page);
       const itemsPerPage = Math.min(50, Math.max(1, limit));
       const skip = (pageNumber - 1) * itemsPerPage;
-  
+
       // Construir el objeto de filtros para la consulta
-      const whereClause: any = { };
-  
+      const whereClause: any = {};
+
       // Aplicar filtros si están definidos
       if (filters?.status && filters.status.length > 0) {
         whereClause.status = { in: filters.status };
       }
-  
+
       if (filters?.dateStart) {
         whereClause.dateStart = { gte: filters.dateStart };
       }
-  
+
       if (filters?.dateEnd) {
         whereClause.dateEnd = { lte: filters.dateEnd };
       }
-  
+
       if (filters?.jobAreaId) {
         whereClause.jobArea = {
           id: filters.jobAreaId,
         };
       }
-  
+
       if (filters?.userId) {
         whereClause.id_user = filters.userId;
       }
-  
+
       if (filters?.inChargedId) {
         whereClause.inChargeOperation = {
           some: {
@@ -266,7 +265,7 @@ export class OperationFinderService {
           },
         };
       }
-  
+
       if (filters?.search) {
         whereClause.OR = [
           { description: { contains: filters.search, mode: 'insensitive' } },
@@ -278,18 +277,20 @@ export class OperationFinderService {
           },
         ];
       }
-      const colombiaTime = new Date(new Date().toLocaleString('en-US', {timeZone: 'America/Bogota'}));
+      const colombiaTime = new Date(
+        new Date().toLocaleString('en-US', { timeZone: 'America/Bogota' }),
+      );
 
       // hacer where por fecha actual
       const whereClauseDate = {
-        dateStart: colombiaTime
-      }
-  
+        dateStart: colombiaTime,
+      };
+
       // Obtener el total de registros para el cálculo de páginas
       const totalItems = await this.prisma.operation.count({
         where: whereClause,
       });
-  
+
       // Obtener el total de operaciones "en curso" (INPROGRESS)
       const totalInProgress = await this.prisma.operation.count({
         where: {
@@ -297,7 +298,7 @@ export class OperationFinderService {
           status: StatusOperation.INPROGRESS,
         },
       });
-  
+
       // Obtener el total de operaciones "pendientes" (PENDING)
       const totalPending = await this.prisma.operation.count({
         where: {
@@ -305,7 +306,14 @@ export class OperationFinderService {
           status: StatusOperation.PENDING,
         },
       });
-  
+
+      const totalCanceled = await this.prisma.operation.count({
+        where: {
+          ...whereClauseDate,
+          status: StatusOperation.CANCELED,
+        },
+      });
+
       // Obtener el total de operaciones "completadas" (COMPLETED)
       const totalCompleted = await this.prisma.operation.count({
         where: {
@@ -313,16 +321,16 @@ export class OperationFinderService {
           status: StatusOperation.COMPLETED,
         },
       });
-  
+
       // Calcular el total de páginas
       const totalPages = Math.ceil(totalItems / itemsPerPage);
-  
+
       // Determinar cuántas páginas adicionales podemos cargar (máximo 2)
       const additionalPagesToFetch = Math.min(2, totalPages - pageNumber);
-  
+
       // Calcular el total de elementos a recuperar (página actual + páginas adicionales)
       const totalItemsToFetch = itemsPerPage * (1 + additionalPagesToFetch);
-  
+
       // Obtener los elementos de la página actual y las siguientes (si hay)
       const allItems = await this.prisma.operation.findMany({
         where: whereClause,
@@ -334,12 +342,12 @@ export class OperationFinderService {
         skip: skip,
         take: totalItemsToFetch,
       });
-  
+
       // Transformar todas las operaciones
       const transformedItems = allItems.map((operation) =>
         this.transformer.transformOperationResponse(operation),
       );
-  
+
       // Si no hay elementos, devolver respuesta vacía
       if (transformedItems.length === 0) {
         return {
@@ -354,13 +362,14 @@ export class OperationFinderService {
             hasPreviousPage: false,
             totalInProgress: 0,
             totalPending: 0,
+            totalCanceled: 0,
             totalCompleted: 0,
           },
           items: [],
           nextPages: [],
         };
       }
-  
+
       // Usar el servicio de paginación para organizar los resultados
       const paginatedResults = this.paginationService.processPaginatedResults(
         transformedItems,
@@ -368,7 +377,7 @@ export class OperationFinderService {
         itemsPerPage,
         totalItems,
       );
-  
+
       // Agregar los totales al objeto de paginación
       return {
         ...paginatedResults,
@@ -377,6 +386,7 @@ export class OperationFinderService {
           totalInProgress, // Total de operaciones en curso
           totalPending, // Total de operaciones pendientes
           totalCompleted, // Total de operaciones completadas
+          totalCanceled, // Total de operaciones canceladas
         },
       };
     } catch (error) {
