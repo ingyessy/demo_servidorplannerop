@@ -160,6 +160,14 @@ export class ExcelExportService {
     
     // Manejar "ID" específicamente
     formatted = formatted.replace(/\bId\b/g, 'ID');
+   
+    formatted = formatted.replace(/\bDateDisableEnd\b/g, 'Fecha Final');
+    formatted = formatted.replace(/\bDateDisableStart\b/g, 'Fecha Inicio');
+    formatted = formatted.replace(/\bType\b/g, 'Tipo');
+    formatted = formatted.replace(/\bCause\b/g, 'Causa');
+    formatted = formatted.replace(/\bID Worker\b/g, 'ID Trabajador');
+    formatted = formatted.replace(/\bWorker - Name\b/g, 'Nombre de Trabajador');
+    formatted = formatted.replace(/\bWorker - Dni\b/g, 'CC Trabajador');
     
     return formatted;
   }
