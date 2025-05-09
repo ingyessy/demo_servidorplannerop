@@ -22,6 +22,7 @@ import { ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { FilterInabilityDto } from './dto/filter-inability';
 import { Response } from 'express';
 import { ExcelExportService } from 'src/common/validation/services/excel-export.service';
+import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 
 @Controller('inability')
 @UseGuards(JwtAuthGuard)
@@ -34,7 +35,8 @@ export class InabilityController {
 
   @Post()
   @UsePipes(DateTransformPipe)
-  async create(@Body() createInabilityDto: CreateInabilityDto) {
+  async create(@Body() createInabilityDto: CreateInabilityDto, @CurrentUser('userId') userId: number) {
+    createInabilityDto.id_user = userId;
     const response = await this.inabilityService.create(createInabilityDto);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);

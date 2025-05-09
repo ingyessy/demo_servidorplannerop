@@ -1,4 +1,4 @@
-import { ApiProperty } from "@nestjs/swagger";
+import { ApiHideProperty, ApiProperty } from "@nestjs/swagger";
 import { CauseDisability, TypeDisability } from "@prisma/client"
 import { Type } from "class-transformer";
 import { IsEnum, IsNumber, IsOptional, IsString, Matches } from "class-validator"
@@ -33,4 +33,10 @@ export class CreateInabilityDto {
     @Type(() => Number)
     @IsNumber()
     id_worker: number
+
+    @ApiHideProperty()
+    @Type(() => Number)
+    @IsNumber()
+    @IsOptional()
+    id_user: number
 }

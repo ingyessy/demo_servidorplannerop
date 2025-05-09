@@ -223,39 +223,35 @@ export class OperationFinderService {
     page: number = 1,
     limit: number = 10,
     filters?: OperationFilterDto,
+    activatePaginated: boolean = true,
   ) {
     try {
-      // Validar y ajustar los parámetros de paginación
-      const pageNumber = Math.max(1, page);
-      const itemsPerPage = Math.min(50, Math.max(1, limit));
-      const skip = (pageNumber - 1) * itemsPerPage;
-
       // Construir el objeto de filtros para la consulta
       const whereClause: any = {};
-
+  
       // Aplicar filtros si están definidos
       if (filters?.status && filters.status.length > 0) {
         whereClause.status = { in: filters.status };
       }
-
+  
       if (filters?.dateStart) {
         whereClause.dateStart = { gte: filters.dateStart };
       }
-
+  
       if (filters?.dateEnd) {
         whereClause.dateEnd = { lte: filters.dateEnd };
       }
-
+  
       if (filters?.jobAreaId) {
         whereClause.jobArea = {
           id: filters.jobAreaId,
         };
       }
-
+  
       if (filters?.userId) {
         whereClause.id_user = filters.userId;
       }
-
+  
       if (filters?.inChargedId) {
         whereClause.inChargeOperation = {
           some: {
@@ -265,7 +261,7 @@ export class OperationFinderService {
           },
         };
       }
-
+  
       if (filters?.search) {
         whereClause.OR = [
           { description: { contains: filters.search, mode: 'insensitive' } },
@@ -277,121 +273,139 @@ export class OperationFinderService {
           },
         ];
       }
-      const colombiaTime = new Date(
-        new Date().toLocaleString('en-US', { timeZone: 'America/Bogota' }),
-      );
-
-      // hacer where por fecha actual
-      const whereClauseDate = {
-        dateStart: colombiaTime,
-      };
-
-      // Obtener el total de registros para el cálculo de páginas
-      const totalItems = await this.prisma.operation.count({
-        where: whereClause,
-      });
-
-      // Obtener el total de operaciones "en curso" (INPROGRESS)
-      const totalInProgress = await this.prisma.operation.count({
-        where: {
-          ...whereClauseDate,
-          status: StatusOperation.INPROGRESS,
-        },
-      });
-
-      // Obtener el total de operaciones "pendientes" (PENDING)
-      const totalPending = await this.prisma.operation.count({
-        where: {
-          ...whereClauseDate,
-          status: StatusOperation.PENDING,
-        },
-      });
-
-      const totalCanceled = await this.prisma.operation.count({
-        where: {
-          ...whereClauseDate,
-          status: StatusOperation.CANCELED,
-        },
-      });
-
-      // Obtener el total de operaciones "completadas" (COMPLETED)
-      const totalCompleted = await this.prisma.operation.count({
-        where: {
-          ...whereClauseDate,
-          status: StatusOperation.COMPLETED,
-        },
-      });
-
-      // Calcular el total de páginas
-      const totalPages = Math.ceil(totalItems / itemsPerPage);
-
-      // Determinar cuántas páginas adicionales podemos cargar (máximo 2)
-      const additionalPagesToFetch = Math.min(2, totalPages - pageNumber);
-
-      // Calcular el total de elementos a recuperar (página actual + páginas adicionales)
-      const totalItemsToFetch = itemsPerPage * (1 + additionalPagesToFetch);
-
-      // Obtener los elementos de la página actual y las siguientes (si hay)
-      const allItems = await this.prisma.operation.findMany({
+  
+      // Configuración base de la consulta
+      const queryConfig: any = {
         where: whereClause,
         include: this.defaultInclude,
         orderBy: [
-          { status: 'asc' }, // Primero por estado
-          { dateStart: 'desc' }, // Luego por fecha más reciente
+          { status: 'asc' },
+          { dateStart: 'desc' },
         ],
-        skip: skip,
-        take: totalItemsToFetch,
+      };
+  
+      // Obtener conteos totales
+      const totalItems = await this.prisma.operation.count({
+        where: whereClause,
       });
-
-      // Transformar todas las operaciones
-      const transformedItems = allItems.map((operation) =>
-        this.transformer.transformOperationResponse(operation),
+  
+      const colombiaTime = new Date(
+        new Date().toLocaleString('en-US', { timeZone: 'America/Bogota' }),
       );
+  
+      const whereClauseDate = {
+        dateStart: colombiaTime,
+      };
+  
+      // Obtener estadísticas
+      const [totalInProgress, totalPending, totalCompleted, totalCanceled] = await Promise.all([
+        this.prisma.operation.count({
+          where: {
+            ...whereClauseDate,
+            status: StatusOperation.INPROGRESS,
+          },
+        }),
+        this.prisma.operation.count({
+          where: {
+            ...whereClauseDate,
+            status: StatusOperation.PENDING,
+          },
+        }),
+        this.prisma.operation.count({
+          where: {
+            ...whereClauseDate,
+            status: StatusOperation.COMPLETED,
+          },
+        }),
+        this.prisma.operation.count({
+          where: {
+            ...whereClauseDate,
+            status: StatusOperation.CANCELED,
+          },
+        }),
+      ]);
 
-      // Si no hay elementos, devolver respuesta vacía
+      if (activatePaginated === false) {
+        const allItems = await this.prisma.operation.findMany(queryConfig);
+        const transformedItems = allItems.map(operation => 
+          this.transformer.transformOperationResponse(operation)
+        );
+  
+        return {
+          items: transformedItems,
+          pagination: {
+            totalItems,
+            totalInProgress,
+            totalPending,
+            totalCompleted,
+            totalCanceled,
+            currentPage: 1,
+            totalPages: 1,
+            hasNextPage: false,
+            hasPreviousPage: false,
+            itemsPerPage: totalItems
+          },
+          nextPages: []
+        };
+      }
+  
+      // Si hay paginación, aplicar skip y take
+      const pageNumber = Math.max(1, page);
+      const itemsPerPage = Math.min(50, Math.max(1, limit));
+      const skip = (pageNumber - 1) * itemsPerPage;
+  
+      queryConfig.skip = skip;
+      queryConfig.take = itemsPerPage;
+  
+      // Obtener items paginados
+      const paginatedItems = await this.prisma.operation.findMany(queryConfig);
+      const transformedItems = paginatedItems.map(operation => 
+        this.transformer.transformOperationResponse(operation)
+      );
+  
+      // Si no hay resultados, devolver respuesta vacía
       if (transformedItems.length === 0) {
         return {
-          message: 'No operations found for the requested criteria',
-          status: 404,
+          items: [],
           pagination: {
             totalItems: 0,
-            itemsPerPage,
+            totalInProgress,
+            totalPending,
+            totalCompleted,
+            totalCanceled,
             currentPage: pageNumber,
             totalPages: 0,
             hasNextPage: false,
             hasPreviousPage: false,
-            totalInProgress: 0,
-            totalPending: 0,
-            totalCanceled: 0,
-            totalCompleted: 0,
+            itemsPerPage
           },
-          items: [],
-          nextPages: [],
+          nextPages: []
         };
       }
-
-      // Usar el servicio de paginación para organizar los resultados
+  
+      // Procesar resultados paginados
       const paginatedResults = this.paginationService.processPaginatedResults(
         transformedItems,
         pageNumber,
         itemsPerPage,
         totalItems,
       );
-
-      // Agregar los totales al objeto de paginación
+  
+      // Retornar resultados con estadísticas
       return {
         ...paginatedResults,
         pagination: {
           ...paginatedResults.pagination,
-          totalInProgress, // Total de operaciones en curso
-          totalPending, // Total de operaciones pendientes
-          totalCompleted, // Total de operaciones completadas
-          totalCanceled, // Total de operaciones canceladas
+          totalInProgress,
+          totalPending,
+          totalCompleted,
+          totalCanceled,
         },
       };
+  
     } catch (error) {
-      console.error('Error finding operations with pagination:', error);
-      throw new Error(error.message);
+      console.error('Error finding operations:', error);
+      throw new Error(`Error finding operations: ${error.message}`);
     }
   }
 

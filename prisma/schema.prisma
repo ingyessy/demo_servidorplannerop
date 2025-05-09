@@ -30,6 +30,7 @@ model User {
   client            Client[]
   calledAttention   CalledAttention[]
   inChargeOperation InChargeOperation[]
+  inability         Inability[]
 }
 
 model JobArea {
@@ -159,6 +160,10 @@ model Inability {
   type             TypeDisability
   cause            CauseDisability
   id_worker        Int
+  id_user          Int
+  createAt         DateTime        @default(now())
+  updateAt         DateTime        @updatedAt
+  user             User            @relation(fields: [id_user], references: [id])
   worker         Worker         @relation(fields: [id_worker], references: [id])
 }
 
