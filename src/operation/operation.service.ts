@@ -62,8 +62,8 @@ export class OperationService {
    /**
    * Obtener operaciones con paginación y filtros opcionales
    */
-   async findAllPaginated(page: number = 1, limit: number = 10, filters?: OperationFilterDto) {
-    return this.finderService.findAllPaginated(page, limit, filters);
+   async findAllPaginated(page: number = 1, limit: number = 10, filters?: OperationFilterDto, activatePaginated: boolean = true) {
+    return this.finderService.findAllPaginated(page, limit, filters,activatePaginated);
   }
   /**
    * Encuentra operaciones asociadas a un trabajador específico

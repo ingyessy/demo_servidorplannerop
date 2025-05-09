@@ -30,6 +30,7 @@ model User {
   client            Client[]
   calledAttention   CalledAttention[]
   inChargeOperation InChargeOperation[]
+  inability         Inability[]
 }
 
 model JobArea {
@@ -63,6 +64,7 @@ model Worker {
   operations       Operation_Worker[]
   calledAttention  CalledAttention[]
   feeding         WorkerFeeding[]
+  inability        Inability[]
 }
 
 model Operation {
@@ -151,6 +153,31 @@ model WorkerFeeding {
   operation    Operation     @relation(fields: [id_operation], references: [id])
 }
 
+model Inability {
+  id               Int             @id @default(autoincrement())
+  dateDisableStart DateTime
+  dateDisableEnd   DateTime
+  type             TypeDisability
+  cause            CauseDisability
+  id_worker        Int
+  id_user          Int
+  createAt         DateTime        @default(now())
+  updateAt         DateTime        @updatedAt
+  user             User            @relation(fields: [id_user], references: [id])
+  worker         Worker         @relation(fields: [id_worker], references: [id])
+}
+
+enum TypeDisability {
+  INITIAL
+  EXTENSION
+}
+
+enum CauseDisability {
+  LABOR
+  TRANSIT
+  DISEASE
+}
+
 enum FeedingStatus {
   BREAKFAST
   LUNCH
@@ -169,7 +196,7 @@ enum Status {
   AVALIABLE
   ASSIGNED
   UNAVALIABLE
-  DEACTIVATED //no se usa 
+  DEACTIVATED
   DISABLE
 }
 

@@ -25,6 +25,7 @@ import { DocsModule } from './docs/docs.module';
 import { DocsAuthMiddleware } from './common/middleware/docs-auth.middleware';
 import { CommonModule } from './common/common.module';
 import { FeedingModule } from './feeding/feeding.module';
+import { InabilityModule } from './inability/inability.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { FeedingModule } from './feeding/feeding.module';
     DocsModule,
     CommonModule,
     FeedingModule,
+    InabilityModule,
   ],
   providers: [
     PrismaService,
