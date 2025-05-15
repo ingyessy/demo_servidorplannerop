@@ -8,10 +8,10 @@ import { OperationInChargeService } from 'src/in-charged/in-charged.service';
 import { OperationFinderService } from './services/operation-finder.service';
 import { OperationTransformerService } from './services/operation-transformer.service';
 import { OperationRelationService } from './services/operation-relation.service';
-import { PaginationService } from 'src/common/services/pagination.service';
+import { PaginationModule } from 'src/common/services/pagination/pagination.module';
 
 @Module({
-  imports: [ValidationModule],
+  imports: [ValidationModule, PaginationModule],
   controllers: [OperationController],
   providers: [
     OperationService,
@@ -19,7 +19,6 @@ import { PaginationService } from 'src/common/services/pagination.service';
     OperationWorkerService,
     OperationInChargeService,
     OperationFinderService,
-    PaginationService,
     OperationTransformerService,
     OperationRelationService,
   ],

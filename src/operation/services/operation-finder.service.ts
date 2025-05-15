@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { StatusActivation, StatusOperation } from '@prisma/client';
+import { StatusOperation } from '@prisma/client';
 import { OperationTransformerService } from './operation-transformer.service';
-import { PaginationService } from 'src/common/services/pagination.service';
 import { OperationFilterDto } from '../dto/fliter-operation.dto';
+import { PaginateOperationService } from 'src/common/services/pagination/operation/paginate-operation.service';
 
 /**
  * Servicio para buscar operaciones
@@ -61,7 +61,7 @@ export class OperationFinderService {
   constructor(
     private prisma: PrismaService,
     private transformer: OperationTransformerService,
-    private paginationService: PaginationService,
+    private paginationService: PaginateOperationService,
   ) {}
 
   /**
@@ -226,183 +226,18 @@ export class OperationFinderService {
     activatePaginated: boolean = true,
   ) {
     try {
-      // Construir el objeto de filtros para la consulta
-      const whereClause: any = {};
-  
-      // Aplicar filtros si están definidos
-      if (filters?.status && filters.status.length > 0) {
-        whereClause.status = { in: filters.status };
-      }
-  
-      if (filters?.dateStart) {
-        whereClause.dateStart = { gte: filters.dateStart };
-      }
-  
-      if (filters?.dateEnd) {
-        whereClause.dateEnd = { lte: filters.dateEnd };
-      }
-  
-      if (filters?.jobAreaId) {
-        whereClause.jobArea = {
-          id: filters.jobAreaId,
-        };
-      }
-  
-      if (filters?.userId) {
-        whereClause.id_user = filters.userId;
-      }
-  
-      if (filters?.inChargedId) {
-        whereClause.inChargeOperation = {
-          some: {
-            id_user: Array.isArray(filters.inChargedId)
-              ? { in: filters.inChargedId }
-              : filters.inChargedId,
-          },
-        };
-      }
-  
-      if (filters?.search) {
-        whereClause.OR = [
-          { description: { contains: filters.search, mode: 'insensitive' } },
-          { task: { name: { contains: filters.search, mode: 'insensitive' } } },
-          {
-            jobArea: {
-              name: { contains: filters.search, mode: 'insensitive' },
-            },
-          },
-        ];
-      }
-  
-      // Configuración base de la consulta
-      const queryConfig: any = {
-        where: whereClause,
-        include: this.defaultInclude,
-        orderBy: [
-          { status: 'asc' },
-          { dateStart: 'desc' },
-        ],
-      };
-  
-      // Obtener conteos totales
-      const totalItems = await this.prisma.operation.count({
-        where: whereClause,
-      });
-  
-      const colombiaTime = new Date(
-        new Date().toLocaleString('en-US', { timeZone: 'America/Bogota' }),
-      );
-  
-      const whereClauseDate = {
-        dateStart: colombiaTime,
-      };
-  
-      // Obtener estadísticas
-      const [totalInProgress, totalPending, totalCompleted, totalCanceled] = await Promise.all([
-        this.prisma.operation.count({
-          where: {
-            ...whereClauseDate,
-            status: StatusOperation.INPROGRESS,
-          },
-        }),
-        this.prisma.operation.count({
-          where: {
-            ...whereClauseDate,
-            status: StatusOperation.PENDING,
-          },
-        }),
-        this.prisma.operation.count({
-          where: {
-            ...whereClauseDate,
-            status: StatusOperation.COMPLETED,
-          },
-        }),
-        this.prisma.operation.count({
-          where: {
-            ...whereClauseDate,
-            status: StatusOperation.CANCELED,
-          },
-        }),
-      ]);
 
-      if (activatePaginated === false) {
-        const allItems = await this.prisma.operation.findMany(queryConfig);
-        const transformedItems = allItems.map(operation => 
-          this.transformer.transformOperationResponse(operation)
-        );
-  
-        return {
-          items: transformedItems,
-          pagination: {
-            totalItems,
-            totalInProgress,
-            totalPending,
-            totalCompleted,
-            totalCanceled,
-            currentPage: 1,
-            totalPages: 1,
-            hasNextPage: false,
-            hasPreviousPage: false,
-            itemsPerPage: totalItems
-          },
-          nextPages: []
-        };
-      }
-  
-      // Si hay paginación, aplicar skip y take
-      const pageNumber = Math.max(1, page);
-      const itemsPerPage = Math.min(50, Math.max(1, limit));
-      const skip = (pageNumber - 1) * itemsPerPage;
-  
-      queryConfig.skip = skip;
-      queryConfig.take = itemsPerPage;
-  
-      // Obtener items paginados
-      const paginatedItems = await this.prisma.operation.findMany(queryConfig);
-      const transformedItems = paginatedItems.map(operation => 
-        this.transformer.transformOperationResponse(operation)
-      );
-  
-      // Si no hay resultados, devolver respuesta vacía
-      if (transformedItems.length === 0) {
-        return {
-          items: [],
-          pagination: {
-            totalItems: 0,
-            totalInProgress,
-            totalPending,
-            totalCompleted,
-            totalCanceled,
-            currentPage: pageNumber,
-            totalPages: 0,
-            hasNextPage: false,
-            hasPreviousPage: false,
-            itemsPerPage
-          },
-          nextPages: []
-        };
-      }
-  
-      // Procesar resultados paginados
-      const paginatedResults = this.paginationService.processPaginatedResults(
-        transformedItems,
-        pageNumber,
-        itemsPerPage,
-        totalItems,
-      );
-  
-      // Retornar resultados con estadísticas
-      return {
-        ...paginatedResults,
-        pagination: {
-          ...paginatedResults.pagination,
-          totalInProgress,
-          totalPending,
-          totalCompleted,
-          totalCanceled,
-        },
-      };
-  
+
+      // Usar el servicio de paginación mejorado
+      return await this.paginationService.paginateOperations({
+        prisma: this.prisma,
+        page,
+        limit,
+        filters,
+        activatePaginated,
+        defaultInclude: this.defaultInclude,
+        transformer: this.transformer,
+      });
     } catch (error) {
       console.error('Error finding operations:', error);
       throw new Error(`Error finding operations: ${error.message}`);
