@@ -25,7 +25,6 @@ import {
   ApiBearerAuth,
   ApiOperation,
   ApiQuery,
-  ApiResponse,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
