@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { StatusActivation, StatusOperation } from '@prisma/client';
+import { StatusActivation, StatusOperation, Prisma } from '@prisma/client';
 import { OperationTransformerService } from './operation-transformer.service';
 import { PaginationService } from 'src/common/services/pagination.service';
 import { OperationFilterDto } from '../dto/fliter-operation.dto';
@@ -141,39 +141,50 @@ export class OperationFinderService {
    * @param statuses - Estados para filtrar las operaciones
    * @returns Lista de operaciones filtradas o mensaje de error
    */
-  async findByStatuses(statuses: StatusOperation[]) {
+    async findByStatuses(statuses: StatusOperation[]) {
     try {
-      const response = await this.prisma.operation.findMany({
+      // Verificar si los estados son válidos y si es en estado completadas
+      const isCompletedOnly = statuses.length === 1 && 
+        statuses[0] === StatusOperation.COMPLETED;
+      
+      // Si solo se busca COMPLETED, no se permiten otros estados
+      const queryConfig = {
         where: {
           status: {
             in: statuses,
           },
         },
         include: this.defaultInclude,
-        orderBy: {
-          dateStart: 'asc', // Ordenar por fecha de inicio ascendente
-        },
-      });
-
+        orderBy: isCompletedOnly 
+          ? { dateStart: Prisma.SortOrder.desc }  // Most recent first for COMPLETED
+          : { dateStart: Prisma.SortOrder.asc },  // Keep original order for other statuses
+      };
+      
+      // Limitar a 30 resultados si solo se busca COMPLETED
+      if (isCompletedOnly) {
+        queryConfig['take'] = 30;
+      }
+      
+      const response = await this.prisma.operation.findMany(queryConfig);
+  
       if (response.length === 0) {
         return {
           message: `No operations found with statuses: ${statuses.join(', ')}`,
           status: 404,
         };
       }
-
-      // Transformar operaciones - workerGroups ya está incluido en la transformación
+  
+      // Transformar la respuesta
       const transformedResponse = response.map((operation) =>
         this.transformer.transformOperationResponse(operation),
       );
-
+  
       return transformedResponse;
     } catch (error) {
       console.error('Error finding operations by status:', error);
       throw new Error(`Error finding operations by status: ${error.message}`);
     }
   }
-
   /**
    * Busca operaciones por rango de fechas
    * @param start Fecha de inicio
@@ -279,8 +290,8 @@ export class OperationFinderService {
         where: whereClause,
         include: this.defaultInclude,
         orderBy: [
-          { status: 'asc' },
-          { dateStart: 'desc' },
+          { status: Prisma.SortOrder.asc },
+          { dateStart: Prisma.SortOrder.desc },
         ],
       };
   
