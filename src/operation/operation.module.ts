@@ -8,6 +8,7 @@ import { OperationInChargeService } from 'src/in-charged/in-charged.service';
 import { OperationFinderService } from './services/operation-finder.service';
 import { OperationTransformerService } from './services/operation-transformer.service';
 import { OperationRelationService } from './services/operation-relation.service';
+import { WorkerAnalyticsService } from 'src/operation/services/workerAnalytics.service';
 import { PaginationModule } from 'src/common/services/pagination/pagination.module';
 
 @Module({
@@ -21,6 +22,7 @@ import { PaginationModule } from 'src/common/services/pagination/pagination.modu
     OperationFinderService,
     OperationTransformerService,
     OperationRelationService,
+    WorkerAnalyticsService
   ],
 })
 export class OperationModule {}
