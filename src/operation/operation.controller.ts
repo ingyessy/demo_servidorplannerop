@@ -47,6 +47,7 @@ export class OperationController {
 
   @Post()
   @UsePipes(new DateTransformPipe())
+   @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
   async create(
     @Body() createOperationDto: CreateOperationDto,
     @CurrentUser('userId') userId: number,

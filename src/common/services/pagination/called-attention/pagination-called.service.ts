@@ -54,7 +54,7 @@ export class PaginationCalledService {
           },
           user: {
             select: {
-              username: true,
+              name: true,
             },
           },
         },
