@@ -6,6 +6,7 @@ import {
   IsNumber,
   IsArray,
   IsEnum,
+  ValidateNested,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 

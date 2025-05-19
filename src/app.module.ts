@@ -26,7 +26,6 @@ import { DocsAuthMiddleware } from './common/middleware/docs-auth.middleware';
 import { CommonModule } from './common/common.module';
 import { FeedingModule } from './feeding/feeding.module';
 import { InabilityModule } from './inability/inability.module';
-import { PaginationModule } from './common/services/pagination/pagination.module';
 
 @Module({
   imports: [
@@ -52,7 +51,6 @@ import { PaginationModule } from './common/services/pagination/pagination.module
     CommonModule,
     FeedingModule,
     InabilityModule,
-    PaginationModule,
   ],
   providers: [
     PrismaService,

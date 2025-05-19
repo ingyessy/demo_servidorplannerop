@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { StatusOperation } from '@prisma/client';
+import { StatusActivation, StatusOperation, Prisma } from '@prisma/client';
 import { OperationTransformerService } from './operation-transformer.service';
+import { PaginationService } from 'src/common/services/pagination.service';
 import { OperationFilterDto } from '../dto/fliter-operation.dto';
-import { PaginateOperationService } from 'src/common/services/pagination/operation/paginate-operation.service';
 
 /**
  * Servicio para buscar operaciones
@@ -61,7 +61,7 @@ export class OperationFinderService {
   constructor(
     private prisma: PrismaService,
     private transformer: OperationTransformerService,
-    private paginationService: PaginateOperationService,
+    private paginationService: PaginationService,
   ) {}
 
   /**
@@ -141,39 +141,50 @@ export class OperationFinderService {
    * @param statuses - Estados para filtrar las operaciones
    * @returns Lista de operaciones filtradas o mensaje de error
    */
-  async findByStatuses(statuses: StatusOperation[]) {
+    async findByStatuses(statuses: StatusOperation[]) {
     try {
-      const response = await this.prisma.operation.findMany({
+      // Verificar si los estados son válidos y si es en estado completadas
+      const isCompletedOnly = statuses.length === 1 && 
+        statuses[0] === StatusOperation.COMPLETED;
+      
+      // Si solo se busca COMPLETED, no se permiten otros estados
+      const queryConfig = {
         where: {
           status: {
             in: statuses,
           },
         },
         include: this.defaultInclude,
-        orderBy: {
-          dateStart: 'asc', // Ordenar por fecha de inicio ascendente
-        },
-      });
-
+        orderBy: isCompletedOnly 
+          ? { dateStart: Prisma.SortOrder.desc }  // Most recent first for COMPLETED
+          : { dateStart: Prisma.SortOrder.asc },  // Keep original order for other statuses
+      };
+      
+      // Limitar a 30 resultados si solo se busca COMPLETED
+      if (isCompletedOnly) {
+        queryConfig['take'] = 30;
+      }
+      
+      const response = await this.prisma.operation.findMany(queryConfig);
+  
       if (response.length === 0) {
         return {
           message: `No operations found with statuses: ${statuses.join(', ')}`,
           status: 404,
         };
       }
-
-      // Transformar operaciones - workerGroups ya está incluido en la transformación
+  
+      // Transformar la respuesta
       const transformedResponse = response.map((operation) =>
         this.transformer.transformOperationResponse(operation),
       );
-
+  
       return transformedResponse;
     } catch (error) {
       console.error('Error finding operations by status:', error);
       throw new Error(`Error finding operations by status: ${error.message}`);
     }
   }
-
   /**
    * Busca operaciones por rango de fechas
    * @param start Fecha de inicio
@@ -226,18 +237,183 @@ export class OperationFinderService {
     activatePaginated: boolean = true,
   ) {
     try {
-
-
-      // Usar el servicio de paginación mejorado
-      return await this.paginationService.paginateOperations({
-        prisma: this.prisma,
-        page,
-        limit,
-        filters,
-        activatePaginated,
-        defaultInclude: this.defaultInclude,
-        transformer: this.transformer,
+      // Construir el objeto de filtros para la consulta
+      const whereClause: any = {};
+  
+      // Aplicar filtros si están definidos
+      if (filters?.status && filters.status.length > 0) {
+        whereClause.status = { in: filters.status };
+      }
+  
+      if (filters?.dateStart) {
+        whereClause.dateStart = { gte: filters.dateStart };
+      }
+  
+      if (filters?.dateEnd) {
+        whereClause.dateEnd = { lte: filters.dateEnd };
+      }
+  
+      if (filters?.jobAreaId) {
+        whereClause.jobArea = {
+          id: filters.jobAreaId,
+        };
+      }
+  
+      if (filters?.userId) {
+        whereClause.id_user = filters.userId;
+      }
+  
+      if (filters?.inChargedId) {
+        whereClause.inChargeOperation = {
+          some: {
+            id_user: Array.isArray(filters.inChargedId)
+              ? { in: filters.inChargedId }
+              : filters.inChargedId,
+          },
+        };
+      }
+  
+      if (filters?.search) {
+        whereClause.OR = [
+          { description: { contains: filters.search, mode: 'insensitive' } },
+          { task: { name: { contains: filters.search, mode: 'insensitive' } } },
+          {
+            jobArea: {
+              name: { contains: filters.search, mode: 'insensitive' },
+            },
+          },
+        ];
+      }
+  
+      // Configuración base de la consulta
+      const queryConfig: any = {
+        where: whereClause,
+        include: this.defaultInclude,
+        orderBy: [
+          { status: Prisma.SortOrder.asc },
+          { dateStart: Prisma.SortOrder.desc },
+        ],
+      };
+  
+      // Obtener conteos totales
+      const totalItems = await this.prisma.operation.count({
+        where: whereClause,
       });
+  
+      const colombiaTime = new Date(
+        new Date().toLocaleString('en-US', { timeZone: 'America/Bogota' }),
+      );
+  
+      const whereClauseDate = {
+        dateStart: colombiaTime,
+      };
+  
+      // Obtener estadísticas
+      const [totalInProgress, totalPending, totalCompleted, totalCanceled] = await Promise.all([
+        this.prisma.operation.count({
+          where: {
+            ...whereClauseDate,
+            status: StatusOperation.INPROGRESS,
+          },
+        }),
+        this.prisma.operation.count({
+          where: {
+            ...whereClauseDate,
+            status: StatusOperation.PENDING,
+          },
+        }),
+        this.prisma.operation.count({
+          where: {
+            ...whereClauseDate,
+            status: StatusOperation.COMPLETED,
+          },
+        }),
+        this.prisma.operation.count({
+          where: {
+            ...whereClauseDate,
+            status: StatusOperation.CANCELED,
+          },
+        }),
+      ]);
+
+      if (activatePaginated === false) {
+        const allItems = await this.prisma.operation.findMany(queryConfig);
+        const transformedItems = allItems.map(operation => 
+          this.transformer.transformOperationResponse(operation)
+        );
+  
+        return {
+          items: transformedItems,
+          pagination: {
+            totalItems,
+            totalInProgress,
+            totalPending,
+            totalCompleted,
+            totalCanceled,
+            currentPage: 1,
+            totalPages: 1,
+            hasNextPage: false,
+            hasPreviousPage: false,
+            itemsPerPage: totalItems
+          },
+          nextPages: []
+        };
+      }
+  
+      // Si hay paginación, aplicar skip y take
+      const pageNumber = Math.max(1, page);
+      const itemsPerPage = Math.min(50, Math.max(1, limit));
+      const skip = (pageNumber - 1) * itemsPerPage;
+  
+      queryConfig.skip = skip;
+      queryConfig.take = itemsPerPage;
+  
+      // Obtener items paginados
+      const paginatedItems = await this.prisma.operation.findMany(queryConfig);
+      const transformedItems = paginatedItems.map(operation => 
+        this.transformer.transformOperationResponse(operation)
+      );
+  
+      // Si no hay resultados, devolver respuesta vacía
+      if (transformedItems.length === 0) {
+        return {
+          items: [],
+          pagination: {
+            totalItems: 0,
+            totalInProgress,
+            totalPending,
+            totalCompleted,
+            totalCanceled,
+            currentPage: pageNumber,
+            totalPages: 0,
+            hasNextPage: false,
+            hasPreviousPage: false,
+            itemsPerPage
+          },
+          nextPages: []
+        };
+      }
+  
+      // Procesar resultados paginados
+      const paginatedResults = this.paginationService.processPaginatedResults(
+        transformedItems,
+        pageNumber,
+        itemsPerPage,
+        totalItems,
+      );
+  
+      // Retornar resultados con estadísticas
+      return {
+        ...paginatedResults,
+        pagination: {
+          ...paginatedResults.pagination,
+          totalInProgress,
+          totalPending,
+          totalCompleted,
+          totalCanceled,
+        },
+      };
+  
     } catch (error) {
       console.error('Error finding operations:', error);
       throw new Error(`Error finding operations: ${error.message}`);

@@ -12,7 +12,6 @@ import {
   UseGuards,
   Query,
   Res,
-  ValidationPipe,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { CalledAttentionService } from './called-attention.service';
@@ -21,11 +20,8 @@ import { UpdateCalledAttentionDto } from './dto/update-called-attention.dto';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { ParseIntPipe } from 'src/pipes/parse-int/parse-int.pipe';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
-import { ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { ExcelExportService } from 'src/common/validation/services/excel-export.service';
-import { FilterCalledAttentionDto } from './dto/filter-called-attention';
-import { PaginatedCalledAttentionQueryDto } from './dto/paginate-called-attention.dto';
-import { BooleanTransformPipe } from 'src/pipes/boolean-transform/boolean-transform.pipe';
 
 @Controller('called-attention')
 @UseGuards(JwtAuthGuard)
@@ -56,7 +52,8 @@ export class CalledAttentionController {
   }
 
   @Get('by-worker/:id')
-  async findWorker(@Param('id', ParseIntPipe) id: number) {
+  async findWorker(
+    @Param('id', ParseIntPipe) id: number,){
     const response = await this.calledAttentionService.findOneByIdWorker(id);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
@@ -64,64 +61,30 @@ export class CalledAttentionController {
       throw new BadRequestException(response['message']);
     }
     return response;
-  }
+    }
 
   @Get('paginated')
-  @ApiOperation({
-    summary: 'Obtener llamadas de atención con paginación y filtros opcionales',
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Número de página para paginación',
   })
   @ApiQuery({
-    name: 'activatePaginated',
+    name: 'limit',
     required: false,
-    type: Boolean,
-    description:
-      'Si es false, devuelve todos los registros sin paginación. Por defecto: true',
+    type: Number,
+    description: 'Número de registros por página',
   })
   async findPaginated(
-    @Query(new ValidationPipe({ transform: true, whitelist: true }))
-    queryParams: PaginatedCalledAttentionQueryDto,
-    @Query('activatePaginated', new BooleanTransformPipe(true))
-    activatePaginated: boolean,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
   ) {
-    try {
-      // Construir el objeto de filtros
-      const filters: FilterCalledAttentionDto = {};
-
-      if (queryParams.type) {
-        filters.type = queryParams.type;
-      }
-
-      if (queryParams.startDate) {
-        filters.startDate = queryParams.startDate;
-      }
-
-      if (queryParams.endDate) {
-        filters.endDate = queryParams.endDate;
-      }
-
-      if (queryParams.search && queryParams.search.trim() !== '') {
-        filters.search = queryParams.search.trim();
-      }
-
-
-      // Si activatePaginated es falso, establecerlo en el objeto filters
-      if (activatePaginated === false) {
-        filters.activatePaginated = false;
-      }
-
-      // Obtener los datos paginados
-      return await this.calledAttentionService.findAllPaginated(
-        queryParams.page || 1,
-        queryParams.limit || 10,
-        filters,
-        activatePaginated
-      );
-    } catch (error) {
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
-      throw new Error(`Error processing paginated request: ${error.message}`);
-    }
+    const response = await this.calledAttentionService.findAllPaginated(
+      page,
+      limit,
+    );
+    return response;
   }
   @Get()
   @ApiQuery({
@@ -152,7 +115,7 @@ export class CalledAttentionController {
         'binary',
       );
     }
-
+    
     if (format === 'base64') {
       // Generar Excel en Base64
       return this.excelExportService.exportToExcel(
@@ -163,7 +126,7 @@ export class CalledAttentionController {
         'base64',
       );
     }
-
+    
     // Formato JSON por defecto (con passthrough: true)
     return response;
   }
