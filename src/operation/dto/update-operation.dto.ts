@@ -58,7 +58,7 @@ export class UpdateOperationDto extends PartialType(OperationUpdateBaseDto) {
   @IsOptional()
   workers?: {
     connect?: Array<SimpleWorkerConnect | ScheduledWorkerConnect>;
-    update?: WorkerScheduleDto[]; // Nueva propiedad
+    update?: WorkerScheduleDto; // Nueva propiedad
     disconnect?: Array<{ id: number }>;
   };
   // Si aún necesitas actualizar inCharged, usa un formato que Prisma pueda entender

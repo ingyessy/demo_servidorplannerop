@@ -153,20 +153,20 @@ export class OperationService {
    * @param updateOperationDto - Datos de actualización
    * @returns Operación actualizada
    */
-  async update(id: number, updateOperationDto: UpdateOperationDto) {
+   async update(id: number, updateOperationDto: UpdateOperationDto) {
     try {
-      // Verificar que la operación existe
+      console.log("updateOperationDto", JSON.stringify(updateOperationDto));
+      // Verify operation exists
       const validate = await this.findOne(id);
       if (validate['status'] === 404) {
         return validate;
       }
-
-      // Validar IDs de encargados
-      const validationResult =
-        await this.relationService.validateInChargedIds(updateOperationDto);
+  
+      // Validate inCharged IDs
+      const validationResult = await this.relationService.validateInChargedIds(updateOperationDto);
       if (validationResult) return validationResult;
-
-      // Extraer datos para actualización
+  
+      // Extract data for update
       const {
         workers,
         inCharged,
@@ -176,8 +176,8 @@ export class OperationService {
         timeEnd,
         ...directFields
       } = updateOperationDto;
-
-      // Preparar datos para actualizar
+  
+      // Prepare data to update
       const operationUpdateData = this.prepareOperationUpdateData(
         directFields,
         dateStart,
@@ -185,29 +185,31 @@ export class OperationService {
         timeStrat,
         timeEnd,
       );
-
-      // Actualizar operación
+  
+      // Update operation
       await this.prisma.operation.update({
         where: { id },
         data: operationUpdateData,
       });
-
-      // Manejar cambio de estado
+  
+      // Handle status change
       if (directFields.status === StatusOperation.COMPLETED) {
         await this.operationWorkerService.releaseAllWorkersFromOperation(id);
       }
-
-      // Procesar actualizaciones de relaciones
+  
+      // Process relationship updates
       await this.relationService.processRelationUpdates(id, workers, inCharged);
-
-      // Obtener la operación actualizada
+  
+      // Get updated operation
       const updatedOperation = await this.findOne(id);
       return updatedOperation;
     } catch (error) {
-      console.error('Error en actualización de operación:', error);
+      console.error('Error updating operation:', error);
       throw new Error(error.message);
     }
   }
+
+  
   /**
    * Prepara los datos para actualizar una operación
    * @param directFields - Campos directos a actualizar
