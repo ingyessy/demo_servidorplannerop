@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PaginatedResponse } from '../../interface/paginate-operation';
 import { PaginationService } from '../pagination.service';
-import { FilterWorkerFeedingDto } from 'src/feeding/dto/filter-worker-feeding.dto'; 
+import { FilterWorkerFeedingDto } from 'src/feeding/dto/filter-worker-feeding.dto';
 
 /**
  * Servicio específico para la paginación de alimentación de trabajadores
@@ -13,15 +13,13 @@ export class PaginationFeedingService {
   /**
    * Pagina los registros de alimentación con opciones específicas
    */
-  async paginateWorkerFeeding<T>(
-    options: {
-      prisma: any;
-      page?: number;
-      limit?: number;
-      filters?: FilterWorkerFeedingDto;
-      activatePaginated?: boolean;
-    }
-  ): Promise<PaginatedResponse<T>> {
+  async paginateWorkerFeeding<T>(options: {
+    prisma: any;
+    page?: number;
+    limit?: number;
+    filters?: FilterWorkerFeedingDto;
+    activatePaginated?: boolean;
+  }): Promise<PaginatedResponse<T>> {
     try {
       const {
         prisma,
@@ -32,10 +30,10 @@ export class PaginationFeedingService {
       } = options;
 
       // Extraer activatePaginated del filtro si está definido
-      const finalActivatePaginated = 
-        filters?.activatePaginated !== undefined ? 
-        filters.activatePaginated : 
-        activatePaginated;
+      const finalActivatePaginated =
+        filters?.activatePaginated !== undefined
+          ? filters.activatePaginated
+          : activatePaginated;
 
       // Usar el servicio genérico de paginación
       return await this.paginationService.paginateEntity<T>({
@@ -58,6 +56,11 @@ export class PaginationFeedingService {
               status: true,
               dateStart: true,
               motorShip: true,
+              client: {
+                select: {
+                  name: true,
+                },
+              },
               task: {
                 select: {
                   name: true,
@@ -70,7 +73,8 @@ export class PaginationFeedingService {
           dateFeeding: 'desc',
         },
         activatePaginated: finalActivatePaginated,
-        buildWhereClause: filters => this.buildWorkerFeedingWhereClause(filters),
+        buildWhereClause: (filters) =>
+          this.buildWorkerFeedingWhereClause(filters),
       });
     } catch (error) {
       console.error('Error paginating worker feeding:', error);
@@ -83,7 +87,7 @@ export class PaginationFeedingService {
    */
   private buildWorkerFeedingWhereClause(filters?: FilterWorkerFeedingDto): any {
     const whereClause: any = {};
-    
+
     if (!filters) return whereClause;
 
     // Filtro por tipo de alimentación
@@ -93,28 +97,28 @@ export class PaginationFeedingService {
 
     // Filtro por fecha de inicio
     if (filters.startDate) {
-      whereClause.dateFeeding = { 
+      whereClause.dateFeeding = {
         ...whereClause.dateFeeding,
-        gte: new Date(filters.startDate) 
+        gte: new Date(filters.startDate),
       };
     }
 
     // Filtro por fecha de fin
     if (filters.endDate) {
-      whereClause.dateFeeding = { 
+      whereClause.dateFeeding = {
         ...whereClause.dateFeeding,
-        lte: new Date(filters.endDate) 
+        lte: new Date(filters.endDate),
       };
     }
 
-       // Filtro de búsqueda por DNI o nombre del trabajador
+    // Filtro de búsqueda por DNI o nombre del trabajador
     if (filters.search && filters.search.trim() !== '') {
       const searchTerm = filters.search.trim();
-      
+
       // Buscar tanto en DNI como en nombre del trabajador
       whereClause.OR = [
         { worker: { dni: { contains: searchTerm, mode: 'insensitive' } } },
-        { worker: { name: { contains: searchTerm, mode: 'insensitive' } } }
+        { worker: { name: { contains: searchTerm, mode: 'insensitive' } } },
       ];
     }
 

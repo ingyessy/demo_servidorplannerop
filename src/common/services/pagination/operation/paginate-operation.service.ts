@@ -91,12 +91,11 @@ export class PaginateOperationService {
     }
 
     if (filters.search) {
-      whereClause.OR = [
-        { description: { contains: filters.search, mode: 'insensitive' } },
-        { task: { name: { contains: filters.search, mode: 'insensitive' } } },
-        { jobArea: { name: { contains: filters.search, mode: 'insensitive' } } },
-      ];
-    }
+    whereClause.OR = [
+      { client: { name: { contains: filters.search, mode: 'insensitive' } } },
+      { jobArea: { name: { contains: filters.search, mode: 'insensitive' } } },
+    ];
+  }
 
     return whereClause;
   }
