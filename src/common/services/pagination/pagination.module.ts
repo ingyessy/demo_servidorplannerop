@@ -6,16 +6,16 @@ import { PaginationFeedingService } from './feeding/pagination-feeding.service';
 
 @Module({
   providers: [
-    PaginationService, 
+    PaginationService,
     PaginateOperationService,
     PaginationCalledService,
-    PaginationFeedingService
+    PaginationFeedingService,
   ],
   exports: [
-    PaginationService, 
+    PaginationService,
     PaginateOperationService,
     PaginationCalledService,
-    PaginationFeedingService
+    PaginationFeedingService,
   ],
 })
 export class PaginationModule {}
