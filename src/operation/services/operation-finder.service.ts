@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { StatusOperation } from '@prisma/client';
+import { Prisma, StatusOperation } from '@prisma/client';
 import { OperationTransformerService } from './operation-transformer.service';
 import { OperationFilterDto } from '../dto/fliter-operation.dto';
 import { PaginateOperationService } from 'src/common/services/pagination/operation/paginate-operation.service';
@@ -143,17 +143,29 @@ export class OperationFinderService {
    */
   async findByStatuses(statuses: StatusOperation[]) {
     try {
-      const response = await this.prisma.operation.findMany({
+      // Verificar si los estados son válidos y si es en estado completadas
+      const isCompletedOnly =
+        statuses.length === 1 && statuses[0] === StatusOperation.COMPLETED;
+
+      // Si solo se busca COMPLETED, no se permiten otros estados
+      const queryConfig = {
         where: {
           status: {
             in: statuses,
           },
         },
         include: this.defaultInclude,
-        orderBy: {
-          dateStart: 'asc', // Ordenar por fecha de inicio ascendente
-        },
-      });
+        orderBy: isCompletedOnly
+          ? { dateStart: Prisma.SortOrder.desc } // Most recent first for COMPLETED
+          : { dateStart: Prisma.SortOrder.asc }, // Keep original order for other statuses
+      };
+
+      // Limitar a 30 resultados si solo se busca COMPLETED
+      if (isCompletedOnly) {
+        queryConfig['take'] = 30;
+      }
+
+      const response = await this.prisma.operation.findMany(queryConfig);
 
       if (response.length === 0) {
         return {
@@ -162,7 +174,7 @@ export class OperationFinderService {
         };
       }
 
-      // Transformar operaciones - workerGroups ya está incluido en la transformación
+      // Transformar la respuesta
       const transformedResponse = response.map((operation) =>
         this.transformer.transformOperationResponse(operation),
       );
@@ -173,7 +185,6 @@ export class OperationFinderService {
       throw new Error(`Error finding operations by status: ${error.message}`);
     }
   }
-
   /**
    * Busca operaciones por rango de fechas
    * @param start Fecha de inicio
@@ -226,8 +237,6 @@ export class OperationFinderService {
     activatePaginated: boolean = true,
   ) {
     try {
-
-
       // Usar el servicio de paginación mejorado
       return await this.paginationService.paginateOperations({
         prisma: this.prisma,
