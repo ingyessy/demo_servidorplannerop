@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -20,51 +14,51 @@ model User {
   username          String              @unique
   password          String
   phone             String
-  occupation        String
   role              Role                @default(ADMIN)
+  occupation        String
   status            StatusActivation    @default(ACTIVE)
-  areas             JobArea[]
-  worker            Worker[]
-  operation         Operation[]
-  task              Task[]
-  client            Client[]
   calledAttention   CalledAttention[]
+  client            Client[]
   inChargeOperation InChargeOperation[]
   inability         Inability[]
+  areas             JobArea[]
+  operation         Operation[]
+  task              Task[]
+  worker            Worker[]
 }
 
 model JobArea {
   id         Int              @id @default(autoincrement())
   name       String
-  status     StatusActivation @default(ACTIVE)
-  workers    Worker[]
   id_user    Int
+  status     StatusActivation @default(ACTIVE)
   user       User             @relation(fields: [id_user], references: [id])
   operations Operation[]
+  workers    Worker[]
 }
 
 model Worker {
   id               Int                @id @default(autoincrement())
   dni              String             @unique
-  code             String             @unique
   phone            String?
   name             String
-  createAt         DateTime           @default(now())
-  updateAt         DateTime           @updatedAt
-  hoursWorked      Float              @default(0)
   status           Status             @default(AVALIABLE)
   id_area          Int?
-  failures         Int                @default(0)
-  dateDisableStart DateTime?
-  dateDisableEnd   DateTime?
-  dateRetierment   DateTime?
-  jobArea          JobArea?           @relation(fields: [id_area], references: [id])
+  createAt         DateTime           @default(now())
+  updateAt         DateTime           @updatedAt
   id_user          Int
-  user             User               @relation(fields: [id_user], references: [id])
-  operations       Operation_Worker[]
+  code             String             @unique
+  dateDisableEnd   DateTime?
+  dateDisableStart DateTime?
+  dateRetierment   DateTime?
+  hoursWorked      Float              @default(0)
+  failures         Int                @default(0)
   calledAttention  CalledAttention[]
-  feeding         WorkerFeeding[]
   inability        Inability[]
+  operations       Operation_Worker[]
+  jobArea          JobArea?           @relation(fields: [id_area], references: [id])
+  user             User               @relation(fields: [id_user], references: [id])
+  feeding          WorkerFeeding[]
 }
 
 model Operation {
@@ -74,34 +68,34 @@ model Operation {
   dateEnd           DateTime?           @db.Date
   timeStrat         String
   timeEnd           String?
-  zone              Int
-  motorShip         String?
   id_user           Int
-  user              User                @relation(fields: [id_user], references: [id])
   id_area           Int
-  jobArea           JobArea             @relation(fields: [id_area], references: [id])
   id_task           Int
-  task              Task                @relation(fields: [id_task], references: [id])
-  workers           Operation_Worker[]
   id_client         Int
-  client            Client              @relation(fields: [id_client], references: [id])
-  inChargeOperation InChargeOperation[]
+  motorShip         String?
+  zone              Int
   createAt          DateTime            @default(now())
   updateAt          DateTime            @default(now()) @updatedAt
+  inChargeOperation InChargeOperation[]
+  jobArea           JobArea             @relation(fields: [id_area], references: [id])
+  client            Client              @relation(fields: [id_client], references: [id])
+  task              Task                @relation(fields: [id_task], references: [id])
+  user              User                @relation(fields: [id_user], references: [id])
+  workers           Operation_Worker[]
   feeding           WorkerFeeding[]
 }
 
 model Operation_Worker {
   id           Int       @id @default(autoincrement())
   id_operation Int
-  operation    Operation @relation(fields: [id_operation], references: [id])
   id_worker    Int
-  worker       Worker    @relation(fields: [id_worker], references: [id])
-  timeStart    String?
-  timeEnd      String?
-  dateStart    DateTime? @db.Date
   dateEnd      DateTime? @db.Date
+  dateStart    DateTime? @db.Date
+  timeEnd      String?
+  timeStart    String?
   id_group     String?
+  operation    Operation @relation(fields: [id_operation], references: [id])
+  worker       Worker    @relation(fields: [id_worker], references: [id])
 }
 
 model Task {
@@ -109,8 +103,8 @@ model Task {
   name       String           @unique
   id_user    Int
   status     StatusActivation @default(ACTIVE)
-  user       User             @relation(fields: [id_user], references: [id])
   operations Operation[]
+  user       User             @relation(fields: [id_user], references: [id])
 }
 
 model Client {
@@ -125,20 +119,20 @@ model Client {
 model CalledAttention {
   id          Int       @id @default(autoincrement())
   description String?
-  type        Failures?
   id_user     Int
+  id_worker   Int
+  type        Failures?
   createAt    DateTime  @default(now())
   user        User      @relation(fields: [id_user], references: [id])
-  id_worker   Int
   worker      Worker    @relation(fields: [id_worker], references: [id])
 }
 
 model InChargeOperation {
   id           Int       @id @default(autoincrement())
   id_user      Int
-  user         User      @relation(fields: [id_user], references: [id])
   id_operation Int
   operation    Operation @relation(fields: [id_operation], references: [id])
+  user         User      @relation(fields: [id_user], references: [id])
 }
 
 model WorkerFeeding {
@@ -149,8 +143,8 @@ model WorkerFeeding {
   type         FeedingStatus
   createAt     DateTime      @default(now())
   updateAt     DateTime      @updatedAt
-  worker       Worker        @relation(fields: [id_worker], references: [id])
   operation    Operation     @relation(fields: [id_operation], references: [id])
+  worker       Worker        @relation(fields: [id_worker], references: [id])
 }
 
 model Inability {
@@ -160,11 +154,11 @@ model Inability {
   type             TypeDisability
   cause            CauseDisability
   id_worker        Int
-  id_user          Int
   createAt         DateTime        @default(now())
+  id_user          Int
   updateAt         DateTime        @updatedAt
   user             User            @relation(fields: [id_user], references: [id])
-  worker         Worker         @relation(fields: [id_worker], references: [id])
+  worker           Worker          @relation(fields: [id_worker], references: [id])
 }
 
 enum TypeDisability {
