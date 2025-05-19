@@ -13,6 +13,7 @@ import {
   Res,
   BadRequestException,
   ValidationPipe,
+  DefaultValuePipe,
 } from '@nestjs/common';
 import { OperationService } from './operation.service';
 import { Response } from 'express';
@@ -32,6 +33,7 @@ import { ExcelExportService } from 'src/common/validation/services/excel-export.
 import { OperationFilterDto } from './dto/fliter-operation.dto';
 import { PaginatedOperationQueryDto } from './dto/paginated-operation-query.dto';
 import { BooleanTransformPipe } from 'src/pipes/boolean-transform/boolean-transform.pipe';
+import { WorkerAnalyticsService } from './services/workerAnalytics.service';
 
 @Controller('operation')
 @UseGuards(JwtAuthGuard)
@@ -40,6 +42,7 @@ export class OperationController {
   constructor(
     private readonly operationService: OperationService,
     private readonly excelExportService: ExcelExportService,
+    private readonly workerAnalyticsService: WorkerAnalyticsService,
   ) {}
 
   @Post()
@@ -94,6 +97,41 @@ export class OperationController {
       );
     }
     return response;
+  }
+
+  @Get('analytics/worker-distribution')
+  @ApiOperation({ summary: 'Get worker distribution by hour for a specific date' })
+  @ApiQuery({
+    name: 'date',
+    required: false,
+    type: String,
+    description: 'Date in YYYY-MM-DD format. Default is today.',
+  })
+  async getWorkerDistributionByHour(
+    @Query('date', DateTransformPipe) date: Date = new Date(),
+  ) {
+    return this.workerAnalyticsService.getWorkerDistributionByHour(date);
+  }
+
+  @Get('analytics/worker-hours')
+  @ApiOperation({ summary: 'Get monthly report of hours worked per worker' })
+  @ApiQuery({
+    name: 'month',
+    required: false,
+    type: Number,
+    description: 'Month (1-12). Default is current month.',
+  })
+  @ApiQuery({
+    name: 'year',
+    required: false,
+    type: Number,
+    description: 'Year. Default is current year.',
+  })
+  async getWorkerHoursReport(
+    @Query('month', new DefaultValuePipe(new Date().getMonth() + 1), ParseIntPipe) month: number,
+    @Query('year', new DefaultValuePipe(new Date().getFullYear()), ParseIntPipe) year: number,
+  ) {
+    return this.workerAnalyticsService.getWorkerHoursReport(month, year);
   }
 
   @Get('paginated')
