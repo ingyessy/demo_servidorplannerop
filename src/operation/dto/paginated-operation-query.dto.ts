@@ -104,7 +104,7 @@ export class PaginatedOperationQueryDto {
   inChargedId?: number;
 
   @ApiProperty({
-    description: 'Texto para búsqueda en descripción, tarea o área',
+    description: 'Texto para búsqueda en descripción, cliente o área',
     required: false,
   })
   @IsOptional()

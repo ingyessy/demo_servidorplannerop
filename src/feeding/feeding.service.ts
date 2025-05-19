@@ -3,12 +3,15 @@ import { CreateFeedingDto } from './dto/create-feeding.dto';
 import { UpdateFeedingDto } from './dto/update-feeding.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ValidationService } from 'src/common/validation/validation.service';
+import { FilterWorkerFeedingDto } from './dto/filter-worker-feeding.dto';
+import { PaginationFeedingService } from 'src/common/services/pagination/feeding/pagination-feeding.service';
 
 @Injectable()
 export class FeedingService {
   constructor(
     private prisma: PrismaService,
     private validation: ValidationService,
+    private paginationService: PaginationFeedingService,
   ) {}
   async create(createFeedingDto: CreateFeedingDto) {
     try {
@@ -57,6 +60,42 @@ export class FeedingService {
       return response;
     } catch (error) {
       throw new Error(error);
+    }
+  }
+
+    async findAllPaginated(
+    page: number = 1,
+    limit: number = 10,
+    filters?: FilterWorkerFeedingDto,
+    activatePaginated: boolean = true,
+  ) {
+    try {
+      
+      // Usar el servicio de paginación para feeding
+      const paginatedResponse =
+        await this.paginationService.paginateWorkerFeeding({
+          prisma: this.prisma,
+          page,
+          limit,
+          filters,
+          activatePaginated: activatePaginated === false ? false : true,
+        });
+
+      // Si no hay resultados, mantener el formato de respuesta de error
+      if (paginatedResponse.items.length === 0) {
+        return {
+          message: 'No worker feeding records found for the requested page',
+          status: 404,
+          pagination: paginatedResponse.pagination,
+          items: [],
+          nextPages: [],
+        };
+      }
+
+      return paginatedResponse;
+    } catch (error) {
+      console.error('Error finding worker feeding with pagination:', error);
+      throw new Error(error.message);
     }
   }
 

@@ -11,7 +11,6 @@ import {
   UseGuards,
   Query,
   Res,
-  DefaultValuePipe,
   BadRequestException,
   ValidationPipe,
 } from '@nestjs/common';
