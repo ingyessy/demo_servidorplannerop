@@ -328,7 +328,7 @@ async assignWorkersToOperation(assignWorkersDto: AssignWorkersDto) {
    * @param workersToUpdate Array de trabajadores con su nueva programación
    * @returns Resultado de la actualización
    */
-   async updateWorkersSchedule(id_operation: number, workersToUpdate: WorkerScheduleDto[]) {
+    async updateWorkersSchedule(id_operation: number, workersToUpdate: WorkerScheduleDto[]) {
     try {
       // Verificar que la operación existe
       const operation = await this.prisma.operation.findUnique({
@@ -339,50 +339,40 @@ async assignWorkersToOperation(assignWorkersDto: AssignWorkersDto) {
         return { message: 'Operation not found', status: 404 };
       }
   
-      // Para cada grupo de trabajadores a actualizar
+      // Por cada grupo de trabajadores a actualizar
       for (const group of workersToUpdate) {
-        const { workerIds, dateStart, timeStart } = group;
+        const { workerIds, dateStart, timeStart, dateEnd, timeEnd } = group;
   
         if (!workerIds || !Array.isArray(workerIds) || workerIds.length === 0) {
           continue;
         }
   
-        // Buscar un grupo existente con la misma programación
-        const existingGroup = await this.prisma.operation_Worker.findFirst({
-          where: {
-            id_operation,
-            dateStart: dateStart ? new Date(dateStart) : null,
-            timeStart: timeStart || null,
-          },
-        });
+        const newGroupId = group.id_group || uuidv4();
   
-        if (existingGroup) {
-          // Agregar nuevos trabajadores al grupo existente
-          for (const workerId of workerIds) {
-            const alreadyAssigned = await this.prisma.operation_Worker.findFirst({
-              where: {
-                id_operation,
-                id_worker: workerId,
-                id_group: existingGroup.id_group,
+        // Procesamos cada trabajador en el grupo
+        for (const workerId of workerIds) {
+          // Busca si el trabajador ya está asignado a la operación
+          const existingAssignment = await this.prisma.operation_Worker.findFirst({
+            where: {
+              id_operation,
+              id_worker: workerId,
+            },
+          });
+  
+          if (existingAssignment) {
+            // Actualiza el registro existente
+            await this.prisma.operation_Worker.update({
+              where: { id: existingAssignment.id },
+              data: {
+                dateStart: dateStart ? new Date(dateStart) : existingAssignment.dateStart,
+                timeStart: timeStart || existingAssignment.timeStart,
+                dateEnd: dateEnd ? new Date(dateEnd) : existingAssignment.dateEnd,
+                timeEnd: timeEnd || existingAssignment.timeEnd,
+                id_group: newGroupId,
               },
             });
-  
-            if (!alreadyAssigned) {
-              await this.prisma.operation_Worker.create({
-                data: {
-                  id_operation,
-                  id_worker: workerId,
-                  id_group: existingGroup.id_group,
-                  dateStart: existingGroup.dateStart,
-                  timeStart: existingGroup.timeStart,
-                },
-              });
-            }
-          }
-        } else {
-          // Si no existe un grupo, crear uno nuevo
-          const newGroupId = group.id_group || uuidv4();
-          for (const workerId of workerIds) {
+          } else {
+            // Crea un nuevo registro si no existe
             await this.prisma.operation_Worker.create({
               data: {
                 id_operation,
@@ -390,6 +380,8 @@ async assignWorkersToOperation(assignWorkersDto: AssignWorkersDto) {
                 id_group: newGroupId,
                 dateStart: dateStart ? new Date(dateStart) : null,
                 timeStart: timeStart || null,
+                dateEnd: dateEnd ? new Date(dateEnd) : null,
+                timeEnd: timeEnd || null,
               },
             });
           }
