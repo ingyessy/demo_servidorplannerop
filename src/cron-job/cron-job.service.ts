@@ -19,7 +19,7 @@ export class OperationsCronService {
   /**
    * Actualiza las operaciones en progreso
    */
-  @Cron(CronExpression.EVERY_MINUTE)
+  @Cron(CronExpression.EVERY_5_MINUTES)
   async handleUpdateInProgressOperations() {
     try {
       await this.updateOperation.updateInProgressOperations();

@@ -68,10 +68,12 @@ export class UpdateOperationService {
             data: { status: 'INPROGRESS' },
           });
 
-               // actualizar la fecha y hora de inicio en la tabla intermedia
+          // actualizar la fecha y hora de inicio en la tabla intermedia
           await this.prisma.operation_Worker.updateMany({
             where: {
               id_operation: operation.id,
+              dateEnd: null,
+              timeEnd: null,
             },
             data: {
               dateStart: operation.dateStart,
@@ -157,6 +159,8 @@ export class UpdateOperationService {
         );
 
         if (minutesDiff >= 10) {
+          //fecha y hora de finalización de colombia
+
           // Paso 1: Obtener los trabajadores de esta operación desde la tabla intermedia
           const operationWorkers = await this.prisma.operation_Worker.findMany({
             where: { id_operation: operation.id },
@@ -188,6 +192,19 @@ export class UpdateOperationService {
           await this.prisma.operation.update({
             where: { id: operation.id },
             data: { status: 'COMPLETED' },
+          });
+
+          //Paso 4: Actualizar la fecha y hora de finalización en la tabla intermedia
+          await this.prisma.operation_Worker.updateMany({
+            where: {
+              id_operation: operation.id,
+              dateEnd: null,
+              timeEnd: null,
+            },
+            data: {
+              dateEnd: operation.dateEnd,
+              timeEnd: operation.timeEnd,
+            },
           });
 
           updatedCount++;
