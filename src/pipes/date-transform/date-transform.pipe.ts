@@ -115,7 +115,7 @@ export class DateTransformPipe implements PipeTransform {
     }
 
     // Lista de campos de hora que podrían necesitar validación
-    const timeFields = ['timeStrat', 'timeEnd'];
+    const timeFields = ['timeStrat', 'timeEnd', 'timeStart'];
 
     // Procesar todos los campos de hora
     for (const field of timeFields) {

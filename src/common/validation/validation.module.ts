@@ -5,7 +5,6 @@ import { ExcelExportService } from './services/excel-export.service';
 
 
 @Module({
- 
   providers: [ValidationService, PrismaService, ExcelExportService],
   exports: [ValidationService, ExcelExportService],
 })
