@@ -32,14 +32,16 @@ export class AssignWorkersDto {
         dateStart: "2023-10-01", 
         dateEnd: "2023-10-15",
         timeStart: "08:00",
-        timeEnd: "12:00"
+        timeEnd: "12:00",
+        id_task: 1
       },
       {
         workerIds: [3, 4],
         dateStart: "2023-10-01",
         dateEnd: "2023-10-15",
         timeStart: "13:00",
-        timeEnd: "17:00"
+        timeEnd: "17:00",
+        id_task: 2
       }
     ]
   })

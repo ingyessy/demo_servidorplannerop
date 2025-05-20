@@ -21,6 +21,8 @@ export class OperationTransformerService {
             : null,
           timeStart: w.timeStart || null,
           timeEnd: w.timeEnd || null,
+          id_task: w.task ? w.task.id : null,
+          task: w.task ? w.task.name : null,
         },
       })) || [];
 
@@ -30,7 +32,8 @@ export class OperationTransformerService {
         name: ic.user.name,
       })) || [];
 
-    const workerGroups = this.groupWorkersByScheduleAndGroup(workersWithSchedule);
+    const workerGroups =
+      this.groupWorkersByScheduleAndGroup(workersWithSchedule);
 
     return {
       ...rest,
@@ -47,9 +50,8 @@ export class OperationTransformerService {
     const groupedByGroupId = {};
 
     workers.forEach((worker) => {
-
       const { groupId = 'default', ...workerData } = worker;
-      
+
       if (!groupedByGroupId[groupId]) {
         groupedByGroupId[groupId] = {
           groupId,

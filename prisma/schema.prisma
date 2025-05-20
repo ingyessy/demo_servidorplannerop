@@ -96,17 +96,20 @@ model Operation_Worker {
   timeEnd      String?
   timeStart    String?
   id_group     String?
+  id_task      Int?
+  task         Task?     @relation(fields: [id_task], references: [id])
   operation    Operation @relation(fields: [id_operation], references: [id])
   worker       Worker    @relation(fields: [id_worker], references: [id])
 }
 
 model Task {
-  id         Int              @id @default(autoincrement())
-  name       String           @unique
-  id_user    Int
-  status     StatusActivation @default(ACTIVE)
-  operations Operation[]
-  user       User             @relation(fields: [id_user], references: [id])
+  id               Int                @id @default(autoincrement())
+  name             String             @unique
+  id_user          Int
+  status           StatusActivation   @default(ACTIVE)
+  operations       Operation[]
+  user             User               @relation(fields: [id_user], references: [id])
+  operation_Worker Operation_Worker[]
 }
 
 model Client {
