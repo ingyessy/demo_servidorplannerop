@@ -53,7 +53,6 @@ export class OperationController {
     @CurrentUser('userId') userId: number,
   ) {
     createOperationDto.id_user = userId;
-    console.log(createOperationDto);
     const response =
       await this.operationService.createWithWorkers(createOperationDto);
     if (response['status'] === 404) {

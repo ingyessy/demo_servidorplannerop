@@ -25,6 +25,7 @@ model User {
   operation         Operation[]
   task              Task[]
   worker            Worker[]
+  clientProgramming ClientProgramming[]
 }
 
 model JobArea {
@@ -83,6 +84,7 @@ model Operation {
   user              User                @relation(fields: [id_user], references: [id])
   workers           Operation_Worker[]
   feeding           WorkerFeeding[]
+  clientProgramming ClientProgramming[]
 }
 
 model Operation_Worker {
@@ -161,6 +163,21 @@ model Inability {
   worker           Worker          @relation(fields: [id_worker], references: [id])
 }
 
+model ClientProgramming {
+  id              Int            @id @default(autoincrement())
+  service_request String
+  service         String
+  dateStart       DateTime       @db.Date
+  timeStart       String
+  ubication       String
+  client          String
+  status          StatusComplete @default(INCOMPLETE)
+  id_user         Int
+  id_operation    Int?
+  user            User           @relation(fields: [id_user], references: [id])
+  operation       Operation?     @relation(fields: [id_operation], references: [id])
+}
+
 enum TypeDisability {
   INITIAL
   EXTENSION
@@ -206,6 +223,11 @@ enum Failures {
   INASSISTANCE
   IRRESPECTFUL
   ABANDONMENT
+}
+
+enum StatusComplete {
+  COMPLETED
+  INCOMPLETE
 }
 
 enum StatusActivation {
