@@ -35,7 +35,6 @@ async assignWorkersAndInCharge(
 
   // Eliminar duplicados en los trabajadores con programación
   const uniqueWorkersWithSchedule: WorkerScheduleDto[] = [];
-  const processedWorkers = new Set();
 
   // Procesar cada grupo de trabajadores con programación
   for (const schedule of workersWithSchedule) {
@@ -43,33 +42,26 @@ async assignWorkersAndInCharge(
       // Filtrar IDs duplicados dentro del mismo grupo
       const uniqueIds = [...new Set(schedule.workerIds)];
 
-      // Filtrar trabajadores que ya aparecen en otras programaciones
-      const filteredIds = uniqueIds.filter(id => !processedWorkers.has(id));
 
-      // Si hay trabajadores únicos, agregar el grupo
-      if (filteredIds.length > 0) {
-        uniqueWorkersWithSchedule.push({
-          ...schedule,
-          workerIds: filteredIds
-        });
+      // Agregar el grupo completo sin filtrar por apariciones en otros grupos
+      uniqueWorkersWithSchedule.push({
+        ...schedule,
+        workerIds: uniqueIds
+      });
 
-        // Marcar estos trabajadores como procesados
-        filteredIds.forEach(id => processedWorkers.add(id));
-      }
+       
     }
   }
 
-  // Filtrar también trabajadores simples que ya están en grupos con programación
-  const filteredWorkerIds = uniqueWorkerIds.filter(id => !processedWorkers.has(id));
-
-  const hasWorkers = filteredWorkerIds.length > 0 || uniqueWorkersWithSchedule.length > 0;
+ const hasWorkers = uniqueWorkerIds.length > 0 || uniqueWorkersWithSchedule.length > 0;
   const hasInCharge = uniqueInChargedIds && uniqueInChargedIds.length > 0;
+
 
   // Asignar trabajadores
   if (hasWorkers) {
     await this.operationWorkerService.assignWorkersToOperation({
       id_operation: operationId,
-      workerIds: filteredWorkerIds,
+      workerIds: uniqueWorkerIds,
       workersWithSchedule: uniqueWorkersWithSchedule,
     });
   }
