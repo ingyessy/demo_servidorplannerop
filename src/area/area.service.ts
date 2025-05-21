@@ -2,8 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { CreateAreaDto } from './dto/create-area.dto';
 import { UpdateAreaDto } from './dto/update-area.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { UserService } from 'src/user/user.service';
-import { StatusActivation } from '@prisma/client';
 
 /**
  * Servicio para gestionar areas
@@ -13,7 +11,6 @@ import { StatusActivation } from '@prisma/client';
 export class AreaService {
   constructor(
     private prisma: PrismaService,
-    private userService: UserService,
   ) {}
   /**
    * Crear un area

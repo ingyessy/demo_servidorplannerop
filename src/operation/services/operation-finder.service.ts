@@ -42,6 +42,12 @@ export class OperationFinderService {
             name: true,
           },
         },
+        task:{
+          select: {
+            id: true,
+            name: true,
+          },
+        },
       },
     },
     inChargeOperation: {

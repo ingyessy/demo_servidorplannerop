@@ -155,7 +155,6 @@ export class OperationService {
    */
    async update(id: number, updateOperationDto: UpdateOperationDto) {
     try {
-      console.log("updateOperationDto", JSON.stringify(updateOperationDto));
       // Verify operation exists
       const validate = await this.findOne(id);
       if (validate['status'] === 404) {

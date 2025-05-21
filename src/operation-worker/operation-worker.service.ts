@@ -128,7 +128,7 @@ async assignWorkersToOperation(assignWorkersDto: AssignWorkersDto) {
             dateStart: null,
             dateEnd: null,
             timeStart: null,
-            timeEnd: null
+            timeEnd: null,
           }
         })
       );
@@ -145,7 +145,8 @@ async assignWorkersToOperation(assignWorkersDto: AssignWorkersDto) {
           dateEnd: group.dateEnd ? parseDate(group.dateEnd) : null,
           timeStart: group.timeStart || null,
           timeEnd: group.timeEnd || null,
-          id_group: groupId
+          id_group: groupId,
+          id_task: group.id_task || null,
         };
         
         // Crear una promesa de creación para cada trabajador en el grupo

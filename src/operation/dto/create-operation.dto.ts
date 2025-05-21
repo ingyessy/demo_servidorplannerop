@@ -88,7 +88,8 @@ export class CreateOperationDto {
           dateStart: "2023-10-01",
           dateEnd: "2023-10-10",
           timeStart: "08:00",
-          timeEnd: "17:00"
+          timeEnd: "17:00",
+          id_task: 1
         }
       ]
     })
