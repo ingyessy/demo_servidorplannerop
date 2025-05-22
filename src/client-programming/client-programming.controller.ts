@@ -9,6 +9,7 @@ import {
   UsePipes,
   NotFoundException,
   UseGuards,
+  ConflictException,
 } from '@nestjs/common';
 import { ClientProgrammingService } from './client-programming.service';
 import { CreateClientProgrammingDto } from './dto/create-client-programming.dto';
@@ -39,6 +40,8 @@ export class ClientProgrammingController {
     );
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
+    }else if (response['status'] === 409) {
+      throw new ConflictException(response['message']);
     }
     return response;
   }

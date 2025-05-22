@@ -63,28 +63,29 @@ model Worker {
 }
 
 model Operation {
-  id                Int                 @id @default(autoincrement())
-  status            StatusOperation     @default(PENDING)
-  dateStart         DateTime            @db.Date
-  dateEnd           DateTime?           @db.Date
-  timeStrat         String
-  timeEnd           String?
-  id_user           Int
-  id_area           Int
-  id_task           Int
-  id_client         Int
-  motorShip         String?
-  zone              Int
-  createAt          DateTime            @default(now())
-  updateAt          DateTime            @default(now()) @updatedAt
-  inChargeOperation InChargeOperation[]
-  jobArea           JobArea             @relation(fields: [id_area], references: [id])
-  client            Client              @relation(fields: [id_client], references: [id])
-  task              Task                @relation(fields: [id_task], references: [id])
-  user              User                @relation(fields: [id_user], references: [id])
-  workers           Operation_Worker[]
-  feeding           WorkerFeeding[]
-  clientProgramming ClientProgramming[]
+  id                   Int                 @id @default(autoincrement())
+  status               StatusOperation     @default(PENDING)
+  dateStart            DateTime            @db.Date
+  dateEnd              DateTime?           @db.Date
+  timeStrat            String
+  timeEnd              String?
+  id_user              Int
+  id_area              Int
+  id_task              Int
+  id_client            Int
+  id_clientProgramming Int?
+  motorShip            String?
+  zone                 Int
+  createAt             DateTime            @default(now())
+  updateAt             DateTime            @default(now()) @updatedAt
+  inChargeOperation    InChargeOperation[]
+  jobArea              JobArea             @relation(fields: [id_area], references: [id])
+  clientProgramming    ClientProgramming?  @relation(fields: [id_clientProgramming], references: [id])
+  client               Client              @relation(fields: [id_client], references: [id])
+  task                 Task                @relation(fields: [id_task], references: [id])
+  user                 User                @relation(fields: [id_user], references: [id])
+  workers              Operation_Worker[]
+  feeding              WorkerFeeding[]
 }
 
 model Operation_Worker {
@@ -174,11 +175,10 @@ model ClientProgramming {
   timeStart       String
   ubication       String
   client          String
-  status          StatusComplete @default(INCOMPLETE)
+  status          StatusComplete @default(UNASSIGNED)
   id_user         Int
-  id_operation    Int?
   user            User           @relation(fields: [id_user], references: [id])
-  operation       Operation?     @relation(fields: [id_operation], references: [id])
+  operations      Operation[]
 }
 
 enum TypeDisability {
@@ -231,6 +231,8 @@ enum Failures {
 enum StatusComplete {
   COMPLETED
   INCOMPLETE
+  UNASSIGNED
+  ASSIGNED
 }
 
 enum StatusActivation {
