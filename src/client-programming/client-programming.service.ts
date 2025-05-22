@@ -12,12 +12,23 @@ export class ClientProgrammingService {
   ) {}
   async create(createClientProgrammingDto: CreateClientProgrammingDto) {
     try {
-      const validate = await this.validation.validateAllIds({
-        id_operation: createClientProgrammingDto.id_operation,
-      });
-      if (validate && 'status' in validate && validate.status === 404) {
-        return validate;
+      const validationProgramming =
+        await this.validation.validateClientProgramming({
+          service_request: createClientProgrammingDto.service_request,
+          service: createClientProgrammingDto.service,
+          client: createClientProgrammingDto.client,
+          ubication: createClientProgrammingDto.ubication,
+          dateStart: createClientProgrammingDto.dateStart,
+          timeStart: createClientProgrammingDto.timeStart,
+        });
+      if (
+        validationProgramming &&
+        'status' in validationProgramming &&
+        validationProgramming.status === 409
+      ) {
+        return validationProgramming;
       }
+
       const response = await this.prisma.clientProgramming.create({
         data: {
           ...createClientProgrammingDto,
@@ -68,12 +79,6 @@ export class ClientProgrammingService {
     updateClientProgrammingDto: UpdateClientProgrammingDto,
   ) {
     try {
-      const validate = await this.validation.validateAllIds({
-        id_operation: updateClientProgrammingDto.id_operation,
-      });
-      if (validate && 'status' in validate && validate.status === 404) {
-        return validate;
-      }
       const validateId = await this.findOne(id);
       if (validateId && 'status' in validateId && validateId.status === 404) {
         return validateId;

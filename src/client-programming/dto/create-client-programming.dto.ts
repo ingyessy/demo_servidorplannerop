@@ -52,10 +52,4 @@ export class CreateClientProgrammingDto {
   @Type(() => Number)
   @IsOptional()
   id_user: number;
-
-  @ApiProperty({ example: '123' })
-  @IsNumber()
-  @Type(() => Number)
-  @IsOptional()
-  id_operation?: number;
 }
