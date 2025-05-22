@@ -15,7 +15,7 @@ export class UpdateOperationWorkerService {
     try {
       this.logger.log('Iniciando actualización de estado de trabajadores según programación');
 
-      // Obtener fecha y hora actual en zona horaria de Colombia (garantizado en cualquier servidor)
+      // Obtener fecha y hora actual en zona horaria de Colombia
       const colombiaTime = new Date(new Date().toLocaleString('en-US', {timeZone: 'America/Bogota'}));
       
       // Formatear fechas para logs con zona horaria colombiana

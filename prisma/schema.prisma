@@ -25,6 +25,7 @@ model User {
   operation         Operation[]
   task              Task[]
   worker            Worker[]
+  clientProgramming ClientProgramming[]
 }
 
 model JobArea {
@@ -62,27 +63,29 @@ model Worker {
 }
 
 model Operation {
-  id                Int                 @id @default(autoincrement())
-  status            StatusOperation     @default(PENDING)
-  dateStart         DateTime            @db.Date
-  dateEnd           DateTime?           @db.Date
-  timeStrat         String
-  timeEnd           String?
-  id_user           Int
-  id_area           Int
-  id_task           Int
-  id_client         Int
-  motorShip         String?
-  zone              Int
-  createAt          DateTime            @default(now())
-  updateAt          DateTime            @default(now()) @updatedAt
-  inChargeOperation InChargeOperation[]
-  jobArea           JobArea             @relation(fields: [id_area], references: [id])
-  client            Client              @relation(fields: [id_client], references: [id])
-  task              Task                @relation(fields: [id_task], references: [id])
-  user              User                @relation(fields: [id_user], references: [id])
-  workers           Operation_Worker[]
-  feeding           WorkerFeeding[]
+  id                   Int                 @id @default(autoincrement())
+  status               StatusOperation     @default(PENDING)
+  dateStart            DateTime            @db.Date
+  dateEnd              DateTime?           @db.Date
+  timeStrat            String
+  timeEnd              String?
+  id_user              Int
+  id_area              Int
+  id_task              Int
+  id_client            Int
+  id_clientProgramming Int?
+  motorShip            String?
+  zone                 Int
+  createAt             DateTime            @default(now())
+  updateAt             DateTime            @default(now()) @updatedAt
+  inChargeOperation    InChargeOperation[]
+  jobArea              JobArea             @relation(fields: [id_area], references: [id])
+  clientProgramming    ClientProgramming?  @relation(fields: [id_clientProgramming], references: [id])
+  client               Client              @relation(fields: [id_client], references: [id])
+  task                 Task                @relation(fields: [id_task], references: [id])
+  user                 User                @relation(fields: [id_user], references: [id])
+  workers              Operation_Worker[]
+  feeding              WorkerFeeding[]
 }
 
 model Operation_Worker {
@@ -94,17 +97,20 @@ model Operation_Worker {
   timeEnd      String?
   timeStart    String?
   id_group     String?
+  id_task      Int?
+  task         Task?     @relation(fields: [id_task], references: [id])
   operation    Operation @relation(fields: [id_operation], references: [id])
   worker       Worker    @relation(fields: [id_worker], references: [id])
 }
 
 model Task {
-  id         Int              @id @default(autoincrement())
-  name       String           @unique
-  id_user    Int
-  status     StatusActivation @default(ACTIVE)
-  operations Operation[]
-  user       User             @relation(fields: [id_user], references: [id])
+  id               Int                @id @default(autoincrement())
+  name             String             @unique
+  id_user          Int
+  status           StatusActivation   @default(ACTIVE)
+  operations       Operation[]
+  user             User               @relation(fields: [id_user], references: [id])
+  operation_Worker Operation_Worker[]
 }
 
 model Client {
@@ -161,6 +167,20 @@ model Inability {
   worker           Worker          @relation(fields: [id_worker], references: [id])
 }
 
+model ClientProgramming {
+  id              Int            @id @default(autoincrement())
+  service_request String
+  service         String
+  dateStart       DateTime       @db.Date
+  timeStart       String
+  ubication       String
+  client          String
+  status          StatusComplete @default(UNASSIGNED)
+  id_user         Int
+  user            User           @relation(fields: [id_user], references: [id])
+  operations      Operation[]
+}
+
 enum TypeDisability {
   INITIAL
   EXTENSION
@@ -206,6 +226,13 @@ enum Failures {
   INASSISTANCE
   IRRESPECTFUL
   ABANDONMENT
+}
+
+enum StatusComplete {
+  COMPLETED
+  INCOMPLETE
+  UNASSIGNED
+  ASSIGNED
 }
 
 enum StatusActivation {

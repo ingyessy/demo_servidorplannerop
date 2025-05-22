@@ -202,6 +202,61 @@ export class ValidationService {
   }
 
   /**
+   * Validar si ya existe la programacion cliente
+   * @param service_request - Solicitud de servicio
+   * @param service - Servicio
+   * @param dateStart - Fecha de inicio
+   * @param timeStart - Hora de inicio
+   * @param client - Cliente
+   * @param ubication - Ubicación
+   * @param id_operation - ID de la operación
+   *
+   */
+  async validateClientProgramming({
+    service_request,
+    service,
+    dateStart,
+    timeStart,
+    client,
+    ubication,
+  }: {
+    service_request: string;
+    service: string;
+    dateStart: string;
+    timeStart: string;
+    client: string;
+    ubication: string;
+  }) {
+    try {
+      // Verificar que la programación del cliente no exista
+      const existingProgramming = await this.prisma.clientProgramming.findFirst(
+        {
+          where: {
+            service_request,
+            service,
+            dateStart: new Date(dateStart),
+            timeStart,
+            client,
+            ubication,
+          },
+        },
+      );
+
+      if (existingProgramming) {
+        return {
+          message: 'Client programming already exists',
+          status: 409,
+        };
+      }
+      // Si no existe, se puede proceder con la creación
+      return { success: true };
+    } catch (error) {
+      console.error('Error validating client programming:', error);
+      throw new Error(`Error validating client programming: ${error.message}`);
+    }
+  }
+
+  /**
    * Valida que un trabajador esté asignado a una operación
    * @param operationId - ID de la operación
    * @param workerId - ID del trabajador

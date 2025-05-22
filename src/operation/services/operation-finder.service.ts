@@ -42,6 +42,12 @@ export class OperationFinderService {
             name: true,
           },
         },
+        task: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
       },
     },
     inChargeOperation: {
@@ -121,6 +127,10 @@ export class OperationFinderService {
           },
         },
         include: this.defaultInclude,
+        take: 10,
+        orderBy: {
+          dateStart: Prisma.SortOrder.desc,
+        },
       });
 
       if (response.length === 0) {

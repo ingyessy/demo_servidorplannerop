@@ -133,6 +133,7 @@ export class OperationService {
       dateEnd,
       timeStrat,
       timeEnd,
+      id_clientProgramming,
       ...restOperationData
     } = operationData;
 
@@ -140,6 +141,7 @@ export class OperationService {
       data: {
         ...restOperationData,
         id_user: operationData.id_user as number,
+        id_clientProgramming: id_clientProgramming || null,
         dateStart: dateStart ? new Date(dateStart) : '',
         dateEnd: dateEnd ? new Date(dateEnd) : null,
         timeStrat: timeStrat || '',
@@ -155,7 +157,6 @@ export class OperationService {
    */
    async update(id: number, updateOperationDto: UpdateOperationDto) {
     try {
-      console.log("updateOperationDto", JSON.stringify(updateOperationDto));
       // Verify operation exists
       const validate = await this.findOne(id);
       if (validate['status'] === 404) {
