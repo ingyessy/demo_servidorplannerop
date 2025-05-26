@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { StatusComplete } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 
 @Injectable()
@@ -57,7 +58,7 @@ export class ValidationService {
       }
 
       // 3. Validar tarea si se proporciona
-      if (id_task !== undefined) {
+      if (id_task !== undefined && id_task !== null) {
         const task = await this.prisma.task.findUnique({
           where: { id: id_task },
         });
@@ -213,41 +214,76 @@ export class ValidationService {
    *
    */
   async validateClientProgramming({
+    id_clientProgramming,
     service_request,
     service,
     dateStart,
     timeStart,
     client,
     ubication,
+    status,
   }: {
-    service_request: string;
-    service: string;
-    dateStart: string;
-    timeStart: string;
-    client: string;
-    ubication: string;
+    id_clientProgramming?: number | null;
+    service_request?: string;
+    service?: string;
+    dateStart?: string;
+    timeStart?: string;
+    client?: string;
+    ubication?: string;
+    status?: string;
   }) {
     try {
       // Verificar que la programación del cliente no exista
-      const existingProgramming = await this.prisma.clientProgramming.findFirst(
-        {
-          where: {
-            service_request,
-            service,
-            dateStart: new Date(dateStart),
-            timeStart,
-            client,
-            ubication,
-          },
-        },
-      );
+      if (
+        service_request &&
+        service &&
+        dateStart &&
+        timeStart &&
+        client &&
+        ubication
+      ) {
+        const existingProgramming =
+          await this.prisma.clientProgramming.findFirst({
+            where: {
+              service_request,
+              service,
+              dateStart: new Date(dateStart || ''),
+              timeStart,
+              client,
+              ubication,
+            },
+          });
 
-      if (existingProgramming) {
-        return {
-          message: 'Client programming already exists',
-          status: 409,
-        };
+        if (existingProgramming) {
+          return {
+            message: 'Client programming already exists',
+            status: 409,
+          };
+        }
       }
+
+      // verificar si existe y tiene estado asignado
+      if (id_clientProgramming) {
+        const validateId = await this.prisma.clientProgramming.findUnique({
+          where: { id: id_clientProgramming },
+        });
+        if (!validateId) {
+          return { message: 'Client programming not found', status: 404 };
+        }
+        const programming = await this.prisma.clientProgramming.findFirst({
+          where: {
+            id: id_clientProgramming,
+            status: StatusComplete.ASSIGNED,
+          },
+        });
+        if (programming) {
+          return {
+            message: 'Client programming already exists and is assigned',
+            status: 409,
+          };
+        }
+      }
+
       // Si no existe, se puede proceder con la creación
       return { success: true };
     } catch (error) {

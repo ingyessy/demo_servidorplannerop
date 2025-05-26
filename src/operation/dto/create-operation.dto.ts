@@ -78,7 +78,8 @@ export class CreateOperationDto {
   @ApiProperty({ example: '1' })
   @Type(() => Number)
   @IsNumber()
-  id_task: number;
+  @IsOptional()
+  id_task?: number;
 
   @ApiProperty({ example: '1' })
   @Type(() => Number)

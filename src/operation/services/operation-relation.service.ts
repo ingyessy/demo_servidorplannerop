@@ -68,6 +68,7 @@ async assignWorkersAndInCharge(
 
   // Asignar encargados
   if (hasInCharge) {
+    console.log('Assigning in charge to operation:')
     await this.operationInChargeService.assignInChargeToOperation({
       id_operation: operationId,
       userIds: uniqueInChargedIds,
@@ -121,6 +122,20 @@ async assignWorkersAndInCharge(
     
     if (validateIds && 'status' in validateIds && validateIds.status === 404) {
       return validateIds;
+    }
+    
+    return null;
+  }
+
+  /**
+   * Validacion si la programcion cliente ya esta asignada
+   * @param id_clientProgramming - ID de la programación del cliente
+   */
+  async validateClientProgramming(id_clientProgramming: number | null) {
+    const validate = await this.validationService.validateClientProgramming({id_clientProgramming});
+    
+    if (validate && 'status' in validate && validate.status === 409 || validate.status === 404) {
+      return validate;
     }
     
     return null;
