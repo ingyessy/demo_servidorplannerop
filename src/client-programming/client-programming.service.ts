@@ -3,6 +3,8 @@ import { CreateClientProgrammingDto } from './dto/create-client-programming.dto'
 import { UpdateClientProgrammingDto } from './dto/update-client-programming.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ValidationService } from 'src/common/validation/validation.service';
+import { FilterClientProgrammingDto } from './dto/filter-client-programming.dto';
+import { StatusComplete } from '@prisma/client';
 
 @Injectable()
 export class ClientProgrammingService {
@@ -71,6 +73,45 @@ export class ClientProgrammingService {
       return response;
     } catch (error) {
       throw new Error('Failed to fetch client programming');
+    }
+  }
+
+  async findAllFiltered(filters: FilterClientProgrammingDto) {
+    try {
+      // Construir el objeto where dinámicamente
+      const whereConditions: any = {};
+
+      // Filtro por fecha de inicio
+      if (filters.dateStart) {
+        whereConditions.dateStart = new Date(filters.dateStart);
+      }
+
+      if (filters.status) {
+        whereConditions.status = filters.status;
+      } else {
+        // Por defecto solo traer UNASSIGNED
+        whereConditions.status = StatusComplete.UNASSIGNED;
+      }
+
+      const response = await this.prisma.clientProgramming.findMany({
+        where: whereConditions,
+        orderBy: [{ dateStart: 'asc' }],
+      });
+
+      if (!response || response.length === 0) {
+        return {
+          status: 404,
+          message: 'No client programming found with the specified filters',
+          filters: filters,
+          count: 0,
+          data: [],
+        };
+      }
+
+      return response;
+    } catch (error) {
+      console.error('Error filtering client programming:', error);
+      throw new Error('Failed to filter client programming');
     }
   }
 

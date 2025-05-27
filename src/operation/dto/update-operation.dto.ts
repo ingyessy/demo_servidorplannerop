@@ -49,7 +49,8 @@ export class UpdateOperationDto extends PartialType(OperationUpdateBaseDto) {
           dateStart: "2023-11-01",
           dateEnd: "2023-11-15",
           timeStart: "09:00",
-          timeEnd: "18:00"
+          timeEnd: "18:00",
+          id_group: "UID-12345"
         }
       ],
       disconnect: [{ id: 5 }]

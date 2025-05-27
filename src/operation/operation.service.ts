@@ -224,6 +224,7 @@ export class OperationService {
 
       // Handle status change
       if (directFields.status === StatusOperation.COMPLETED) {
+        await this.operationWorkerService.completeClientProgramming(id);
         await this.operationWorkerService.releaseAllWorkersFromOperation(id);
       }
 
