@@ -108,7 +108,7 @@ export class OperationController {
     description: 'Date in YYYY-MM-DD format. Default is today.',
   })
   async getWorkerDistributionByHour(
-    @Query('date', DateTransformPipe) date: Date = new Date(),
+    @Query('date') date: string,
   ) {
     return this.workerAnalyticsService.getWorkerDistributionByHour(date);
   }
