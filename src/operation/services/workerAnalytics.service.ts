@@ -40,7 +40,6 @@ export class WorkerAnalyticsService {
     );
   
     const dateStr = date;
-    console.log(`Calculando distribución para fecha: ${dateStr}`);
   
     // PASO 1: Buscar trabajadores de operaciones PROGRAMADAS para este día
     const scheduledWorkers = await this.prisma.operation_Worker.findMany({
@@ -128,8 +127,6 @@ export class WorkerAnalyticsService {
         }
       }
     });
-  
-    console.log(`Encontrados ${scheduledWorkers.length} trabajadores programados y ${inProgressWorkers.length} trabajadores en operaciones en curso`);
   
     // Crear distribución horaria para 24 horas
     const hourlyDistribution: WorkerDistribution[] = Array(24).fill(0).map((_, i) => ({
@@ -307,8 +304,6 @@ export class WorkerAnalyticsService {
     const [startHour, startMin = 0] = startTime.split(':').map(Number);
     const [endHour, endMin = 0] = endTime.split(':').map(Number);
     
-    console.log(`Processing worker ${assignment.worker.id} (${type}): ${startHour}:${startMin} to ${endHour}:${endMin}`);
-    
     // Determinar si es turno nocturno
     const isOvernightShift = endHour < startHour || (endHour === startHour && endMin < startMin);
     
@@ -354,7 +349,6 @@ export class WorkerAnalyticsService {
         dni: assignment.worker.dni || 'N/A'
       });
       hourlyDistribution[hour].count++;
-      console.log(`Added worker ${assignment.worker.id} to hour ${hour}:00-${hour+1}:00 (${type})`);
     }
     
     // Agregar ID de operación si no existe
