@@ -87,10 +87,19 @@ export class ClientProgrammingService {
       }
 
       if (filters.status) {
-        whereConditions.status = filters.status;
+        whereConditions.status = filters.status[0];
       } else {
         // Por defecto solo traer UNASSIGNED
         whereConditions.status = StatusComplete.UNASSIGNED;
+      }
+
+      // Filtro por texto de búsqueda
+      if (filters.search) {
+        whereConditions.OR = [
+          { service: { contains: filters.search, mode: 'insensitive' } },
+          { client: { contains: filters.search, mode: 'insensitive' } },
+          { ubication: { contains: filters.search, mode: 'insensitive' } },
+        ];
       }
 
       const response = await this.prisma.clientProgramming.findMany({

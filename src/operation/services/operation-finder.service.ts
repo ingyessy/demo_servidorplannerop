@@ -43,7 +43,7 @@ export class OperationFinderService {
             name: true,
           },
         },
-        Task: { // Cambiar 'task' por 'Task' (con T mayúscula)
+        task: { // Cambiar 'task' por 'Task' (con T mayúscula)
           select: {
             id: true,
             name: true,
