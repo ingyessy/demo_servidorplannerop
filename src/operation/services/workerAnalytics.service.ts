@@ -19,33 +19,23 @@ export class WorkerAnalyticsService {
    * @param date Fecha para la cual se desea calcular la distribución.
    * @returns Un objeto que contiene la fecha y la distribución de trabajadores por hora.
    */
-   async getWorkerDistributionByHour(date: string): Promise<any> {
-    // Parsear la fecha correctamente
-    const [dateYear, dateMonth, dateDay] = date.split('-').map(Number);
-    const targetDate = new Date(dateYear, dateMonth - 1, dateDay);
+    async getWorkerDistributionByHour(date: string): Promise<any> {
     
-    // Crear rango del día
-    const startOfDay = new Date(
-      targetDate.getFullYear(),
-      targetDate.getMonth(),
-      targetDate.getDate(),
-      0, 0, 0, 0
-    );
+    // Usar formato YYYY-MM-DD directamente para las comparaciones
+    const targetDateStr = date; // Ej: "2025-05-27"
     
-    const endOfDay = new Date(
-      targetDate.getFullYear(),
-      targetDate.getMonth(),
-      targetDate.getDate(),
-      23, 59, 59, 999
-    );
-  
-    const dateStr = date;
+    // Para Prisma, crear fechas específicas pero forzar timezone local
+    const [year, month, day] = date.split('-').map(Number);
+    
+    // Crear las fechas sin problemas de timezone
+    const startOfDay = new Date(year, month - 1, day, 0, 0, 0, 0);
+    const endOfDay = new Date(year, month - 1, day, 23, 59, 59, 999);
+    
   
     // PASO 1: Buscar trabajadores de operaciones PROGRAMADAS para este día
     const scheduledWorkers = await this.prisma.operation_Worker.findMany({
       where: {
         AND: [
-          // La operación NO debe estar cancelada
           {
             operation: {
               status: {
@@ -53,7 +43,6 @@ export class WorkerAnalyticsService {
               }
             }
           },
-          // Registros que intersectan con la fecha consultada
           {
             OR: [
               // Caso 1: Registro que empieza en la fecha consultada
@@ -100,6 +89,7 @@ export class WorkerAnalyticsService {
       }
     });
   
+    
     // PASO 2: Buscar trabajadores de operaciones EN CURSO (INPROGRESS)
     const inProgressWorkers = await this.prisma.operation_Worker.findMany({
       where: {
@@ -128,7 +118,6 @@ export class WorkerAnalyticsService {
       }
     });
   
-
     // Crear distribución horaria para 24 horas
     const hourlyDistribution: WorkerDistribution[] = Array(24).fill(0).map((_, i) => ({
       hour: `${i}:00-${i + 1}:00`,
@@ -141,7 +130,7 @@ export class WorkerAnalyticsService {
     this.processScheduledWorkers(scheduledWorkers, hourlyDistribution);
   
     // PASO 4: Procesar trabajadores en operaciones en curso
-    this.processInProgressWorkers(inProgressWorkers, hourlyDistribution, targetDate, dateStr);
+    this.processInProgressWorkers(inProgressWorkers, hourlyDistribution, targetDateStr);
   
     // Crear la lista única de trabajadores para el resumen
     const allWorkersMap = new Map();
@@ -171,10 +160,110 @@ export class WorkerAnalyticsService {
     });
   
     return {
-      date: dateStr,
+      date: targetDateStr,
       workers: trabajadores,
       distribution: distribution
     };
+  }
+  
+  /**
+   * Procesa trabajadores de operaciones en curso
+   */
+  private processInProgressWorkers(
+    workers: any[], 
+    hourlyDistribution: WorkerDistribution[], 
+    targetDateStr: string // Cambiar a string
+  ) {
+    const currentTime = new Date();
+    
+    for (const assignment of workers) {
+      // Verificar si la operación en curso abarca la fecha consultada
+      const operationStartDate = assignment.operation.dateStart;
+      const operationEndDate = assignment.operation.dateEnd;
+      
+      if (!operationStartDate) continue;
+      
+      // Convertir fechas a formato YYYY-MM-DD para comparación directa
+      const opStartDateStr = operationStartDate.toISOString().split('T')[0];
+      const opEndDateStr = operationEndDate ? operationEndDate.toISOString().split('T')[0] : null;
+      
+      
+      // Verificar si la operación en curso incluye la fecha consultada
+      const operationIncludesDate = 
+        (opStartDateStr <= targetDateStr) && 
+        (opEndDateStr === null || opEndDateStr >= targetDateStr);
+      
+      
+      if (!operationIncludesDate) continue;
+  
+      // Determinar el estado del trabajador según si ya finalizó o sigue activo
+      if (assignment.timeEnd && assignment.dateEnd) {
+        // El trabajador YA FINALIZÓ su turno - usar horarios de operation_Worker
+        this.processWorkerSchedule(assignment, hourlyDistribution, 'completed');
+      } else {
+        // El trabajador AÚN ESTÁ EN PROGRESO
+        this.processActiveWorker(assignment, hourlyDistribution, targetDateStr, currentTime);
+      }
+    }
+  }
+  
+  /**
+   * Procesa un trabajador que aún está activo (sin hora de finalización)
+   */
+  private processActiveWorker(
+    assignment: any, 
+    hourlyDistribution: WorkerDistribution[], 
+    targetDateStr: string, // Cambiar a string
+    currentTime: Date, 
+  ) {
+    const startTime = assignment.timeStart || assignment.operation.timeStrat;
+    const endTime = assignment.timeEnd || assignment.operation.timeEnd;
+    
+    if (!startTime) return;
+  
+    // Crear fecha objetivo para comparar con fecha actual
+    const [year, month, day] = targetDateStr.split('-').map(Number);
+    const targetDate = new Date(year, month - 1, day);
+    const isToday = targetDate.toDateString() === currentTime.toDateString();
+    
+    // Verificar fechas de inicio usando strings
+    const operationStartDate = assignment.operation.dateStart;
+    const assignmentStartDate = assignment.dateStart;
+    
+    const relevantStartDate = assignmentStartDate || operationStartDate;
+    
+    if (!relevantStartDate) return;
+    
+    // Comparar fechas como strings para evitar problemas de timezone
+    const startDateStr = relevantStartDate.toISOString().split('T')[0];
+    
+    
+    const operationStartedBefore = startDateStr < targetDateStr;
+    const operationStartedSameDay = startDateStr === targetDateStr;
+    
+  
+    if (operationStartedBefore) {
+      // CASO 1: Operación empezó en fecha anterior - trabajador activo todo el día
+      if (isToday && !endTime) {
+        this.processActiveWorkerTodayFullDay(assignment, hourlyDistribution, currentTime);
+      } else if (endTime) {
+        this.processWorkerTimeRange(assignment, hourlyDistribution, '00:00', endTime, 'active-continued');
+      } else {
+        this.processWorkerTimeRange(assignment, hourlyDistribution, '00:00', '23:59', 'active-continued');
+      }
+    } else if (operationStartedSameDay) {
+      console.log(`Using specific start time: ${startTime}`);
+      // CASO 2: Operación empezó el mismo día - usar hora específica de inicio
+      if (isToday && !endTime) {
+        this.processActiveWorkerToday(assignment, hourlyDistribution, startTime, currentTime);
+      } else if (endTime) {
+        this.processWorkerTimeRange(assignment, hourlyDistribution, startTime, endTime, 'active-same-day');
+      } else {
+        this.processWorkerTimeRange(assignment, hourlyDistribution, startTime, '23:59', 'active-same-day');
+      }
+    } else {
+      console.warn(`Operación en progreso con fecha futura: ${startDateStr}`);
+    }
   }
 
   /**
@@ -192,109 +281,8 @@ export class WorkerAnalyticsService {
     }
   }
 
-  /**
-   * Procesa trabajadores de operaciones en curso
-   */
-  private processInProgressWorkers(
-    workers: any[], 
-    hourlyDistribution: WorkerDistribution[], 
-    targetDate: Date, 
-    dateStr: string
-  ) {
-    const currentTime = new Date();
-    
-    for (const assignment of workers) {
-      // Verificar si la operación en curso abarca la fecha consultada
-      const operationStartDate = assignment.operation.dateStart;
-      const operationEndDate = assignment.operation.dateEnd;
-      
-      if (!operationStartDate) continue;
-      
-      // Normalizar fechas para comparación
-      const opStartDateOnly = new Date(operationStartDate.getFullYear(), operationStartDate.getMonth(), operationStartDate.getDate());
-      const opEndDateOnly = operationEndDate ? new Date(operationEndDate.getFullYear(), operationEndDate.getMonth(), operationEndDate.getDate()) : null;
-      const targetDateOnly = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
-      
-      // Verificar si la operación en curso incluye la fecha consultada
-      const operationIncludesDate = 
-        (opStartDateOnly <= targetDateOnly) && 
-        (opEndDateOnly === null || opEndDateOnly >= targetDateOnly);
-      
-      if (!operationIncludesDate) continue;
+ 
 
-      // Determinar el estado del trabajador según si ya finalizó o sigue activo
-      if (assignment.timeEnd && assignment.dateEnd) {
-        // El trabajador YA FINALIZÓ su turno - usar horarios de operation_Worker
-        this.processWorkerSchedule(assignment, hourlyDistribution, 'completed');
-      } else {
-        // El trabajador AÚN ESTÁ EN PROGRESO
-        this.processActiveWorker(assignment, hourlyDistribution, targetDate, currentTime);
-      }
-    }
-  }
-
-  /**
-   * Procesa un trabajador que aún está activo (sin hora de finalización)
-   */
-  private processActiveWorker(
-    assignment: any, 
-    hourlyDistribution: WorkerDistribution[], 
-    targetDate: Date, 
-    currentTime: Date, 
-  ) {
-    // Usar horarios de la operación principal si no tiene horarios específicos
-    const startTime = assignment.timeStart || assignment.operation.timeStrat;
-    const endTime = assignment.timeEnd || assignment.operation.timeEnd;
-    
-    if (!startTime) return;
-  
-    // Determinar si es el día actual
-    const isToday = targetDate.toDateString() === currentTime.toDateString();
-    
-    // Verificar si la operación empezó en una fecha anterior
-    const operationStartDate = assignment.operation.dateStart;
-    const assignmentStartDate = assignment.dateStart;
-    
-    // Usar la fecha de inicio más relevante
-    const relevantStartDate = assignmentStartDate || operationStartDate;
-    
-    if (!relevantStartDate) return;
-    
-    // Normalizar fechas para comparación
-    const startDateOnly = new Date(relevantStartDate.getFullYear(), relevantStartDate.getMonth(), relevantStartDate.getDate());
-    const targetDateOnly = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
-    
-    // Si la operación empezó en una fecha anterior al día consultado
-    const operationStartedBefore = startDateOnly < targetDateOnly;
-    
-    if (operationStartedBefore) {
-      // Para operaciones que empezaron antes, el trabajador está activo todo el día
-      if (isToday && !endTime) {
-        // Si es hoy y no tiene hora de fin, activo desde las 00:00 hasta hora actual
-        this.processActiveWorkerTodayFullDay(assignment, hourlyDistribution, currentTime);
-      } else if (endTime) {
-        // Si tiene hora de finalización, usar el rango completo del día
-        this.processWorkerTimeRange(assignment, hourlyDistribution, '00:00', endTime, 'active-continued');
-      } else {
-        // Sin hora de finalización, todo el día
-        this.processWorkerTimeRange(assignment, hourlyDistribution, '00:00', '23:59', 'active-continued');
-      }
-    } else {
-      // Para operaciones que empezaron el mismo día, usar la lógica original
-      if (isToday && !endTime) {
-        // Trabajador activo HOY - calcular desde hora de inicio hasta hora actual
-        this.processActiveWorkerToday(assignment, hourlyDistribution, startTime, currentTime);
-      } else if (endTime) {
-        // Tiene hora de finalización - usar el rango completo
-        this.processWorkerTimeRange(assignment, hourlyDistribution, startTime, endTime, 'active');
-      } else {
-        // Día futuro o pasado con trabajador activo - usar horario completo de operación
-        const operationEndTime = assignment.operation.timeEnd || '23:59';
-        this.processWorkerTimeRange(assignment, hourlyDistribution, startTime, operationEndTime, 'active');
-      }
-    }
-  }
-  
   /**
    * Procesa un trabajador activo en el día actual desde las 00:00 hasta la hora actual
    */
