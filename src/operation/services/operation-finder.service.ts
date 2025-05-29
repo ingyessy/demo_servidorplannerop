@@ -11,6 +11,7 @@ import { PaginateOperationService } from 'src/common/services/pagination/operati
 @Injectable()
 export class OperationFinderService {
   // Configuraciones de consulta reutilizables
+  
   private readonly defaultInclude = {
     client: {
       select: { name: true },
@@ -42,7 +43,7 @@ export class OperationFinderService {
             name: true,
           },
         },
-        task: {
+        Task: { // Cambiar 'task' por 'Task' (con T mayúscula)
           select: {
             id: true,
             name: true,
@@ -63,6 +64,7 @@ export class OperationFinderService {
       },
     },
   };
+  
 
   constructor(
     private prisma: PrismaService,

@@ -40,7 +40,6 @@ export class WorkerAnalyticsService {
     );
   
     const dateStr = date;
-    console.log(`Calculando distribución para fecha: ${dateStr}`);
   
     // PASO 1: Buscar trabajadores de operaciones PROGRAMADAS para este día
     const scheduledWorkers = await this.prisma.operation_Worker.findMany({
@@ -129,7 +128,7 @@ export class WorkerAnalyticsService {
       }
     });
   
-    console.log(`Encontrados ${scheduledWorkers.length} trabajadores programados y ${inProgressWorkers.length} trabajadores en operaciones en curso`);
+   
   
     // Crear distribución horaria para 24 horas
     const hourlyDistribution: WorkerDistribution[] = Array(24).fill(0).map((_, i) => ({
@@ -153,7 +152,7 @@ export class WorkerAnalyticsService {
         if (!allWorkersMap.has(worker.id)) {
           allWorkersMap.set(worker.id, {
             id: worker.id,
-            nombre: worker.name,
+            name: worker.name,
             dni: worker.dni || 'N/A'
           });
         }
@@ -173,8 +172,8 @@ export class WorkerAnalyticsService {
     });
   
     return {
-      fecha: dateStr,
-      trabajadores: trabajadores,
+      date: dateStr,
+      workers: trabajadores,
       distribution: distribution
     };
   }
@@ -249,23 +248,69 @@ export class WorkerAnalyticsService {
     const endTime = assignment.timeEnd || assignment.operation.timeEnd;
     
     if (!startTime) return;
-
-    // Si es el día actual, calcular hasta la hora actual
+  
+    // Determinar si es el día actual
     const isToday = targetDate.toDateString() === currentTime.toDateString();
     
-    if (isToday && !endTime) {
-      // Trabajador activo HOY - calcular desde hora de inicio hasta hora actual
-      this.processActiveWorkerToday(assignment, hourlyDistribution, startTime, currentTime);
-    } else if (endTime) {
-      // Tiene hora de finalización - usar el rango completo
-      this.processWorkerTimeRange(assignment, hourlyDistribution, startTime, endTime, 'active');
+    // Verificar si la operación empezó en una fecha anterior
+    const operationStartDate = assignment.operation.dateStart;
+    const assignmentStartDate = assignment.dateStart;
+    
+    // Usar la fecha de inicio más relevante
+    const relevantStartDate = assignmentStartDate || operationStartDate;
+    
+    if (!relevantStartDate) return;
+    
+    // Normalizar fechas para comparación
+    const startDateOnly = new Date(relevantStartDate.getFullYear(), relevantStartDate.getMonth(), relevantStartDate.getDate());
+    const targetDateOnly = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
+    
+    // Si la operación empezó en una fecha anterior al día consultado
+    const operationStartedBefore = startDateOnly < targetDateOnly;
+    
+    if (operationStartedBefore) {
+      // Para operaciones que empezaron antes, el trabajador está activo todo el día
+      if (isToday && !endTime) {
+        // Si es hoy y no tiene hora de fin, activo desde las 00:00 hasta hora actual
+        this.processActiveWorkerTodayFullDay(assignment, hourlyDistribution, currentTime);
+      } else if (endTime) {
+        // Si tiene hora de finalización, usar el rango completo del día
+        this.processWorkerTimeRange(assignment, hourlyDistribution, '00:00', endTime, 'active-continued');
+      } else {
+        // Sin hora de finalización, todo el día
+        this.processWorkerTimeRange(assignment, hourlyDistribution, '00:00', '23:59', 'active-continued');
+      }
     } else {
-      // Día futuro o pasado con trabajador activo - usar horario completo de operación
-      const operationEndTime = assignment.operation.timeEnd || '23:59';
-      this.processWorkerTimeRange(assignment, hourlyDistribution, startTime, operationEndTime, 'active');
+      // Para operaciones que empezaron el mismo día, usar la lógica original
+      if (isToday && !endTime) {
+        // Trabajador activo HOY - calcular desde hora de inicio hasta hora actual
+        this.processActiveWorkerToday(assignment, hourlyDistribution, startTime, currentTime);
+      } else if (endTime) {
+        // Tiene hora de finalización - usar el rango completo
+        this.processWorkerTimeRange(assignment, hourlyDistribution, startTime, endTime, 'active');
+      } else {
+        // Día futuro o pasado con trabajador activo - usar horario completo de operación
+        const operationEndTime = assignment.operation.timeEnd || '23:59';
+        this.processWorkerTimeRange(assignment, hourlyDistribution, startTime, operationEndTime, 'active');
+      }
     }
   }
-
+  
+  /**
+   * Procesa un trabajador activo en el día actual desde las 00:00 hasta la hora actual
+   */
+  private processActiveWorkerTodayFullDay(
+    assignment: any, 
+    hourlyDistribution: WorkerDistribution[], 
+    currentTime: Date
+  ) {
+    const currentHour = currentTime.getHours();
+    
+    // Trabajador activo desde las 00:00 hasta hora actual
+    for (let hour = 0; hour <= currentHour; hour++) {
+      this.addWorkerToHour(assignment, hourlyDistribution, hour, 'active-continued-today');
+    }
+  }
   /**
    * Procesa un trabajador activo en el día actual hasta la hora actual
    */
@@ -307,7 +352,6 @@ export class WorkerAnalyticsService {
     const [startHour, startMin = 0] = startTime.split(':').map(Number);
     const [endHour, endMin = 0] = endTime.split(':').map(Number);
     
-    console.log(`Processing worker ${assignment.worker.id} (${type}): ${startHour}:${startMin} to ${endHour}:${endMin}`);
     
     // Determinar si es turno nocturno
     const isOvernightShift = endHour < startHour || (endHour === startHour && endMin < startMin);
@@ -354,7 +398,6 @@ export class WorkerAnalyticsService {
         dni: assignment.worker.dni || 'N/A'
       });
       hourlyDistribution[hour].count++;
-      console.log(`Added worker ${assignment.worker.id} to hour ${hour}:00-${hour+1}:00 (${type})`);
     }
     
     // Agregar ID de operación si no existe
