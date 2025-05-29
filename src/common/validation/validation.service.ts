@@ -262,6 +262,19 @@ export class ValidationService {
         }
       }
 
+      if (service_request) {
+        console.log(
+          'Validating service request for client programming:',
+          service_request,
+        );
+        const serviceRequest = await this.prisma.clientProgramming.findFirst({
+          where: { service_request },
+        });
+        if (serviceRequest) {
+          return { message: 'Service alredy exists', status: 409 };
+        }
+      }
+
       // verificar si existe y tiene estado asignado
       if (id_clientProgramming) {
         const validateId = await this.prisma.clientProgramming.findUnique({

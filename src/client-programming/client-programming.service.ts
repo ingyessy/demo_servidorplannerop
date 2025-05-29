@@ -26,7 +26,8 @@ export class ClientProgrammingService {
       if (
         validationProgramming &&
         'status' in validationProgramming &&
-        validationProgramming.status === 409
+        validationProgramming.status === 409 ||
+        validationProgramming && validationProgramming.status === 404
       ) {
         return validationProgramming;
       }
