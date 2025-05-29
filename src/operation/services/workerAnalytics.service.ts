@@ -128,8 +128,7 @@ export class WorkerAnalyticsService {
       }
     });
   
-   
-  
+
     // Crear distribución horaria para 24 horas
     const hourlyDistribution: WorkerDistribution[] = Array(24).fill(0).map((_, i) => ({
       hour: `${i}:00-${i + 1}:00`,
@@ -352,7 +351,7 @@ export class WorkerAnalyticsService {
     const [startHour, startMin = 0] = startTime.split(':').map(Number);
     const [endHour, endMin = 0] = endTime.split(':').map(Number);
     
-    
+
     // Determinar si es turno nocturno
     const isOvernightShift = endHour < startHour || (endHour === startHour && endMin < startMin);
     
