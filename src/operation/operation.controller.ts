@@ -14,6 +14,7 @@ import {
   BadRequestException,
   ValidationPipe,
   DefaultValuePipe,
+  ConflictException,
 } from '@nestjs/common';
 import { OperationService } from './operation.service';
 import { Response } from 'express';
@@ -21,11 +22,7 @@ import { CreateOperationDto } from './dto/create-operation.dto';
 import { UpdateOperationDto } from './dto/update-operation.dto';
 import { ParseIntPipe } from 'src/pipes/parse-int/parse-int.pipe';
 import { DateTransformPipe } from 'src/pipes/date-transform/date-transform.pipe';
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiQuery,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { StatusOperation } from '@prisma/client';
@@ -47,7 +44,7 @@ export class OperationController {
 
   @Post()
   @UsePipes(new DateTransformPipe())
-   @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
   async create(
     @Body() createOperationDto: CreateOperationDto,
     @CurrentUser('userId') userId: number,
@@ -57,6 +54,8 @@ export class OperationController {
       await this.operationService.createWithWorkers(createOperationDto);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
+    } else if (response['status'] === 409) {
+      throw new ConflictException(response['message']);
     }
     return response;
   }
@@ -100,7 +99,9 @@ export class OperationController {
   }
 
   @Get('analytics/worker-distribution')
-  @ApiOperation({ summary: 'Get worker distribution by hour for a specific date' })
+  @ApiOperation({
+    summary: 'Get worker distribution by hour for a specific date',
+  })
   @ApiQuery({
     name: 'date',
     required: false,
@@ -108,7 +109,7 @@ export class OperationController {
     description: 'Date in YYYY-MM-DD format. Default is today.',
   })
   async getWorkerDistributionByHour(
-    @Query('date', DateTransformPipe) date: Date = new Date(),
+    @Query('date') date: string,
   ) {
     return this.workerAnalyticsService.getWorkerDistributionByHour(date);
   }
@@ -128,8 +129,14 @@ export class OperationController {
     description: 'Year. Default is current year.',
   })
   async getWorkerHoursReport(
-    @Query('month', new DefaultValuePipe(new Date().getMonth() + 1), ParseIntPipe) month: number,
-    @Query('year', new DefaultValuePipe(new Date().getFullYear()), ParseIntPipe) year: number,
+    @Query(
+      'month',
+      new DefaultValuePipe(new Date().getMonth() + 1),
+      ParseIntPipe,
+    )
+    month: number,
+    @Query('year', new DefaultValuePipe(new Date().getFullYear()), ParseIntPipe)
+    year: number,
   ) {
     return this.workerAnalyticsService.getWorkerHoursReport(month, year);
   }
@@ -283,7 +290,7 @@ export class OperationController {
   ) {
     const response = await this.operationService.update(id, updateOperationDto);
     if (response && response['status'] === 404) {
-      throw new NotFoundException(response['messsge']);
+      throw new NotFoundException(response['message']);
     }
     return response;
   }

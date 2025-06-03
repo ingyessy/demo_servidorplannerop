@@ -47,6 +47,10 @@ export class LoginController {
   async validationToken(@Request() req){
     const authHeader = req.headers.authorization;
     const token = authHeader.split(' ')[1];
-    return this.loginService.validationToken(token);
+    const response = await this.loginService.validationToken(token);
+    if (response === 'Invalid token') {
+      throw new UnauthorizedException(response);
+    }
+    return response;
   }
 }

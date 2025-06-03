@@ -71,7 +71,7 @@ model Operation {
   timeEnd              String?
   id_user              Int
   id_area              Int
-  id_task              Int
+  id_task              Int?
   id_client            Int
   id_clientProgramming Int?
   motorShip            String?
@@ -82,7 +82,7 @@ model Operation {
   jobArea              JobArea             @relation(fields: [id_area], references: [id])
   clientProgramming    ClientProgramming?  @relation(fields: [id_clientProgramming], references: [id])
   client               Client              @relation(fields: [id_client], references: [id])
-  task                 Task                @relation(fields: [id_task], references: [id])
+  task                 Task?                @relation(fields: [id_task], references: [id])
   user                 User                @relation(fields: [id_user], references: [id])
   workers              Operation_Worker[]
   feeding              WorkerFeeding[]

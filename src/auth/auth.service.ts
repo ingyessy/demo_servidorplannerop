@@ -26,7 +26,14 @@ export class AuthService {
    */
   async validateUser(username: string, password: string): Promise<any> {
     const user = await this.user.findByUsername(username);
-    if (user && await this.comparePassword(password, user.password)) {
+    if (!user) {
+      return null;
+    }
+
+    if (user.status === 'INACTIVE') {
+      return null;
+    }
+    if (user && (await this.comparePassword(password, user.password))) {
       // Excluir contraseña de la respuesta
       const { password, ...result } = user;
       return result;
@@ -36,8 +43,8 @@ export class AuthService {
 
   /**
    * generar token
-   * @param user 
-   * @returns 
+   * @param user
+   * @returns
    */
   generateToken(user: any) {
     const payload = {
@@ -48,6 +55,7 @@ export class AuthService {
       dni: user.dni,
       occupation: user.occupation,
       phone: user.phone,
+      status: user.status,
     };
 
     return {
@@ -57,17 +65,20 @@ export class AuthService {
 
   /**
    * comparar contraseña
-   * @param plainPassword contraseña sin hashear 
+   * @param plainPassword contraseña sin hashear
    * @param hashedPassword contraseña hasheada
    * @returns resultado de la operación
    */
-  async comparePassword(plainPassword: string, hashedPassword: string): Promise<boolean> {
+  async comparePassword(
+    plainPassword: string,
+    hashedPassword: string,
+  ): Promise<boolean> {
     try {
       // Para usuarios existentes (sin hash) - Implementación temporal
       if (plainPassword === hashedPassword) {
         return true;
       }
-      
+
       // Para contraseñas hasheadas
       return await bcrypt.compare(plainPassword, hashedPassword);
     } catch (error) {
@@ -77,8 +88,8 @@ export class AuthService {
 
   /**
    * hashear contraseña
-   * @param password 
-   * @returns 
+   * @param password
+   * @returns
    */
   async hashPassword(password: string): Promise<string> {
     return bcrypt.hash(password, 10);
@@ -96,13 +107,13 @@ export class AuthService {
       const decodedToken = this.jwtService.decode(tokenValue);
       return {
         decoded: decodedToken,
-        valid: !!decodedToken
+        valid: !!decodedToken,
       };
     } catch (error) {
       return {
         decoded: null,
         valid: false,
-        error: error.message
+        error: error.message,
       };
     }
   }
@@ -115,21 +126,21 @@ export class AuthService {
     try {
       // Decodificar token para obtener su tiempo de expiración
       const decoded = this.jwtService.decode(token) as { exp: number };
-      
+
       if (!decoded) {
         throw new Error('Invalid token');
       }
-      
+
       // Calcular tiempo restante de validez
       const expiration = decoded.exp * 1000; // Convertir a milisegundos
       const now = Date.now();
       const ttl = Math.floor((expiration - now) / 1000); // Segundos hasta expiración
-      
+
       if (ttl > 0) {
         // Añadir token a lista negra hasta su expiración natural
         await this.cacheManager.set(`blacklist:${token}`, true, ttl);
       }
-      
+
       return true;
     } catch (error) {
       console.error('Error invalidating token:', error);
@@ -145,16 +156,16 @@ export class AuthService {
     return !!(await this.cacheManager.get(`blacklist:${token}`));
   }
 
-    /**
+  /**
    * Extrae el ID de usuario desde el token JWT
    * @param token Token JWT con el prefijo 'Bearer '
    * @returns ID del usuario o null si no se puede extraer
    */
-   extractUserIdFromToken(token: string): number | null {
+  extractUserIdFromToken(token: string): number | null {
     try {
       // Usar el método decodeToken existente en AuthService
       const decodedResult = this.decodeToken(token);
-      
+
       if (decodedResult.valid && decodedResult.decoded?.id) {
         return decodedResult.decoded.id;
       }
@@ -165,30 +176,40 @@ export class AuthService {
     }
   }
 
-    /**
+  /**
    * Obtiene el tiempo restante de validez de un token en segundos
    * @param token Token JWT
    * @returns Tiempo en segundos hasta expiración (0 si ya expiró)
    */
-    getTokenExpirationTime(token: string): number {
-      try {
-        const decodedToken = this.jwtService.decode(token) as { exp: number };
-        if (!decodedToken || !decodedToken.exp) {
-          return 0;
-        }
-        
-        const expirationTime = decodedToken.exp * 1000; // Convertir a milisegundos
-        const currentTime = Date.now();
-        
-        // Si ya expiró, retornar 0
-        if (expirationTime <= currentTime) {
-          return 0;
-        }
-        
-        // Retornar tiempo restante en segundos
-        return Math.floor((expirationTime - currentTime) / 1000);
-      } catch (error) {
+  async getTokenExpirationTime(token: string): Promise<number> {
+    try {
+      const decodedToken = this.jwtService.decode(token) as { exp: number };
+      const statusUser = this.decodeToken(token);
+      const user = await this.user.findOneById(statusUser.decoded.id);
+
+      if (user.status === 'INACTIVE') {
+        return 0; // Si el usuario está inactivo, retornar 0
+      }
+
+      if (!decodedToken || !decodedToken.exp) {
         return 0;
       }
+
+   
+
+      const expirationTime = decodedToken.exp * 1000; // Convertir a milisegundos
+      const currentTime = Date.now();
+
+      // Si ya expiró, retornar 0
+      if (expirationTime <= currentTime) {
+        return 0;
+      }
+
+      // Retornar tiempo restante en segundos
+      return Math.floor((expirationTime - currentTime) / 1000);
+    } catch (error) {
+      console.error('Error getting token expiration time:', error);
+      return 0;
     }
+  }
 }

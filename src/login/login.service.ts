@@ -47,7 +47,7 @@ export class LoginService {
     try {
       const user = await this.authService.getTokenExpirationTime(token);
       if (!user) {
-        throw new UnauthorizedException('Invalid token');
+        return 'Invalid token';
       }
       return user;
     } catch (error) {

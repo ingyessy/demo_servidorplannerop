@@ -70,7 +70,7 @@ export class InabilityController {
       'Formato de respuesta: json por defecto o excel para exportación',
   })
   async findByFilters(
-    @Query() filters: FilterInabilityDto,
+    @Query(DateTransformPipe) filters: FilterInabilityDto,
     @Query('format') format: string = 'json',
     @Res({ passthrough: true }) res: Response,
   ) {
