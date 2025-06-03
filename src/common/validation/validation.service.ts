@@ -263,10 +263,6 @@ export class ValidationService {
       }
 
       if (service_request) {
-        console.log(
-          'Validating service request for client programming:',
-          service_request,
-        );
         const serviceRequest = await this.prisma.clientProgramming.findFirst({
           where: { service_request },
         });

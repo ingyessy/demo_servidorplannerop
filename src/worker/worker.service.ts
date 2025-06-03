@@ -29,6 +29,7 @@ export class WorkerService {
         id_area: id_area,
         dni_worker: dni,
         code_worker: code,
+        phone_worker: phone,
       });
       // Si hay un error, retornarlo
       if (validation && 'status' in validation && (validation.status === 404 || validation.status === 409)) {
