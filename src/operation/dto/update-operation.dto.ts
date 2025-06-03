@@ -15,6 +15,20 @@ class OperationUpdateBaseDto extends OmitType(CreateOperationDto, [
   'groups'
 ] as const) {}
 
+export class WorkerDisconnect {
+  @ApiProperty({ example: 5 })
+  @IsNumber()
+  id: number;
+
+  @ApiProperty({ 
+    example: "bc5a073b-e861-4825-a718-6ec81f46404f",
+    required: false,
+    description: "Si se proporciona, solo desconecta del grupo específico. Si no, desconecta de toda la operación."
+  })
+  @IsOptional()
+  id_group?: string;
+}
+
 // Tipo para conectar trabajadores simples (por ID)
 export class SimpleWorkerConnect {
   @ApiProperty({ example: 1 })
@@ -53,14 +67,14 @@ export class UpdateOperationDto extends PartialType(OperationUpdateBaseDto) {
           id_group: "UID-12345"
         }
       ],
-      disconnect: [{ id: 5 }]
+      disconnect: [{ id: 5, id_group: "UID-12345" }]
     }
   })
   @IsOptional()
   workers?: {
     connect?: Array<SimpleWorkerConnect | ScheduledWorkerConnect>;
-    update?: WorkerScheduleDto; // Nueva propiedad
-    disconnect?: Array<{ id: number }>;
+    update?: WorkerScheduleDto[]; // Nueva propiedad
+    disconnect?: Array<WorkerDisconnect>;
   };
   // Si aún necesitas actualizar inCharged, usa un formato que Prisma pueda entender
   @ApiProperty({ 
@@ -68,7 +82,7 @@ export class UpdateOperationDto extends PartialType(OperationUpdateBaseDto) {
     required: false,
     example: { 
       connect: [{ id: 1 }, { id: 2 }],
-      disconnect: [{ id: 3 }]
+      disconnect: [{ id: 3 },{id: 4, id_group: "UID-12345"}]
     } 
   })
   @IsOptional()

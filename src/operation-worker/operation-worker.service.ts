@@ -237,20 +237,22 @@ export class OperationWorkerService {
       throw new Error(error.message);
     }
   }
-  /**
+   /**
    * Remueve trabajadores de una operación
    * @param removeWorkersDto - Datos de remoción
    * @returns Resultado de la operación
    */
-  async removeWorkersFromOperation(removeWorkersDto: RemoveWorkersDto) {
+  async removeWorkersFromOperation(removeWorkersDto: any) {
     try {
-      const { id_operation, workerIds } = removeWorkersDto;
-      // Validar que todos los trabajadores existen
+      const { id_operation, workerIds, workersToRemove } = removeWorkersDto;
+  
+      // CASO 1: Formato original (compatibilidad hacia atrás)
       if (workerIds && workerIds.length > 0) {
+        // Validar que todos los trabajadores existen
         const workerValidation = await this.validationService.validateAllIds({
           workerIds,
         });
-
+  
         if (
           workerValidation &&
           'status' in workerValidation &&
@@ -258,27 +260,161 @@ export class OperationWorkerService {
         ) {
           return workerValidation;
         }
-
-        // Eliminar solo las relaciones especificadas
+  
+        // Eliminar de toda la operación (comportamiento original)
         await this.prisma.operation_Worker.deleteMany({
           where: {
             id_operation,
             id_worker: { in: workerIds },
           },
         });
-
+  
         // Actualizar estado de los trabajadores eliminados
         await this.prisma.worker.updateMany({
           where: { id: { in: workerIds } },
           data: { status: 'AVALIABLE' },
         });
-
+  
         return {
           message: `${workerIds.length} workers removed from operation ${id_operation}`,
           removedWorkers: workerIds,
         };
       }
-
+  
+      // CASO 2: Nuevo formato con id_group opcional
+      if (workersToRemove && workersToRemove.length > 0) {
+        const results: Array<{
+          workerId: any;
+          groupId?: any;
+          action: string;
+          success: boolean;
+          workerReleased?: boolean;
+          groupsRemoved?: number;
+        }> = [];
+        const allWorkerIds = workersToRemove.map(w => w.id);
+  
+        // Validar que todos los trabajadores existen
+        const workerValidation = await this.validationService.validateAllIds({
+          workerIds: allWorkerIds,
+        });
+  
+        if (
+          workerValidation &&
+          'status' in workerValidation &&
+          workerValidation.status === 404
+        ) {
+          return workerValidation;
+        }
+  
+        for (const workerToRemove of workersToRemove) {
+          const { id: workerId, id_group } = workerToRemove;
+  
+          if (id_group) {
+            // Eliminar solo del grupo específico
+            const deleteResult = await this.prisma.operation_Worker.deleteMany({
+              where: {
+                id_operation,
+                id_worker: workerId,
+                id_group: id_group,
+              },
+            });
+  
+            if (deleteResult.count > 0) {
+              results.push({
+                workerId,
+                groupId: id_group,
+                action: 'removed_from_group',
+                success: true
+              });
+  
+              // Verificar si el trabajador aún está en otros grupos de esta operación
+              const remainingInOperation = await this.prisma.operation_Worker.findFirst({
+                where: {
+                  id_operation,
+                  id_worker: workerId,
+                },
+              });
+  
+              // Solo liberar si no está en otros grupos de esta operación
+              if (!remainingInOperation) {
+                // Verificar si está en otras operaciones activas
+                const inOtherActiveOps = await this.prisma.operation_Worker.findFirst({
+                  where: {
+                    id_worker: workerId,
+                    id_operation: { not: id_operation },
+                    operation: {
+                      status: { in: ['PENDING', 'INPROGRESS'] },
+                    },
+                  },
+                });
+  
+                if (!inOtherActiveOps) {
+                  await this.prisma.worker.update({
+                    where: { id: workerId },
+                    data: { status: 'AVALIABLE' },
+                  });
+                  results[results.length - 1].workerReleased = true;
+                }
+              }
+            } else {
+              results.push({
+                workerId,
+                groupId: id_group,
+                action: 'not_found_in_group',
+                success: false
+              });
+            }
+          } else {
+            // Eliminar de toda la operación
+            const deleteResult = await this.prisma.operation_Worker.deleteMany({
+              where: {
+                id_operation,
+                id_worker: workerId,
+              },
+            });
+  
+            if (deleteResult.count > 0) {
+              results.push({
+                workerId,
+                action: 'removed_from_operation',
+                groupsRemoved: deleteResult.count,
+                success: true
+              });
+  
+              // Verificar si está en otras operaciones activas antes de liberar
+              const inOtherActiveOps = await this.prisma.operation_Worker.findFirst({
+                where: {
+                  id_worker: workerId,
+                  id_operation: { not: id_operation },
+                  operation: {
+                    status: { in: ['PENDING', 'INPROGRESS'] },
+                  },
+                },
+              });
+  
+              if (!inOtherActiveOps) {
+                await this.prisma.worker.update({
+                  where: { id: workerId },
+                  data: { status: 'AVALIABLE' },
+                });
+                results[results.length - 1].workerReleased = true;
+              }
+            } else {
+              results.push({
+                workerId,
+                action: 'not_found_in_operation',
+                success: false
+              });
+            }
+          }
+        }
+  
+        return {
+          message: `Processed ${workersToRemove.length} worker removal requests`,
+          results,
+        };
+      }
+  
       return { message: 'No workers to remove', removedWorkers: [] };
     } catch (error) {
       console.error('Error removing workers from operation:', error);
@@ -404,96 +540,138 @@ export class OperationWorkerService {
       throw new Error(error.message);
     }
   }
-  /**
-   * Actualiza la programación de trabajadores ya asignados a una operación
-   * @param id_operation ID de la operación
-   * @param workersToUpdate Array de trabajadores con su nueva programación
-   * @returns Resultado de la actualización
-   */
-  async updateWorkersSchedule(
-    id_operation: number,
-    workersToUpdate: WorkerScheduleDto[],
-  ) {
-    try {
-      // Verificar que la operación existe
-      const operation = await this.prisma.operation.findUnique({
-        where: { id: id_operation },
-      });
+ /**
+ * Actualiza la programación de trabajadores ya asignados a una operación
+ * @param id_operation ID de la operación
+ * @param workersToUpdate Array de trabajadores con su nueva programación
+ * @returns Resultado de la actualización
+ */
+async updateWorkersSchedule(
+  id_operation: number,
+  workersToUpdate: WorkerScheduleDto[],
+) {
+  try {
+    // Verificar que la operación existe
+    const operation = await this.prisma.operation.findUnique({
+      where: { id: id_operation },
+    });
 
-      if (!operation) {
-        return { message: 'Operation not found', status: 404 };
+    if (!operation) {
+      return { message: 'Operation not found', status: 404 };
+    }
+
+    // Contadores para el reporte final
+    let groupsUpdated = 0;
+    let totalWorkersUpdated = 0;
+
+    // Por cada grupo de trabajadores a actualizar
+    for (const group of workersToUpdate) {
+      const { dateStart, timeStart, dateEnd, timeEnd, id_group, workerIds } = group;
+
+      // VALIDACIÓN CRÍTICA: Verificar que el id_group existe en la operación
+      if (!id_group) {
+        throw new Error(
+          'id_group es requerido para actualizar un grupo existente',
+        );
       }
 
-      // Contadores para el reporte final
-      let groupsUpdated = 0;
-      let totalWorkersUpdated = 0;
-
-      // Por cada grupo de trabajadores a actualizar
-      for (const group of workersToUpdate) {
-        const { dateStart, timeStart, dateEnd, timeEnd, id_group } = group;
-
-        // VALIDACIÓN CRÍTICA: Verificar que el id_group existe en la operación
-        if (!id_group) {
-          throw new Error(
-            'id_group es requerido para actualizar un grupo existente',
-          );
-        }
-
-        // Verificar que el grupo existe en la operación
-        const existingGroupRecords =
-          await this.prisma.operation_Worker.findMany({
-            where: {
-              id_operation,
-              id_group: id_group,
-            },
-          });
-
-        if (existingGroupRecords.length === 0) {
-          throw new Error(
-            `El grupo ${id_group} no existe en la operación ${id_operation}`,
-          );
-        }
-
-        const updateData: any = {};
-
-        // Solo incluir campos que se proporcionaron (evitar sobrescribir con undefined)
-        if (dateStart !== undefined) {
-          updateData.dateStart = dateStart ? new Date(dateStart) : null;
-        }
-
-        if (timeStart !== undefined) {
-          updateData.timeStart = timeStart || null;
-        }
-
-        if (dateEnd !== undefined) {
-          updateData.dateEnd = dateEnd ? new Date(dateEnd) : null;
-        }
-
-        if (timeEnd !== undefined) {
-          updateData.timeEnd = timeEnd || null;
-        }
-
-        // Ejecutar la actualización del grupo completo
-        const updateResult = await this.prisma.operation_Worker.updateMany({
+      // Verificar que el grupo existe en la operación
+      const existingGroupRecords =
+        await this.prisma.operation_Worker.findMany({
           where: {
             id_operation,
             id_group: id_group,
           },
-          data: updateData,
         });
 
-        groupsUpdated++;
-        totalWorkersUpdated += updateResult.count;
+      if (existingGroupRecords.length === 0) {
+       return{ message: `Group with id_group ${id_group} not found in operation ${id_operation}`, status: 404 };
       }
 
-      return {
-        message: `Workers schedule updated successfully: ${groupsUpdated} groups updated, ${totalWorkersUpdated} workers affected`,
-        groupsUpdated,
-        totalWorkersUpdated,
-      };
-    } catch (error) {
-      console.error('Error updating workers schedule:', error);
-      throw new Error(error.message);
+      // NUEVO: Agregar trabajadores si se proporcionaron workerIds
+      if (workerIds && workerIds.length > 0) {
+        // Obtener trabajadores actuales del grupo
+        const currentWorkerIds = existingGroupRecords.map(record => record.id_worker);
+        
+        // Filtrar trabajadores nuevos (que no están en el grupo)
+        const newWorkerIds = workerIds.filter(id => !currentWorkerIds.includes(id));
+        
+        if (newWorkerIds.length > 0) {
+          // Validar que los trabajadores existen
+          const validation = await this.validationService.validateAllIds({ workerIds: newWorkerIds });
+          if (validation && 'status' in validation && validation.status === 404) {
+            return validation;
+          }
+
+          // Obtener configuración del primer registro del grupo para aplicar a los nuevos
+          const groupConfig = existingGroupRecords[0];
+          
+          // Crear registros para los nuevos trabajadores
+          const newWorkerRecords = newWorkerIds.map(workerId => ({
+            id_operation,
+            id_worker: workerId,
+            id_group: id_group,
+            dateStart: groupConfig.dateStart,
+            dateEnd: groupConfig.dateEnd,
+            timeStart: groupConfig.timeStart,
+            timeEnd: groupConfig.timeEnd,
+            id_task: groupConfig.id_task,
+          }));
+
+          await this.prisma.operation_Worker.createMany({
+            data: newWorkerRecords,
+          });
+
+          // Actualizar estado de trabajadores a ASSIGNED
+          await this.prisma.worker.updateMany({
+            where: { id: { in: newWorkerIds } },
+            data: { status: 'ASSIGNED' },
+          });
+
+          console.log(`Added ${newWorkerIds.length} new workers to group ${id_group}`);
+        }
+      }
+
+      const updateData: any = {};
+
+      // Solo incluir campos que se proporcionaron (evitar sobrescribir con undefined)
+      if (dateStart !== undefined) {
+        updateData.dateStart = dateStart ? new Date(dateStart) : null;
+      }
+
+      if (timeStart !== undefined) {
+        updateData.timeStart = timeStart || null;
+      }
+
+      if (dateEnd !== undefined) {
+        updateData.dateEnd = dateEnd ? new Date(dateEnd) : null;
+      }
+
+      if (timeEnd !== undefined) {
+        updateData.timeEnd = timeEnd || null;
+      }
+
+      // Ejecutar la actualización del grupo completo (incluye los nuevos trabajadores)
+      const updateResult = await this.prisma.operation_Worker.updateMany({
+        where: {
+          id_operation,
+          id_group: id_group,
+        },
+        data: updateData,
+      });
+
+      groupsUpdated++;
+      totalWorkersUpdated += updateResult.count;
     }
+
+    return {
+      message: `Workers schedule updated successfully: ${groupsUpdated} groups updated, ${totalWorkersUpdated} workers affected`,
+      groupsUpdated,
+      totalWorkersUpdated,
+    };
+  } catch (error) {
+    console.error('Error updating workers schedule:', error);
+    throw new Error(error.message);
   }
+}
 }

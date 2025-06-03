@@ -79,16 +79,10 @@ export class InabilityService {
 
         if (filters.dateDisableEnd || filters.dateDisableStart) {
          if(filters.dateDisableEnd){
-          where.dateDisableEnd = {
-            ...where.dateDisableEnd,
-            lte: filters.dateDisableEnd,
-          }
+          where.dateDisableEnd = filters.dateDisableEnd;
          }
           if(filters.dateDisableStart){
-            where.dateDisableStart = {
-              ...where.dateDisableStart,
-              gte: filters.dateDisableStart,
-            }
+            where.dateDisableStart = filters.dateDisableStart;
           }
         }
       }

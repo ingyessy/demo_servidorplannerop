@@ -150,7 +150,10 @@ async assignWorkersAndInCharge(
   async processRelationUpdates(operationId: number, workers?: any, inCharged?: any) {
     // Procesar actualizaciones de trabajadores
     if (workers) {
-      await this.processWorkerUpdates(operationId, workers);
+     const res = await this.processWorkerUpdates(operationId, workers);
+     if (res && res.status === 404) {
+       return res;
+     }
     }
 
     // Procesar actualizaciones de encargados
@@ -159,18 +162,26 @@ async assignWorkersAndInCharge(
     }
   }
 
-  /**
-   * Procesa las actualizaciones de trabajadores
-   * @param operationId - ID de la operación
-   * @param workers - Datos de actualización de trabajadores
-   */
-  private async processWorkerUpdates(operationId: number, workers: any) {
+ /**
+ * Procesa las actualizaciones de trabajadores
+ * @param operationId - ID de la operación
+ * @param workers - Datos de actualización de trabajadores
+ * @returns Resultado de las operaciones
+ */
+private async processWorkerUpdates(operationId: number, workers: any): Promise<any> {
+  const results = {
+    connected: null as any,
+    disconnected: null as any,
+    updated: null as any,
+  };
+
+  try {
     // Conectar nuevos trabajadores
     if (workers.connect?.length) {
       const { simpleWorkers, scheduledGroups } = this.separateWorkerTypes(workers.connect);
       
       if (simpleWorkers.length > 0 || scheduledGroups.length > 0) {
-        await this.operationWorkerService.assignWorkersToOperation({
+        results.connected = await this.operationWorkerService.assignWorkersToOperation({
           id_operation: operationId,
           workerIds: simpleWorkers,
           workersWithSchedule: scheduledGroups,
@@ -178,26 +189,31 @@ async assignWorkersAndInCharge(
       }
     }
 
-    // Desconectar trabajadores
+    // Desconectar trabajadores (MODIFICADO)
     if (workers.disconnect?.length) {
-      const workerIds = workers.disconnect.map(item => item.id);
-      
-      if (workerIds.length > 0) {
-        await this.operationWorkerService.removeWorkersFromOperation({
-          id_operation: operationId,
-          workerIds,
-        });
-      }
+      results.disconnected = await this.operationWorkerService.removeWorkersFromOperation({
+        id_operation: operationId,
+        workersToRemove: workers.disconnect, // ← CAMBIO: Pasar array completo con id_group opcional
+      });
     }
 
     // Actualizar programación de trabajadores
     if (workers.update?.length) {
-      await this.operationWorkerService.updateWorkersSchedule(
+      results.updated = await this.operationWorkerService.updateWorkersSchedule(
         operationId,
         workers.update,
       );
     }
+
+    return results;
+  } catch (error) {
+    console.error('Error processing worker updates:', error);
+    return {
+      error: error.message,
+      status: 500
+    };
   }
+}
 
   /**
    * Separa trabajadores en simples y programados

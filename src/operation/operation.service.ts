@@ -229,8 +229,11 @@ export class OperationService {
       }
 
       // Process relationship updates
-      await this.relationService.processRelationUpdates(id, workers, inCharged);
-
+     const res = await this.relationService.processRelationUpdates(id, workers, inCharged);
+     
+     if (res && res.status === 404) {
+        return res;
+      }
       // Get updated operation
       const updatedOperation = await this.findOne(id);
       return updatedOperation;

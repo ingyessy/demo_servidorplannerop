@@ -290,7 +290,7 @@ export class OperationController {
   ) {
     const response = await this.operationService.update(id, updateOperationDto);
     if (response && response['status'] === 404) {
-      throw new NotFoundException(response['messsge']);
+      throw new NotFoundException(response['message']);
     }
     return response;
   }
