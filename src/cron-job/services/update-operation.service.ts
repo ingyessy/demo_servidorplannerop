@@ -1,7 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { differenceInMinutes } from 'date-fns';
-import { time } from 'console';
+import { 
+  getColombianDateTime, 
+  getColombianTimeString, 
+  getColombianStartOfDay, 
+  getColombianEndOfDay 
+} from 'src/common/utils/dateColombia';
 
 @Injectable()
 export class UpdateOperationService {
@@ -17,19 +22,18 @@ export class UpdateOperationService {
     try {
       this.logger.debug('Checking for operations to update to INPROGRESS...');
 
-      const now = new Date();
+      // Usar hora colombiana en lugar de hora del servidor
+      const now = getColombianDateTime();
+      
+      // Crear fecha de inicio (hoy a medianoche hora colombiana)
+      const startOfDay = getColombianStartOfDay(now);
+      
+      // Crear fecha de fin (mañana a medianoche hora colombiana)
+      const endOfDay = getColombianEndOfDay(now);
 
-      // Crear fecha de inicio (hoy a medianoche)
-      const startOfDay = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate(),
+      this.logger.debug(
+        `Colombian time now: ${now.toISOString()}`
       );
-
-      // Crear fecha de fin (mañana a medianoche)
-      const endOfDay = new Date(startOfDay);
-      endOfDay.setDate(startOfDay.getDate() + 1);
-
       this.logger.debug(
         `Searching operations for date: ${startOfDay.toISOString()}`,
       );
@@ -38,8 +42,8 @@ export class UpdateOperationService {
       const pendingOperations = await this.prisma.operation.findMany({
         where: {
           dateStart: {
-            gte: startOfDay, // Mayor o igual que hoy a medianoche
-            lt: endOfDay, // Menor que mañana a medianoche
+            gte: startOfDay, // Mayor o igual que hoy a medianoche (hora colombiana)
+            lt: endOfDay, // Menor que mañana a medianoche (hora colombiana)
           },
           status: 'PENDING',
         },
@@ -56,11 +60,12 @@ export class UpdateOperationService {
           `${dateStartStr}T${operation.timeStrat}`,
         );
 
-        // Verificar si han pasado 5 minutos desde la hora de inicio
+        // Verificar si han pasado 5 minutos desde la hora de inicio (usando hora colombiana)
         const minutesDiff = differenceInMinutes(now, startDateTime);
         this.logger.debug(
-          `Operation ${operation.id}: ${minutesDiff} minutes since start time`,
+          `Operation ${operation.id}: ${minutesDiff} minutes since start time (Colombian time)`,
         );
+        
         if (minutesDiff >= 5) {
           // Actualizar el estado a INPROGRESS
           await this.prisma.operation.update({
@@ -68,7 +73,7 @@ export class UpdateOperationService {
             data: { status: 'INPROGRESS' },
           });
 
-          // actualizar la fecha y hora de inicio en la tabla intermedia
+          // Actualizar la fecha y hora de inicio en la tabla intermedia (con hora colombiana)
           await this.prisma.operation_Worker.updateMany({
             where: {
               id_operation: operation.id,
@@ -101,29 +106,28 @@ export class UpdateOperationService {
     try {
       this.logger.debug('Checking for operations to update to COMPLETED...');
 
-      const now = new Date();
-
-      // Crear fecha de inicio (hoy a medianoche)
-      const startOfDay = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate(),
-      );
-
-      // Crear fecha de fin (mañana a medianoche)
-      const endOfDay = new Date(startOfDay);
-      endOfDay.setDate(startOfDay.getDate() + 1);
+      // Usar hora colombiana en lugar de hora del servidor
+      const now = getColombianDateTime();
+      
+      // Crear fecha de inicio (hoy a medianoche hora colombiana)
+      const startOfDay = getColombianStartOfDay(now);
+      
+      // Crear fecha de fin (mañana a medianoche hora colombiana)
+      const endOfDay = getColombianEndOfDay(now);
 
       this.logger.debug(
-        `Searching operations for date: ${startOfDay.toISOString()}`,
+        `Colombian time now: ${now.toISOString()}`
+      );
+      this.logger.debug(
+        `Searching operations for date: ${startOfDay.toISOString()} to ${endOfDay.toISOString()}`,
       );
 
       // Buscar todas las operaciones con estado INPROGRESS para hoy que tengan fecha de finalización
       const inProgressOperations = await this.prisma.operation.findMany({
         where: {
           dateEnd: {
-            gte: startOfDay, // Mayor o igual que hoy a medianoche
-            lt: endOfDay, // Menor que mañana a medianoche
+            gte: startOfDay, // Mayor o igual que hoy a medianoche (hora colombiana)
+            lt: endOfDay, // Menor que mañana a medianoche (hora colombiana)
           },
           status: 'INPROGRESS',
           timeEnd: {
@@ -152,14 +156,17 @@ export class UpdateOperationService {
         const dateEndStr = operation.dateEnd.toISOString().split('T')[0];
         const endDateTime = new Date(`${dateEndStr}T${operation.timeEnd}`);
 
-        // Verificar si han pasado 10 minutos desde la hora de finalización
+        // Verificar si han pasado 10 minutos desde la hora de finalización (usando hora colombiana)
         const minutesDiff = differenceInMinutes(now, endDateTime);
         this.logger.debug(
-          `Operation ${operation.id}: ${minutesDiff} minutes since end time`,
+          `Operation ${operation.id}: ${minutesDiff} minutes since end time (Colombian time)`,
         );
 
+        // Si han pasado 10 minutos desde la hora de finalización
         if (minutesDiff >= 10) {
-          //fecha y hora de finalización de colombia
+          // Obtener fecha y hora de finalización en zona horaria colombiana
+          const colombianEndTime = getColombianDateTime();
+          const colombianTimeString = getColombianTimeString();
 
           // Paso 1: Obtener los trabajadores de esta operación desde la tabla intermedia
           const operationWorkers = await this.prisma.operation_Worker.findMany({
@@ -189,12 +196,13 @@ export class UpdateOperationService {
           }
 
           // Paso 3: Actualizar el estado de la operación a COMPLETED
-          await this.prisma.operation.update({
+          const response = await this.prisma.operation.update({
             where: { id: operation.id },
             data: { status: 'COMPLETED' },
           });
 
-          //Paso 4: Actualizar la fecha y hora de finalización en la tabla intermedia
+
+          // Paso 4: Actualizar la fecha y hora de finalización en la tabla intermedia (con hora colombiana)
           await this.prisma.operation_Worker.updateMany({
             where: {
               id_operation: operation.id,
@@ -202,10 +210,21 @@ export class UpdateOperationService {
               timeEnd: null,
             },
             data: {
-              dateEnd: operation.dateEnd,
-              timeEnd: operation.timeEnd,
+              dateEnd: colombianEndTime, // Usar hora colombiana
+              timeEnd: colombianTimeString, // Usar hora colombiana en formato HH:MM
             },
           });
+
+          //paso 5: actulizar el estado de cliente programming a COMPLETED
+          if(response.id_clientProgramming){
+            await this.prisma.clientProgramming.update({
+              where: { id: response.id_clientProgramming },
+              data: { status: 'COMPLETED' },
+            });
+            this.logger.debug(
+              `Updated client programming ${response.id_clientProgramming} to COMPLETED status`,
+            );
+          }
 
           updatedCount++;
         }

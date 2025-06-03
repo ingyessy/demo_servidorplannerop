@@ -3,7 +3,7 @@ import { CreateOperationDto } from './dto/create-operation.dto';
 import { UpdateOperationDto } from './dto/update-operation.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { OperationWorkerService } from 'src/operation-worker/operation-worker.service';
-import { StatusOperation } from '@prisma/client';
+import { StatusComplete, StatusOperation } from '@prisma/client';
 import { OperationFinderService } from './services/operation-finder.service';
 import { OperationRelationService } from './services/operation-relation.service';
 import { OperationFilterDto } from './dto/fliter-operation.dto';
@@ -59,11 +59,21 @@ export class OperationService {
   async findOperationByUser(id_user: number) {
     return await this.finderService.findByUser(id_user);
   }
-   /**
+  /**
    * Obtener operaciones con paginación y filtros opcionales
    */
-   async findAllPaginated(page: number = 1, limit: number = 10, filters?: OperationFilterDto, activatePaginated: boolean = true) {
-    return this.finderService.findAllPaginated(page, limit, filters,activatePaginated);
+  async findAllPaginated(
+    page: number = 1,
+    limit: number = 10,
+    filters?: OperationFilterDto,
+    activatePaginated: boolean = true,
+  ) {
+    return this.finderService.findAllPaginated(
+      page,
+      limit,
+      filters,
+      activatePaginated,
+    );
   }
   /**
    * Encuentra operaciones asociadas a un trabajador específico
@@ -102,6 +112,14 @@ export class OperationService {
 
       if (validationResult) return validationResult;
 
+      //validar programacion cliente
+      const validateClientProgramming =
+        await this.relationService.validateClientProgramming(
+          createOperationDto.id_clientProgramming || null,
+        );
+
+        if (validateClientProgramming) return validateClientProgramming;
+
       // Crear la operación
       const operation = await this.createOperation(createOperationDto);
 
@@ -137,7 +155,7 @@ export class OperationService {
       ...restOperationData
     } = operationData;
 
-    return this.prisma.operation.create({
+    const newOperation = await this.prisma.operation.create({
       data: {
         ...restOperationData,
         id_user: operationData.id_user as number,
@@ -148,6 +166,16 @@ export class OperationService {
         timeEnd: timeEnd || null,
       },
     });
+
+    if (id_clientProgramming) {
+      await this.prisma.clientProgramming.update({
+        where: { id: id_clientProgramming },
+        data: {
+          status: StatusComplete.ASSIGNED,
+        },
+      });
+    }
+    return newOperation;
   }
   /**
    * Actualiza una operación existente
@@ -155,18 +183,19 @@ export class OperationService {
    * @param updateOperationDto - Datos de actualización
    * @returns Operación actualizada
    */
-   async update(id: number, updateOperationDto: UpdateOperationDto) {
+  async update(id: number, updateOperationDto: UpdateOperationDto) {
     try {
       // Verify operation exists
       const validate = await this.findOne(id);
       if (validate['status'] === 404) {
         return validate;
       }
-  
+
       // Validate inCharged IDs
-      const validationResult = await this.relationService.validateInChargedIds(updateOperationDto);
+      const validationResult =
+        await this.relationService.validateInChargedIds(updateOperationDto);
       if (validationResult) return validationResult;
-  
+
       // Extract data for update
       const {
         workers,
@@ -177,7 +206,7 @@ export class OperationService {
         timeEnd,
         ...directFields
       } = updateOperationDto;
-  
+
       // Prepare data to update
       const operationUpdateData = this.prepareOperationUpdateData(
         directFields,
@@ -186,21 +215,25 @@ export class OperationService {
         timeStrat,
         timeEnd,
       );
-  
+
       // Update operation
       await this.prisma.operation.update({
         where: { id },
         data: operationUpdateData,
       });
-  
+
       // Handle status change
       if (directFields.status === StatusOperation.COMPLETED) {
+        await this.operationWorkerService.completeClientProgramming(id);
         await this.operationWorkerService.releaseAllWorkersFromOperation(id);
       }
-  
+
       // Process relationship updates
-      await this.relationService.processRelationUpdates(id, workers, inCharged);
-  
+     const res = await this.relationService.processRelationUpdates(id, workers, inCharged);
+     
+     if (res && res.status === 404) {
+        return res;
+      }
       // Get updated operation
       const updatedOperation = await this.findOne(id);
       return updatedOperation;
@@ -210,7 +243,6 @@ export class OperationService {
     }
   }
 
-  
   /**
    * Prepara los datos para actualizar una operación
    * @param directFields - Campos directos a actualizar

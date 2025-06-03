@@ -3,6 +3,7 @@ import { CreateClientProgrammingDto } from './dto/create-client-programming.dto'
 import { UpdateClientProgrammingDto } from './dto/update-client-programming.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ValidationService } from 'src/common/validation/validation.service';
+import { FilterClientProgrammingDto } from './dto/filter-client-programming.dto';
 
 @Injectable()
 export class ClientProgrammingService {
@@ -24,7 +25,8 @@ export class ClientProgrammingService {
       if (
         validationProgramming &&
         'status' in validationProgramming &&
-        validationProgramming.status === 409
+        validationProgramming.status === 409 ||
+        validationProgramming && validationProgramming.status === 404
       ) {
         return validationProgramming;
       }
@@ -71,6 +73,55 @@ export class ClientProgrammingService {
       return response;
     } catch (error) {
       throw new Error('Failed to fetch client programming');
+    }
+  }
+
+  async findAllFiltered(filters: FilterClientProgrammingDto) {
+    try {
+      // Construir el objeto where dinámicamente
+      const whereConditions: any = {};
+
+      // Filtro por fecha de inicio
+      if (filters.dateStart) {
+        whereConditions.dateStart = filters.dateStart;
+      }
+
+      if (filters.status) {
+        whereConditions.status = filters.status[0];
+      }
+      //  else {
+      //   // Por defecto solo traer UNASSIGNED
+      //   whereConditions.status = StatusComplete.UNASSIGNED;
+      // }
+
+      // Filtro por texto de búsqueda
+      if (filters.search) {
+        whereConditions.OR = [
+          { service: { contains: filters.search, mode: 'insensitive' } },
+          { client: { contains: filters.search, mode: 'insensitive' } },
+          { ubication: { contains: filters.search, mode: 'insensitive' } },
+        ];
+      }
+
+      const response = await this.prisma.clientProgramming.findMany({
+        where: whereConditions,
+        orderBy: [{ dateStart: 'asc' }],
+      });
+
+      if (!response || response.length === 0) {
+        return {
+          status: 404,
+          message: 'No client programming found with the specified filters',
+          filters: filters,
+          count: 0,
+          data: [],
+        };
+      }
+
+      return response;
+    } catch (error) {
+      console.error('Error filtering client programming:', error);
+      throw new Error('Failed to filter client programming');
     }
   }
 

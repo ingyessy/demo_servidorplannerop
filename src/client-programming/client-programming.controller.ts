@@ -10,6 +10,7 @@ import {
   NotFoundException,
   UseGuards,
   ConflictException,
+  Query,
 } from '@nestjs/common';
 import { ClientProgrammingService } from './client-programming.service';
 import { CreateClientProgrammingDto } from './dto/create-client-programming.dto';
@@ -17,8 +18,9 @@ import { UpdateClientProgrammingDto } from './dto/update-client-programming.dto'
 import { ParseIntPipe } from 'src/pipes/parse-int/parse-int.pipe';
 import { DateTransformPipe } from 'src/pipes/date-transform/date-transform.pipe';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
-import { ApiBearerAuth } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { FilterClientProgrammingDto } from './dto/filter-client-programming.dto';
 
 @Controller('client-programming')
 @UseGuards(JwtAuthGuard)
@@ -40,8 +42,20 @@ export class ClientProgrammingController {
     );
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
-    }else if (response['status'] === 409) {
+    } else if (response['status'] === 409) {
       throw new ConflictException(response['message']);
+    }
+    return response;
+  }
+
+  @Get('filtered')
+  @UsePipes(new DateTransformPipe())
+  @ApiOperation({ summary: 'Obtener programaciones de cliente con filtros' })
+  async findAllFiltered(@Query() filters: FilterClientProgrammingDto) {
+    const response =
+      await this.clientProgrammingService.findAllFiltered(filters);
+    if (response['status'] === 404) {
+      throw new NotFoundException(response['message']);
     }
     return response;
   }
