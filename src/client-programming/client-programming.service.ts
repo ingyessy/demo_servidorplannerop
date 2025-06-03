@@ -4,7 +4,6 @@ import { UpdateClientProgrammingDto } from './dto/update-client-programming.dto'
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ValidationService } from 'src/common/validation/validation.service';
 import { FilterClientProgrammingDto } from './dto/filter-client-programming.dto';
-import { StatusComplete } from '@prisma/client';
 
 @Injectable()
 export class ClientProgrammingService {
@@ -84,15 +83,16 @@ export class ClientProgrammingService {
 
       // Filtro por fecha de inicio
       if (filters.dateStart) {
-        whereConditions.dateStart = new Date(filters.dateStart);
+        whereConditions.dateStart = filters.dateStart;
       }
 
       if (filters.status) {
         whereConditions.status = filters.status[0];
-      } else {
-        // Por defecto solo traer UNASSIGNED
-        whereConditions.status = StatusComplete.UNASSIGNED;
       }
+      //  else {
+      //   // Por defecto solo traer UNASSIGNED
+      //   whereConditions.status = StatusComplete.UNASSIGNED;
+      // }
 
       // Filtro por texto de búsqueda
       if (filters.search) {
