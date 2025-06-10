@@ -213,7 +213,7 @@ export class ValidationService {
    * @param id_operation - ID de la operación
    *
    */
-  async validateClientProgramming({
+   async validateClientProgramming({
     id_clientProgramming,
     service_request,
     service,
@@ -221,19 +221,17 @@ export class ValidationService {
     timeStart,
     client,
     ubication,
-    status,
   }: {
     id_clientProgramming?: number | null;
     service_request?: string;
     service?: string;
-    dateStart?: string;
+    dateStart?: string | Date; 
     timeStart?: string;
     client?: string;
     ubication?: string;
-    status?: string;
   }) {
     try {
-      // Verificar que la programación del cliente no exista
+      // Verificar que la programación del cliente no exista (TODOS los campos deben coincidir)
       if (
         service_request &&
         service &&
@@ -242,18 +240,41 @@ export class ValidationService {
         client &&
         ubication
       ) {
-        const existingProgramming =
-          await this.prisma.clientProgramming.findFirst({
-            where: {
-              service_request,
-              service,
-              dateStart: new Date(dateStart || ''),
-              timeStart,
-              client,
-              ubication,
-            },
-          });
-
+  
+        let targetDate: Date;
+  
+        // Manejar tanto strings como objetos Date
+        if (typeof dateStart === 'string') {
+          if (dateStart.includes('-')) {
+            // Formato "YYYY-MM-DD"
+            const [year, month, day] = dateStart.split('-').map(Number);
+            targetDate = new Date(year, month - 1, day, 0, 0, 0, 0);
+          } else {
+            // Otros formatos de string
+            targetDate = new Date(dateStart);
+            targetDate.setHours(0, 0, 0, 0);
+          }
+        } else if (dateStart instanceof Date) {
+          // Ya es un objeto Date
+          targetDate = new Date(dateStart);
+          targetDate.setHours(0, 0, 0, 0);
+        } else {
+          throw new Error('Invalid date format');
+        }
+        
+  
+        const existingProgramming = await this.prisma.clientProgramming.findFirst({
+          where: {
+            service_request,
+            service,
+            dateStart: targetDate,
+            timeStart,
+            client,
+            ubication,
+          },
+        });
+  
+  
         if (existingProgramming) {
           return {
             message: 'Client programming already exists',
@@ -261,30 +282,39 @@ export class ValidationService {
           };
         }
       }
-
+  
+      // Verificar si el service_request ya existe (pero excluir el registro actual si estamos editando)
       if (service_request) {
         const serviceRequest = await this.prisma.clientProgramming.findFirst({
-          where: { service_request },
+          where: { 
+            service_request,
+            // Si estamos editando, excluir el registro actual
+            ...(id_clientProgramming && { id: { not: id_clientProgramming } })
+          },
         });
+        
         if (serviceRequest) {
-          return { message: 'Service alredy exists', status: 409 };
+          return { message: 'Service request already exists', status: 409 };
         }
       }
-
-      // verificar si existe y tiene estado asignado
+  
+      // Verificar si existe y tiene estado asignado
       if (id_clientProgramming) {
         const validateId = await this.prisma.clientProgramming.findUnique({
           where: { id: id_clientProgramming },
         });
+        
         if (!validateId) {
           return { message: 'Client programming not found', status: 404 };
         }
+        
         const programming = await this.prisma.clientProgramming.findFirst({
           where: {
             id: id_clientProgramming,
             status: StatusComplete.ASSIGNED,
           },
         });
+        
         if (programming) {
           return {
             message: 'Client programming already exists and is assigned',
@@ -292,7 +322,7 @@ export class ValidationService {
           };
         }
       }
-
+  
       // Si no existe, se puede proceder con la creación
       return { success: true };
     } catch (error) {
