@@ -75,4 +75,10 @@ export class CreateWorkerDto {
     message: 'dateRetierment debe tener formato YYYY-MM-DD',
   })
   dateRetierment: string;
+
+  @ApiProperty({ example: '201' })
+  @IsNumber()
+  @Type(() => Number)
+  @IsOptional()
+  id_site?: number;
 }

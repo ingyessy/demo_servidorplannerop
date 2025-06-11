@@ -1,16 +1,21 @@
-import { ApiHideProperty, ApiProperty } from "@nestjs/swagger";
-import { Type } from "class-transformer";
-import { IsNumber, IsOptional, IsString } from "class-validator";
+import { ApiHideProperty, ApiProperty } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
+import { IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class CreateClientDto {
+  @ApiProperty({ example: 'Juan' })
+  @IsString()
+  name: string;
 
-    @ApiProperty({example: "Juan"})
-    @IsString()
-    name: string;
+  @ApiHideProperty()
+  @Type(() => Number)
+  @IsNumber()
+  @IsOptional()
+  id_user?: number;
 
-    @ApiHideProperty()
-    @Type (() => Number)
-    @IsNumber()
-    @IsOptional()
-    id_user?: number
+  @ApiProperty({ example: '1' })
+  @Type(() => Number)
+  @IsNumber()
+  @IsOptional()
+  id_site?: number;
 }

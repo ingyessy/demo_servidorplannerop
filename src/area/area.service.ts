@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { CreateAreaDto } from './dto/create-area.dto';
 import { UpdateAreaDto } from './dto/update-area.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { validate } from 'class-validator';
 
 /**
  * Servicio para gestionar areas
@@ -9,9 +10,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
  */
 @Injectable()
 export class AreaService {
-  constructor(
-    private prisma: PrismaService,
-  ) {}
+  constructor(private prisma: PrismaService) {}
   /**
    * Crear un area
    * @param createAreaDto  Datos del area a crear
@@ -70,6 +69,10 @@ export class AreaService {
    */
   async update(id: number, updateAreaDto: UpdateAreaDto) {
     try {
+      const validate = await this.findOne(id);
+      if (validate['status'] === 404) {
+        return validate;
+      }
       const response = await this.prisma.jobArea.update({
         where: {
           id,
@@ -86,8 +89,15 @@ export class AreaService {
    * @param id id del area a eliminar
    * @returns retorna mensaje de exito o error
    */
-  async remove(id: number) {
+  async remove(id: number, id_site?: number) {
     try {
+      const validate = await this.findOne(id);
+      if (validate['status'] === 404) {
+        return validate;
+      }
+      if( id_site !== undefined && validate['id_site'] !== id_site) {
+        return { message: 'Not authorized to delete this area', status: 403 };
+      }
       const response = await this.prisma.jobArea.delete({
         where: {
           id,

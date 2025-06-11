@@ -11,6 +11,7 @@ import {
   UseGuards,
   Request,
   ForbiddenException,
+  UseInterceptors,
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -20,16 +21,32 @@ import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Role } from '@prisma/client';
 import { Roles } from 'src/auth/decorators/roles.decorator';
+import { SiteInterceptor } from 'src/common/interceptors/site.interceptor';
+import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 
 @Controller('user')
 @ApiBearerAuth('access-token')
+@UseInterceptors(SiteInterceptor)
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.SUPERADMIN)
-  async create(@Request() req, @Body() createUserDto: CreateUserDto) {
+  async create(
+    @Request() req,
+    @Body() createUserDto: CreateUserDto,
+    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
+    @CurrentUser('siteId') siteId: number,
+  ) {
+    if (!isSuperAdmin) {
+      if (createUserDto.id_site && createUserDto.id_site !== siteId) {
+        throw new ForbiddenException(
+          `You can only create workers in your site (${siteId})`,
+        );
+      }
+      createUserDto.id_site = siteId;
+    }
     const currentUserRole = req.user.role;
     const newUserRole = createUserDto.role;
     if (currentUserRole === Role.ADMIN && newUserRole === Role.SUPERADMIN) {
@@ -37,8 +54,8 @@ export class UserController {
     }
 
     const response = await this.userService.create(createUserDto);
-    if (response["status"] === 409) {
-      throw new ConflictException(response["message"]);
+    if (response['status'] === 409) {
+      throw new ConflictException(response['message']);
     }
     return response;
   }
@@ -53,8 +70,8 @@ export class UserController {
   @UseGuards(JwtAuthGuard)
   async findOne(@Param('dni') dni: string) {
     const response = await this.userService.findOne(dni);
-    if (response["status"] === 404) {
-      throw new NotFoundException(response["message"]);
+    if (response['status'] === 404) {
+      throw new NotFoundException(response['message']);
     }
     return response;
   }
@@ -66,11 +83,21 @@ export class UserController {
     @Request() req,
     @Param('dni') dni: string,
     @Body() updateUserDto: UpdateUserDto,
+    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
+    @CurrentUser('siteId') siteId: number,
   ) {
+    if (!isSuperAdmin) {
+      if (updateUserDto.id_site && updateUserDto.id_site !== siteId) {
+        throw new ForbiddenException(
+          `You can only update workers in your site (${siteId})`,
+        );
+      }
+      updateUserDto.id_site = siteId;
+    }
     const userToUpdate = await this.userService.findOne(dni);
     const currentUserRole = req.user.role;
-    if (userToUpdate["status"] === 404) {
-      throw new NotFoundException(userToUpdate["message"]);
+    if (userToUpdate['status'] === 404) {
+      throw new NotFoundException(userToUpdate['message']);
     }
 
     if (
@@ -83,8 +110,8 @@ export class UserController {
       );
     }
     const response = await this.userService.update(dni, updateUserDto);
-    if (response["status"] === 404) {
-      throw new NotFoundException(response["message"]);
+    if (response['status'] === 404) {
+      throw new NotFoundException(response['message']);
     }
     return response;
   }
@@ -95,8 +122,8 @@ export class UserController {
   async remove(@Request() req, @Param('dni') dni: string) {
     const userToDelete = await this.userService.findOne(dni);
 
-    if (userToDelete["status"] === 404) {
-      throw new NotFoundException(userToDelete["message"]);
+    if (userToDelete['status'] === 404) {
+      throw new NotFoundException(userToDelete['message']);
     }
     const currentUserRole = req.user.role;
     if (

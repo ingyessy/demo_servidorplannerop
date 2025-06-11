@@ -4,9 +4,10 @@ import { FeedingController } from './feeding.controller';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ValidationService } from 'src/common/validation/validation.service';
 import { PaginationModule } from 'src/common/services/pagination/pagination.module';
+import { AuthModule } from 'src/auth/auth.module';
 
 @Module({
-  imports: [PaginationModule],
+  imports: [PaginationModule, AuthModule],
   controllers: [FeedingController],
   providers: [FeedingService, PrismaService, ValidationService],
 })

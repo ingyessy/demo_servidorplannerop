@@ -26,6 +26,11 @@ model User {
   task              Task[]
   worker            Worker[]
   clientProgramming ClientProgramming[]
+  Site              Site                @relation(fields: [id_site], references: [id])
+  id_site           Int                 @default(1)
+  cretedSites       Site[]              @relation("SiteCreator")
+  id_subsite        Int?
+  subSite           SubSite?            @relation(fields: [id_subsite], references: [id])
 }
 
 model JobArea {
@@ -36,6 +41,10 @@ model JobArea {
   user       User             @relation(fields: [id_user], references: [id])
   operations Operation[]
   workers    Worker[]
+  Site       Site             @relation(fields: [id_site], references: [id])
+  id_site    Int              @default(1)
+  id_subsite Int?
+  subSite    SubSite?         @relation(fields: [id_subsite], references: [id])
 }
 
 model Worker {
@@ -60,6 +69,10 @@ model Worker {
   jobArea          JobArea?           @relation(fields: [id_area], references: [id])
   user             User               @relation(fields: [id_user], references: [id])
   feeding          WorkerFeeding[]
+  Site             Site               @relation(fields: [id_site], references: [id])
+  id_site          Int                @default(1)
+  id_subsite       Int?
+  subSite          SubSite?           @relation(fields: [id_subsite], references: [id])
 }
 
 model Operation {
@@ -82,10 +95,14 @@ model Operation {
   jobArea              JobArea             @relation(fields: [id_area], references: [id])
   clientProgramming    ClientProgramming?  @relation(fields: [id_clientProgramming], references: [id])
   client               Client              @relation(fields: [id_client], references: [id])
-  task                 Task?                @relation(fields: [id_task], references: [id])
+  task                 Task?               @relation(fields: [id_task], references: [id])
   user                 User                @relation(fields: [id_user], references: [id])
   workers              Operation_Worker[]
   feeding              WorkerFeeding[]
+  Site                 Site                @relation(fields: [id_site], references: [id])
+  id_site              Int                 @default(1)
+  id_subsite           Int?
+  subSite              SubSite?            @relation(fields: [id_subsite], references: [id])
 }
 
 model Operation_Worker {
@@ -111,6 +128,10 @@ model Task {
   operations       Operation[]
   user             User               @relation(fields: [id_user], references: [id])
   operation_Worker Operation_Worker[]
+  Site             Site               @relation(fields: [id_site], references: [id])
+  id_site          Int                @default(1)
+  id_subsite       Int?
+  subSite          SubSite?           @relation(fields: [id_subsite], references: [id])
 }
 
 model Client {
@@ -120,6 +141,10 @@ model Client {
   status     StatusActivation @default(ACTIVE)
   user       User             @relation(fields: [id_user], references: [id])
   operations Operation[]
+  Site       Site             @relation(fields: [id_site], references: [id])
+  id_site    Int              @default(1)
+  id_subsite Int?
+  subSite    SubSite?         @relation(fields: [id_subsite], references: [id])
 }
 
 model CalledAttention {
@@ -179,6 +204,43 @@ model ClientProgramming {
   id_user         Int
   user            User           @relation(fields: [id_user], references: [id])
   operations      Operation[]
+  id_site         Int            @default(1)
+  Site            Site           @relation(fields: [id_site], references: [id])
+  id_subsite      Int?
+  subSite         SubSite?       @relation(fields: [id_subsite], references: [id])
+}
+
+model Site {
+  id                Int                 @id @default(autoincrement())
+  name              String              @unique
+  status            StatusActivation    @default(ACTIVE)
+  createAt          DateTime            @default(now())
+  updateAt          DateTime            @updatedAt
+  id_user           Int                 @default(38)
+  user              User                @relation("SiteCreator", fields: [id_user], references: [id])
+  users             User[]
+  workers           Worker[]
+  operations        Operation[]
+  jobAreas          JobArea[]
+  clients           Client[]
+  tasks             Task[]
+  ClientProgramming ClientProgramming[]
+  SubSite           SubSite[]
+}
+
+model SubSite {
+  id                Int                 @id @default(autoincrement())
+  name              String
+  id_site           Int
+  status            StatusActivation    @default(ACTIVE)
+  site              Site                @relation(fields: [id_site], references: [id])
+  User              User[]
+  JobArea           JobArea[]
+  Worker            Worker[]
+  Operation         Operation[]
+  Task              Task[]
+  Client            Client[]
+  ClientProgramming ClientProgramming[]
 }
 
 enum TypeDisability {

@@ -1,4 +1,4 @@
-import {  IsEnum, IsString} from 'class-validator';
+import {  IsEnum, IsNumber, IsOptional, IsString} from 'class-validator';
 import { Role } from '@prisma/client';
 import { Transform } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
@@ -34,4 +34,10 @@ export class CreateUserDto {
   })
   @Transform(({ value }) => value.toUpperCase())
   role: Role;
+
+  @ApiProperty({ example: '1' })
+  @IsNumber()
+  @Transform(({ value }) => Number(value))
+  @IsOptional()
+  id_site?: number;
 }

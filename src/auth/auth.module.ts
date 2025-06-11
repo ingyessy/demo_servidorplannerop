@@ -7,6 +7,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { UserService } from 'src/user/user.service';
 import { ConfigService } from '@nestjs/config';
 import { CacheModule } from '@nestjs/cache-manager';
+import { RolesGuard } from './guards/roles.guard';
 
 @Module({
   imports: [
@@ -23,7 +24,7 @@ import { CacheModule } from '@nestjs/cache-manager';
       }),
     }),
   ],
-  providers: [AuthService, JwtStrategy, PrismaService, UserService],
-  exports: [AuthService, JwtModule],
+  providers: [AuthService, JwtStrategy, PrismaService, UserService,RolesGuard],
+  exports: [AuthService, JwtModule,RolesGuard],
 })
 export class AuthModule {}

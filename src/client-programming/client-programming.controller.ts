@@ -11,6 +11,8 @@ import {
   UseGuards,
   ConflictException,
   Query,
+  UseInterceptors,
+  ForbiddenException,
 } from '@nestjs/common';
 import { ClientProgrammingService } from './client-programming.service';
 import { CreateClientProgrammingDto } from './dto/create-client-programming.dto';
@@ -21,9 +23,11 @@ import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { FilterClientProgrammingDto } from './dto/filter-client-programming.dto';
+import { SiteInterceptor } from 'src/common/interceptors/site.interceptor';
 
 @Controller('client-programming')
 @UseGuards(JwtAuthGuard)
+@UseInterceptors(SiteInterceptor)
 @ApiBearerAuth('access-token')
 export class ClientProgrammingController {
   constructor(
@@ -75,6 +79,7 @@ export class ClientProgrammingController {
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
     }
+    console.log(response);
     return response;
   }
 
@@ -95,10 +100,16 @@ export class ClientProgrammingController {
   }
 
   @Delete(':id')
-  async remove(@Param('id', ParseIntPipe) id: number) {
-    const response = await this.clientProgrammingService.remove(id);
+  async remove(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser('siteId') siteId: number,
+    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
+  ) {
+    const response = await this.clientProgrammingService.remove(id, isSuperAdmin ? undefined : siteId);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
+    }else if (response['status'] === 403) {
+      throw new ForbiddenException(response['message']);
     }
     return response;
   }

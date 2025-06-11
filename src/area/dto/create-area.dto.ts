@@ -9,9 +9,14 @@ export class CreateAreaDto {
   @IsNumber()
   @IsOptional()
   id_user?: number;
-  
+
   @ApiProperty({ example: 'Area 1' })
   @IsString()
   name: string;
 
+  @ApiProperty({ example: '1' })
+  @Type(() => Number)
+  @IsNumber()
+  @IsOptional()
+  id_site?: number;
 }

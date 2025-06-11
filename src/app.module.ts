@@ -28,6 +28,7 @@ import { FeedingModule } from './feeding/feeding.module';
 import { InabilityModule } from './inability/inability.module';
 import { PaginationModule } from './common/services/pagination/pagination.module';
 import { ClientProgrammingModule } from './client-programming/client-programming.module';
+import { SiteModule } from './site/site.module';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { ClientProgrammingModule } from './client-programming/client-programming
     InabilityModule,
     PaginationModule,
     ClientProgrammingModule,
+    SiteModule,
   ],
   providers: [
     PrismaService,

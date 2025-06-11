@@ -118,4 +118,16 @@ export class CreateOperationDto {
   @IsNumber({}, { each: true })
   @IsOptional()
   inChargedIds?: number[];
+
+  @ApiProperty({example: '1'})
+  @IsNumber()
+  @Type(() => Number)
+  @IsOptional()
+  id_site?: number;
+
+  @ApiProperty({ example: '1' })
+  @IsNumber()
+  @Type(() => Number)
+  @IsOptional()
+  id_subsite?: number;
 }

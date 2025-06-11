@@ -36,6 +36,8 @@ export class ValidationService {
   }) {
     try {
       // 1. Validar usuario si se proporciona
+
+      let response: any = { succes: true };
       if (id_user !== undefined) {
         const user = await this.prisma.user.findUnique({
           where: { id: id_user },
@@ -137,10 +139,16 @@ export class ValidationService {
           },
           select: {
             id: true,
+            id_site: true,
+            id_subsite: true,
           },
         });
-
         const existingWorkerIds = existingWorkers.map((worker) => worker.id);
+        const existingWorkerSitesAndSubsite = existingWorkers.map((worker) => ({
+          id: worker.id,
+          id_site: worker.id_site,
+          id_subsite: worker.id_subsite,
+        }));
         const nonExistingWorkerIds = workerIds.filter(
           (workerId) => !existingWorkerIds.includes(workerId),
         );
@@ -152,6 +160,8 @@ export class ValidationService {
             status: 404,
           };
         }
+
+        response.existingWorkerIds = existingWorkerSitesAndSubsite;
       }
 
       // 9. Validar que todos los encargados existan si se proporcionan IDs
@@ -188,14 +198,14 @@ export class ValidationService {
         const operation = await this.prisma.operation.findUnique({
           where: { id: id_operation },
         });
-
+        if (operation) {
+          response.operation = operation;
+        }
         if (!operation) {
           return { message: 'Operation not found', status: 404 };
         }
       }
-
-      // Todos los IDs son válidos
-      return { success: true };
+      return response;
     } catch (error) {
       console.error('Error validating IDs:', error);
       throw new Error(`Error validating IDs: ${error.message}`);
@@ -302,6 +312,51 @@ export class ValidationService {
   }
 
   /**
+   *  Valida los IDs de trabajadores
+   * @param workerIds
+   * @returns
+   */
+  async validateWorkerIds(
+    workerIds: number[],
+    id_subsite?: number | null,
+    id_site?: number | null,
+  ) {
+    if (!workerIds || !workerIds.length) return null;
+    const validateIds = await this.validateAllIds({
+      workerIds,
+    });
+    if (id_subsite && validateIds.existingWorkerIds) {
+      const workersWithInvalidSubsite = validateIds.existingWorkerIds.filter(
+        (worker) => worker.id_subsite !== id_subsite,
+      );
+      if (workersWithInvalidSubsite.length > 0) {
+        const invalidWorkerIds = workersWithInvalidSubsite.map((w) => w.id);
+        return {
+          message: `Not access to workers with IDs: ${invalidWorkerIds.join(
+            ', ',
+          )}`,
+          status: 403,
+        };
+      }
+    }
+    if (id_site && validateIds.existingWorkerIds) {
+      const workersWithInvalidSite = validateIds.existingWorkerIds.filter(
+        (worker) => worker.id_site !== id_site,
+      );
+      if (workersWithInvalidSite.length > 0) {
+        const invalidWorkerIds = workersWithInvalidSite.map((w) => w.id);
+        return {
+          message: `Not access to workers with IDs: ${invalidWorkerIds.join(
+            ', ',
+          )}`,
+          status: 403,
+        };
+      }
+    }
+    return null;
+  }
+
+  /**
    * Valida que un trabajador esté asignado a una operación
    * @param operationId - ID de la operación
    * @param workerId - ID del trabajador
@@ -405,6 +460,63 @@ export class ValidationService {
     } catch (error) {
       console.error('Error checking if worker phone exists:', error);
       throw new Error(`Error checking worker phone: ${error.message}`);
+    }
+  }
+
+  /**
+   * Valida que todos los trabajadores existan y devuelve su información de site/subsite
+   * @param workerIds - Array de IDs de trabajadores
+   * @returns Información de trabajadores existentes o error si no existen
+   */
+  async validateWorkersExistence(workerIds: number[]) {
+    try {
+      if (!workerIds || workerIds.length === 0) {
+        return { success: true, existingWorkerIds: [] };
+      }
+
+      // Obtener todos los trabajadores con su información de site/subsite
+      const existingWorkers = await this.prisma.worker.findMany({
+        where: {
+          id: {
+            in: workerIds,
+          },
+        },
+        select: {
+          id: true,
+          id_site: true,
+          id_subsite: true,
+        },
+      });
+
+      const existingWorkerIds = existingWorkers.map((worker) => worker.id);
+      const existingWorkerSitesAndSubsite = existingWorkers.map((worker) => ({
+        id: worker.id,
+        id_site: worker.id_site,
+        id_subsite: worker.id_subsite,
+      }));
+
+      const nonExistingWorkerIds = workerIds.filter(
+        (workerId) => !existingWorkerIds.includes(workerId),
+      );
+
+      // Si hay trabajadores que no existen, devolver error
+      if (nonExistingWorkerIds.length > 0) {
+        console.log('Workers not found:', nonExistingWorkerIds);
+        return {
+          message: `Workers not found: ${nonExistingWorkerIds.join(', ')}`,
+          status: 404,
+          nonExistingWorkers: nonExistingWorkerIds,
+        };
+      }
+
+      // Devolver la información de los trabajadores existentes
+      return {
+        success: true,
+        existingWorkerIds: existingWorkerSitesAndSubsite,
+      };
+    } catch (error) {
+      console.error('Error validating workers existence:', error);
+      throw new Error(`Error validating workers: ${error.message}`);
     }
   }
 }

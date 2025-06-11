@@ -60,6 +60,14 @@ export class PaginateOperationService {
     
     if (!filters) return whereClause;
 
+    if(filters.id_site){
+      whereClause.id_site = filters.id_site;
+    }
+
+    if(filters.id_subsite){
+      whereClause.id_subsite = filters.id_subsite;
+    }
+
     if (filters.status && filters.status.length > 0) {
       whereClause.status = { in: filters.status };
     }

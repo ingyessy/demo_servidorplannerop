@@ -37,6 +37,7 @@ export class TaskService {
       });
       return response;
     } catch (error) {
+      console.error('Error creating task:', error);
       throw new Error('Error create Task');
     }
   }

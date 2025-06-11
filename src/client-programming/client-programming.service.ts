@@ -23,10 +23,10 @@ export class ClientProgrammingService {
           timeStart: createClientProgrammingDto.timeStart,
         });
       if (
-        validationProgramming &&
-        'status' in validationProgramming &&
-        validationProgramming.status === 409 ||
-        validationProgramming && validationProgramming.status === 404
+        (validationProgramming &&
+          'status' in validationProgramming &&
+          validationProgramming.status === 409) ||
+        (validationProgramming && validationProgramming.status === 404)
       ) {
         return validationProgramming;
       }
@@ -64,7 +64,7 @@ export class ClientProgrammingService {
           id,
         },
       });
-      if (!response) {
+      if (!response || Object.keys(response).length === 0) {
         return {
           status: 404,
           message: 'Not Found Client Programming',
@@ -148,11 +148,20 @@ export class ClientProgrammingService {
     }
   }
 
-  async remove(id: number) {
+  async remove(id: number, id_site?: number) {
     try {
       const validateId = await this.findOne(id);
       if (validateId && 'status' in validateId && validateId.status === 404) {
         return validateId;
+      }
+      if (id_site !== undefined) {
+        const validateSite = validateId['id_site'];
+        if (validateSite !== id_site) {
+          return {
+            message: 'Not authorized to delete this client programming',
+            status: 403,
+          };
+        }
       }
       const response = await this.prisma.clientProgramming.delete({
         where: { id },

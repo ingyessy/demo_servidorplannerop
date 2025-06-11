@@ -11,6 +11,8 @@ import {
   UseGuards,
   Query,
   Res,
+  UseInterceptors,
+  ConflictException,
 } from '@nestjs/common';
 import { InabilityService } from './inability.service';
 import { CreateInabilityDto } from './dto/create-inability.dto';
@@ -23,9 +25,11 @@ import { FilterInabilityDto } from './dto/filter-inability';
 import { Response } from 'express';
 import { ExcelExportService } from 'src/common/validation/services/excel-export.service';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
+import { SiteInterceptor } from 'src/common/interceptors/site.interceptor';
 
 @Controller('inability')
 @UseGuards(JwtAuthGuard)
+@UseInterceptors(SiteInterceptor)
 @ApiBearerAuth('access-token')
 export class InabilityController {
   constructor(
@@ -35,27 +39,51 @@ export class InabilityController {
 
   @Post()
   @UsePipes(DateTransformPipe)
-  async create(@Body() createInabilityDto: CreateInabilityDto, @CurrentUser('userId') userId: number) {
+  async create(
+    @Body() createInabilityDto: CreateInabilityDto,
+    @CurrentUser('userId') userId: number,
+    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
+    @CurrentUser('siteId') siteId: number,
+  ) {
     createInabilityDto.id_user = userId;
-    const response = await this.inabilityService.create(createInabilityDto);
+    const response = await this.inabilityService.create(
+      createInabilityDto,
+      isSuperAdmin ? undefined : siteId,
+    );
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
+    } else if (response['status'] === 409) {
+      throw new ConflictException(response['message']);
     }
     return response;
   }
 
   @Get()
-  async findAll() {
-    const response = await this.inabilityService.findAll();
+  async findAll(
+    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
+    @CurrentUser('siteId') siteId: number,
+  ) {
+    const response = await this.inabilityService.findAll(
+      isSuperAdmin ? undefined : siteId,
+    );
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
+    } else if (response['status'] === 409) {
+      throw new ConflictException(response['message']);
     }
     return response;
   }
 
   @Get(':id')
-  async findOne(@Param('id', ParseIntPipe) id: number) {
-    const response = await this.inabilityService.findOne(id);
+  async findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
+    @CurrentUser('siteId') siteId: number,
+  ) {
+    const response = await this.inabilityService.findOne(
+      id,
+      isSuperAdmin ? undefined : siteId,
+    );
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
     }
@@ -73,7 +101,12 @@ export class InabilityController {
     @Query(DateTransformPipe) filters: FilterInabilityDto,
     @Query('format') format: string = 'json',
     @Res({ passthrough: true }) res: Response,
+    @CurrentUser('siteId') siteId: number,
+    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
   ) {
+    if (!isSuperAdmin) {
+      filters.id_site = siteId;
+    }
     const response = await this.inabilityService.findByFilters(filters);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
@@ -105,24 +138,35 @@ export class InabilityController {
 
   @Patch(':id')
   async update(
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Body() updateInabilityDto: UpdateInabilityDto,
+    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
+    @CurrentUser('siteId') siteId: number,
   ) {
     const response = await this.inabilityService.update(
-      +id,
+      id,
       updateInabilityDto,
+      isSuperAdmin ? undefined : siteId,
     );
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
+    } else if (response['status'] === 409) {
+      throw new ConflictException(response['message']);
     }
     return response;
   }
 
   @Delete(':id')
-  async remove(@Param('id', ParseIntPipe) id: number) {
-    const response = await this.inabilityService.remove(id);
+  async remove(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
+    @CurrentUser('siteId') siteId: number,
+  ) {
+    const response = await this.inabilityService.remove(id, isSuperAdmin ? undefined : siteId);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
+    }else if (response['status'] === 409) {
+      throw new ConflictException(response['message']);
     }
     return response;
   }

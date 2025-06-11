@@ -14,7 +14,6 @@ export class WorkerService {
   constructor(
     private prisma: PrismaService,
     private validationService: ValidationService,
-    private authService: AuthService,
   ) {}
   /**
    * craer un trabajador
@@ -32,7 +31,11 @@ export class WorkerService {
         phone_worker: phone,
       });
       // Si hay un error, retornarlo
-      if (validation && 'status' in validation && (validation.status === 404 || validation.status === 409)) {
+      if (
+        validation &&
+        'status' in validation &&
+        (validation.status === 404 || validation.status === 409)
+      ) {
         return validation;
       }
 
@@ -53,20 +56,20 @@ export class WorkerService {
       throw new Error(error.message || String(error));
     }
   }
- /**
-  * obtener trabajador por dni
-  * @param dni numero de identificacion del trabajador a buscar
-  * @returns respuesta de la busqueda del trabajador
-  */
- async finDni(dni: string){
-  const response = await this.prisma.worker.findFirst({
-    where:{dni}
-  });
-  if (!response){
-    return {message:"Not found", status:404}
+  /**
+   * obtener trabajador por dni
+   * @param dni numero de identificacion del trabajador a buscar
+   * @returns respuesta de la busqueda del trabajador
+   */
+  async finDni(dni: string) {
+    const response = await this.prisma.worker.findFirst({
+      where: { dni },
+    });
+    if (!response) {
+      return { message: 'Not found', status: 404 };
+    }
+    return response;
   }
-  return response;
- }
 
   /**
    * obtener todos los trabajadores
@@ -79,6 +82,11 @@ export class WorkerService {
           jobArea: {
             select: {
               id: true,
+              name: true,
+            },
+          },
+          Site: {
+            select: {
               name: true,
             },
           },

@@ -56,6 +56,9 @@ export class AuthService {
       occupation: user.occupation,
       phone: user.phone,
       status: user.status,
+      id_site: user.id_site,
+      site: user.Site?.name || null,
+      id_subsite: user.id_subsite || null,
     };
 
     return {

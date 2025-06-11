@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "Site" ADD COLUMN     "id_user" INTEGER NOT NULL DEFAULT 38;
+
+-- AddForeignKey
+ALTER TABLE "Site" ADD CONSTRAINT "Site_id_user_fkey" FOREIGN KEY ("id_user") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

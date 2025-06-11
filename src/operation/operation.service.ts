@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { CreateOperationDto } from './dto/create-operation.dto';
 import { UpdateOperationDto } from './dto/update-operation.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -24,23 +24,31 @@ export class OperationService {
    * Obtiene todas las operaciones
    * @returns Lista de operaciones con relaciones incluidas
    */
-  async findAll() {
-    return await this.finderService.findAll();
+  async findAll(id_site?: number, id_subsite?: number) {
+    return await this.finderService.findAll(id_site, id_subsite);
   }
   /**
    * Busca una operación por su ID
    * @param id - ID de la operación a buscar
    * @returns Operación encontrada o mensaje de error
    */
-  async findOne(id: number) {
-    return await this.finderService.findOne(id);
+  async findOne(id: number, id_site?: number, id_subsite?: number) {
+    return await this.finderService.findOne(id, id_site, id_subsite);
   }
   /**
    * Encuentra todas las operaciones activas (IN_PROGRESS y PENDING) sin filtros de fecha
    * @returns Lista de operaciones activas o mensaje de error
    */
-  async findActiveOperations(statuses: StatusOperation[]) {
-    return await this.finderService.findByStatuses(statuses);
+  async findActiveOperations(
+    statuses: StatusOperation[],
+    id_site?: number,
+    id_subsite?: number,
+  ) {
+    return await this.finderService.findByStatuses(
+      statuses,
+      id_site,
+      id_subsite,
+    );
   }
   /**
    *  Busca operaciones por rango de fechas
@@ -48,16 +56,30 @@ export class OperationService {
    * @param end Fecha de fin
    * @returns resultado de la busqueda
    */
-  async findOperationRangeDate(start: Date, end: Date) {
-    return await this.finderService.findByDateRange(start, end);
+  async findOperationRangeDate(
+    start: Date,
+    end: Date,
+    id_site?: number,
+    id_subsite?: number,
+  ) {
+    return await this.finderService.findByDateRange(
+      start,
+      end,
+      id_site,
+      id_subsite,
+    );
   }
   /**
    * Encuentra operaciones asociadas a un usuario específico
    * @param id_user ID del usuario para buscar operaciones
    * @returns  Lista de operaciones asociadas al usuario o mensaje de error
    */
-  async findOperationByUser(id_user: number) {
-    return await this.finderService.findByUser(id_user);
+  async findOperationByUser(
+    id_user: number,
+    id_site?: number,
+    id_subsite?: number,
+  ) {
+    return await this.finderService.findByUser(id_user, id_site, id_subsite);
   }
   /**
    * Obtener operaciones con paginación y filtros opcionales
@@ -76,19 +98,15 @@ export class OperationService {
     );
   }
   /**
-   * Encuentra operaciones asociadas a un trabajador específico
-   * @param id_worker ID del trabajador para buscar operaciones
-   * @returns Lista de operaciones asociadas al trabajador o mensaje de error
-   */
-  async findByWorker(id_worker: number) {
-    return await this.finderService.findByWorker(id_worker);
-  }
-  /**
    * Crea una nueva operación y asigna trabajadores
    * @param createOperationDto - Datos de la operación a crear
    * @returns Operación creada
    */
-  async createWithWorkers(createOperationDto: CreateOperationDto) {
+  async createWithWorkers(
+    createOperationDto: CreateOperationDto,
+    id_subsite?: number,
+    id_site?: number,
+  ) {
     try {
       // Validaciones
       if (createOperationDto.id_user === undefined) {
@@ -101,6 +119,19 @@ export class OperationService {
         this.relationService.extractScheduledWorkerIds(groups);
       const allWorkerIds = [...workerIds, ...scheduledWorkerIds];
 
+      const validateWorkerIds =
+        await this.relationService.validateWorkerIds(allWorkerIds,id_subsite, id_site);
+        if(validateWorkerIds?.status === 403){
+          return validateWorkerIds;
+        }
+      //validar programacion cliente
+      const validateClientProgramming =
+        await this.relationService.validateClientProgramming(
+          createOperationDto.id_clientProgramming || null,
+        );
+
+      if (validateClientProgramming) return validateClientProgramming;
+
       // Validar todos los IDs
       const validationResult = await this.relationService.validateOperationIds({
         id_area: createOperationDto.id_area,
@@ -110,27 +141,32 @@ export class OperationService {
         inChargedIds: createOperationDto.inChargedIds,
       });
 
-      if (validationResult) return validationResult;
-
-      //validar programacion cliente
-      const validateClientProgramming =
-        await this.relationService.validateClientProgramming(
-          createOperationDto.id_clientProgramming || null,
-        );
-
-        if (validateClientProgramming) return validateClientProgramming;
+      if (
+        validationResult &&
+        validationResult.status &&
+        validationResult.status !== 200
+      ) {
+        return validationResult;
+      }
 
       // Crear la operación
-      const operation = await this.createOperation(createOperationDto);
+      const operation = await this.createOperation(
+        createOperationDto,
+        id_subsite,
+      );
 
+      // VERIFICAR SI HAY ERROR ANTES DE ACCEDER A 'id'
+      if ('status' in operation && 'message' in operation) {
+        return operation;
+      }
       // Asignar trabajadores y encargados
       await this.relationService.assignWorkersAndInCharge(
         operation.id,
         workerIds,
         groups,
         createOperationDto.inChargedIds || [],
+        id_subsite,
       );
-
       return { id: operation.id };
     } catch (error) {
       console.error('Error creating operation with workers:', error);
@@ -142,7 +178,10 @@ export class OperationService {
    * @param operationData - Datos de la operación
    * @returns Operación creada
    */
-  private async createOperation(operationData: CreateOperationDto) {
+  private async createOperation(
+    operationData: CreateOperationDto,
+    id_subsite?: number,
+  ) {
     const {
       workerIds,
       groups,
@@ -155,6 +194,11 @@ export class OperationService {
       ...restOperationData
     } = operationData;
 
+    if (id_subsite !== undefined) {
+      if (operationData.id_subsite !== id_subsite) {
+        return { message: 'Subsite does not match', status: 400 };
+      }
+    }
     const newOperation = await this.prisma.operation.create({
       data: {
         ...restOperationData,
@@ -183,14 +227,19 @@ export class OperationService {
    * @param updateOperationDto - Datos de actualización
    * @returns Operación actualizada
    */
-  async update(id: number, updateOperationDto: UpdateOperationDto) {
+  async update(
+    id: number,
+    updateOperationDto: UpdateOperationDto,
+    id_subsite?: number,
+    id_site?: number,
+  ) {
     try {
       // Verify operation exists
       const validate = await this.findOne(id);
       if (validate['status'] === 404) {
         return validate;
       }
-
+      
       // Validate inCharged IDs
       const validationResult =
         await this.relationService.validateInChargedIds(updateOperationDto);
@@ -214,6 +263,7 @@ export class OperationService {
         dateEnd,
         timeStrat,
         timeEnd,
+        id_subsite,
       );
 
       // Update operation
@@ -229,9 +279,15 @@ export class OperationService {
       }
 
       // Process relationship updates
-     const res = await this.relationService.processRelationUpdates(id, workers, inCharged);
-     
-     if (res && res.status === 404) {
+      const res = await this.relationService.processRelationUpdates(
+        id,
+        workers,
+        inCharged,
+        id_site,
+        id_subsite,
+      );
+
+      if (res && res.status === 404) {
         return res;
       }
       // Get updated operation
@@ -258,6 +314,7 @@ export class OperationService {
     dateEnd?: string,
     timeStrat?: string,
     timeEnd?: string,
+    id_subsite?: number,
   ) {
     const updateData = { ...directFields };
 
@@ -265,6 +322,12 @@ export class OperationService {
     if (dateEnd) updateData.dateEnd = new Date(dateEnd);
     if (timeStrat) updateData.timeStrat = timeStrat;
     if (timeEnd) updateData.timeEnd = timeEnd;
+    if (id_subsite !== undefined) {
+      if (directFields.id_subsite !== id_subsite) {
+        throw new ConflictException('Subsite does not match');
+      }
+      updateData.id_subsite = id_subsite;
+    }
 
     return updateData;
   }
@@ -273,11 +336,23 @@ export class OperationService {
    * @param id - ID de la operación a eliminar
    * @returns Operación eliminada
    */
-  async remove(id: number) {
+  async remove(id: number, id_site?: number, id_subsite?: number) {
     try {
       const validateOperation = await this.findOne(id);
       if (validateOperation['status'] === 404) {
         return validateOperation;
+      }
+
+      if (id_site !== undefined) {
+        if (validateOperation.id_site !== id_site) {
+          return { message: 'Site does not match', status: 400 };
+        }
+      }
+
+      if (id_subsite !== undefined) {
+        if (validateOperation.id_subsite !== id_subsite) {
+          return { message: 'Subsite does not match', status: 400 };
+        }
       }
 
       // Eliminar todos los trabajadores asignados a la operación
