@@ -30,6 +30,7 @@ import { PaginationModule } from './common/services/pagination/pagination.module
 import { ClientProgrammingModule } from './client-programming/client-programming.module';
 import { SiteModule } from './site/site.module';
 import { SubsiteModule } from './subsite/subsite.module';
+import { SubtaskModule } from './subtask/subtask.module';
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ import { SubsiteModule } from './subsite/subsite.module';
     ClientProgrammingModule,
     SiteModule,
     SubsiteModule,
+    SubtaskModule,
   ],
   providers: [
     PrismaService,

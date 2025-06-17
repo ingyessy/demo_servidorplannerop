@@ -67,6 +67,8 @@ export class ValidationService {
 
         if (!task) {
           return { message: 'Task not found', status: 404 };
+        }else if(task){
+          response.task = task;
         }
       }
 
