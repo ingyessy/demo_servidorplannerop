@@ -67,7 +67,7 @@ export class UserController {
     @CurrentUser('siteId') siteId: number,
   ) {
     return this.userService.findAll(
-      isSuperAdmin ? siteId : undefined,
+      siteId 
     );
   }
 

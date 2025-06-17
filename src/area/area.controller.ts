@@ -25,7 +25,7 @@ import { Role } from '@prisma/client';
 
 @Controller('area')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.SUPERADMIN, Role.SUPERVISOR)
+@Roles(Role.SUPERADMIN, Role.SUPERVISOR, Role.ADMIN)
 @ApiBearerAuth('access-token')
 @UseInterceptors(SiteInterceptor)
 export class AreaController {

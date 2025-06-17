@@ -68,9 +68,15 @@ export class TaskService {
    * obtener todas las tareas
    * @returns respuesta de la busqueda de todas las tareas
    */
-  async findAll() {
+  async findAll(id_site?: number) {
     try {
-      const response = await this.prisma.task.findMany();
+      const response = await this.prisma.task.findMany(
+        {
+          where: {
+            id_site: id_site
+          }
+        }
+      );
       return response;
     } catch (error) {
       throw new Error('Error get all Task');

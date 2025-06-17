@@ -60,8 +60,12 @@ export class TaskController {
   }
 
   @Get()
-  findAll() {
-    return this.taskService.findAll();
+  @Roles(Role.SUPERVISOR, Role.ADMIN, Role.SUPERADMIN)
+  findAll(
+    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
+     @CurrentUser('siteId') siteId: number,
+  ) {
+    return this.taskService.findAll(!isSuperAdmin ? siteId : undefined);
   }
   @Get(':name')
   async findByName(@Param('name') name: string) {

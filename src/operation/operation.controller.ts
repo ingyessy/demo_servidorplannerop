@@ -115,12 +115,13 @@ export class OperationController {
     @Query('format') format: 'json' | 'excel' | 'base64',
     @Res({ passthrough: true }) res: Response,
     @CurrentUser('isSupervisor') isSupervisor: boolean,
-    @CurrentUser('isAdmin') isAdmin: boolean,
+    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
     @CurrentUser('siteId') siteId: number,
     @CurrentUser('subsiteId') subsiteId: number,
   ) {
+    console.log(siteId, subsiteId, isSuperAdmin, isSupervisor);
     const response = await this.operationService.findAll(
-      isAdmin ? siteId : undefined,
+      !isSuperAdmin ? siteId : undefined,
       isSupervisor ? subsiteId : undefined,
     );
 
@@ -267,7 +268,7 @@ export class OperationController {
   async findByStatus(
     @Query('status') statusParam: StatusOperation | StatusOperation[],
     @CurrentUser('isSupervisor') isSupervisor: boolean,
-    @CurrentUser('isAdmin') isAdmin: boolean,
+    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
     @CurrentUser('siteId') siteId: number,
     @CurrentUser('subsiteId') subsiteId: number,
   ) {
@@ -292,7 +293,7 @@ export class OperationController {
 
     const response = await this.operationService.findActiveOperations(
       statusesToUse,
-      isAdmin ? siteId : undefined,
+      !isSuperAdmin ? siteId : undefined,
       isSupervisor ? subsiteId : undefined,
     );
 

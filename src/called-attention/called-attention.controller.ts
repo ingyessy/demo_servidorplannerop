@@ -155,7 +155,6 @@ export class CalledAttentionController {
     @CurrentUser('siteId') id_site: number,
     @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
   ) {
-    console.log(id_site, 'jajaj');
     const response = await this.calledAttentionService.findAll(
       isSuperAdmin ? undefined : id_site,
     );

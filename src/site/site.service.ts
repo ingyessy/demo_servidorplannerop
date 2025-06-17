@@ -17,29 +17,34 @@ export class SiteService {
       return response;
     } catch (error) {
       if (error.code === 'P2002') {
-      const target = error.meta?.target;
-      const fieldName = Array.isArray(target) ? target[0] : target;
-      
-      return {
-        message: `Site with ${fieldName} '${createSiteDto[fieldName]}' already exists`,
-        status: 409,
-      };
-    }
+        const target = error.meta?.target;
+        const fieldName = Array.isArray(target) ? target[0] : target;
+
+        return {
+          message: `Site with ${fieldName} '${createSiteDto[fieldName]}' already exists`,
+          status: 409,
+        };
+      }
       throw new Error('Failed to create site');
     }
   }
 
-  async findAll() {
+  async findAll(id_site?: number) {
     try {
-      const response = await this.prisma.site.findMany();
+      const response = await this.prisma.site.findMany({
+        include: { SubSite: true },
+        where: { id: id_site },
+      });
       if (!response || response.length === 0) {
         return { message: 'No sites found', status: 404 };
       }
       return response;
-    } catch (error) {}
+    } catch (error) {
+      throw new Error('Failed to fetch sites');
+    }
   }
 
-  async findOne(id: number) {
+  async findOne(id: number,  id_site?: number ) {
     try {
       const response = await this.prisma.site.findUnique({
         where: { id },

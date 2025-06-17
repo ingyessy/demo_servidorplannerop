@@ -26,7 +26,7 @@ import { Role } from '@prisma/client';
 @Controller('client')
 @UseInterceptors(SiteInterceptor)
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.SUPERADMIN, Role.ADMIN )
+@Roles(Role.SUPERADMIN, Role.ADMIN)
 @ApiBearerAuth('access-token')
 export class ClientController {
   constructor(private readonly clientService: ClientService) {}
@@ -55,6 +55,7 @@ export class ClientController {
   }
 
   @Get()
+  @Roles(Role.SUPERVISOR, Role.ADMIN, Role.SUPERADMIN)
   async findAll(@CurrentUser('siteId') siteId: number) {
     const response = await this.clientService.findAll();
     return response;

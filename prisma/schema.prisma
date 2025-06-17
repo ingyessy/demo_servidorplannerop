@@ -132,6 +132,15 @@ model Task {
   id_site          Int                @default(1)
   id_subsite       Int?
   subSite          SubSite?           @relation(fields: [id_subsite], references: [id])
+  SubTask          SubTask[]
+}
+
+model SubTask {
+  id      Int              @id @default(autoincrement())
+  name    String
+  status  StatusActivation @default(ACTIVE)
+  id_task Int
+  task    Task             @relation(fields: [id_task], references: [id])
 }
 
 model Client {

@@ -22,12 +22,12 @@ import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 
 @Controller('site')
+@UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth('access-token')
 export class SiteController {
   constructor(private readonly siteService: SiteService) {}
 
   @Post()
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.SUPERADMIN)
   async create(
     @Request() req,
@@ -47,25 +47,52 @@ export class SiteController {
   }
 
   @Get()
-  findAll() {
-    return this.siteService.findAll();
+  @Roles(Role.SUPERADMIN, Role.ADMIN)
+  async findAll(
+    @CurrentUser('siteId') siteId: number,
+    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
+  ) {
+    const response = await this.siteService.findAll(
+      !isSuperAdmin ? siteId : undefined,
+    );
+    if (response['status'] === 404) {
+      return { status: 404, message: 'No sites found' };
+    }
+    return response;
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.siteService.findOne(id);
+  @Roles(Role.SUPERADMIN, Role.ADMIN)
+  async findOne(
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    const response = await this.siteService.findOne(id);
+    if (response['status'] === 404) {
+      return { status: 404, message: 'Site not found' };
+    }
+    return response;
   }
 
   @Patch(':id')
-  update(
+  async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateSiteDto: UpdateSiteDto,
   ) {
-    return this.siteService.update(id, updateSiteDto);
+    const existingSite = await this.siteService.findOne(id);
+    if (existingSite['status'] === 404) {
+      return { status: 404, message: 'Site not found' };
+    }
+    const response = await this.siteService.update(id, updateSiteDto);
+    return response;
   }
 
   @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.siteService.remove(id);
+  async remove(@Param('id', ParseIntPipe) id: number) {
+    const existingSite = await this.siteService.findOne(id);
+    if (existingSite['status'] === 404) {
+      return { status: 404, message: 'Site not found' };
+    }
+    const response = await this.siteService.remove(id);
+    return response;
   }
 }
