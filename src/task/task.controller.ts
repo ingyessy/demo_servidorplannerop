@@ -21,10 +21,15 @@ import { ToLowerCasePipe } from 'src/pipes/to-lowercase/to-lowercase.pipe';
 import { ParseIntPipe } from 'src/pipes/parse-int/parse-int.pipe';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { SiteInterceptor } from 'src/common/interceptors/site.interceptor';
+import { RolesGuard } from 'src/auth/guards/roles.guard';
+import { Roles } from 'src/auth/decorators/roles.decorator';
+import { Role } from '@prisma/client';
 
 @Controller('task')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Role.SUPERADMIN, Role.ADMIN)
 @UseInterceptors(SiteInterceptor)
+
 @ApiBearerAuth('access-token')
 export class TaskController {
   constructor(private readonly taskService: TaskService) {}
@@ -35,15 +40,12 @@ export class TaskController {
     @Body() createTaskDto: CreateTaskDto,
     @CurrentUser('userId') userId: number,
     @CurrentUser('siteId') siteId: number,
-    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
+    @CurrentUser('subsiteId') subsiteId: number,
+
   ) {
-    if (!isSuperAdmin) {
-      if (createTaskDto.id_site && createTaskDto.id_site !== siteId) {
-        throw new ConflictException(
-          `You can only create tasks in your site (${siteId})`,
-        );
-      }
+    if(!createTaskDto.id_site || !createTaskDto.id_subsite) {
       createTaskDto.id_site = siteId;
+      createTaskDto.id_subsite = subsiteId;
     }
     createTaskDto.id_user = userId;
     const response = await this.taskService.create(createTaskDto);
@@ -80,17 +82,7 @@ export class TaskController {
     @Param('id', ParseIntPipe) id: number,
     @Body() updateTaskDto: UpdateTaskDto,
     @CurrentUser('userId') userId: number,
-    @CurrentUser('siteId') siteId: number,
-    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
   ) {
-    if (!isSuperAdmin) {
-      if (updateTaskDto.id_site && updateTaskDto.id_site !== siteId) {
-        throw new ConflictException(
-          `You can only update tasks in your site (${siteId})`,
-        );
-      }
-      updateTaskDto.id_site = siteId;
-    }
     updateTaskDto.id_user = userId;
     const response = await this.taskService.update(id, updateTaskDto);
     if (response['status'] === 404) {

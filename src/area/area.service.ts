@@ -33,9 +33,11 @@ export class AreaService {
    * devuelve todas las areas
    * @returns retorna todas las areas
    */
-  async findAll() {
+  async findAll(id_site?: number) {
     try {
-      const response = await this.prisma.jobArea.findMany({});
+      const response = await this.prisma.jobArea.findMany({
+        where: {id_site}
+      });
       return response;
     } catch (error) {
       throw new Error(error);
@@ -46,11 +48,12 @@ export class AreaService {
    * @param id  ID del area a buscar
    * @returns  Area encontrada o mensaje de error
    */
-  async findOne(id: number) {
+  async findOne(id: number, id_site?: number) {
     try {
       const response = await this.prisma.jobArea.findUnique({
         where: {
           id,
+          id_site,
         },
       });
       if (!response) {

@@ -24,10 +24,13 @@ import { ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { FilterClientProgrammingDto } from './dto/filter-client-programming.dto';
 import { SiteInterceptor } from 'src/common/interceptors/site.interceptor';
+import { Roles } from 'src/auth/decorators/roles.decorator';
+import { Role } from '@prisma/client';
 
 @Controller('client-programming')
 @UseGuards(JwtAuthGuard)
 @UseInterceptors(SiteInterceptor)
+@Roles(Role.SUPERADMIN, Role.ADMIN)
 @ApiBearerAuth('access-token')
 export class ClientProgrammingController {
   constructor(
@@ -39,8 +42,23 @@ export class ClientProgrammingController {
   async create(
     @Body() createClientProgrammingDto: CreateClientProgrammingDto,
     @CurrentUser('userId') userId: number,
+    @CurrentUser('siteId') siteId: number,
+    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
+    @CurrentUser('subsiteId') subsiteId: number,
   ) {
     createClientProgrammingDto.id_user = userId;
+    if (
+      !createClientProgrammingDto.id_site ||
+      !createClientProgrammingDto.id_subsite
+    ) {
+      createClientProgrammingDto.id_site = siteId;
+      createClientProgrammingDto.id_subsite = subsiteId;
+    }
+    if (!isSuperAdmin && createClientProgrammingDto.id_site !== siteId) {
+      throw new ForbiddenException(
+        'No tienes permiso para crear una programación en este sitio',
+      );
+    }
     const response = await this.clientProgrammingService.create(
       createClientProgrammingDto,
     );
@@ -55,9 +73,15 @@ export class ClientProgrammingController {
   @Get('filtered')
   @UsePipes(new DateTransformPipe())
   @ApiOperation({ summary: 'Obtener programaciones de cliente con filtros' })
-  async findAllFiltered(@Query() filters: FilterClientProgrammingDto) {
-    const response =
-      await this.clientProgrammingService.findAllFiltered(filters);
+  async findAllFiltered(
+    @Query() filters: FilterClientProgrammingDto,
+    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
+    @CurrentUser('siteId') siteId: number,
+  ) {
+    const response = await this.clientProgrammingService.findAllFiltered(
+      filters,
+      !isSuperAdmin ? siteId : undefined,
+    );
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
     }
@@ -65,8 +89,13 @@ export class ClientProgrammingController {
   }
 
   @Get()
-  async findAll() {
-    const response = await this.clientProgrammingService.findAll();
+  async findAll(
+    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
+    @CurrentUser('siteId') siteId: number,
+  ) {
+    const response = await this.clientProgrammingService.findAll(
+      isSuperAdmin ? undefined : siteId,
+    );
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
     }
@@ -74,8 +103,12 @@ export class ClientProgrammingController {
   }
 
   @Get(':id')
-  async findOne(@Param('id', ParseIntPipe) id: number) {
-    const response = await this.clientProgrammingService.findOne(id);
+  async findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
+    @CurrentUser('siteId') siteId: number,
+  ) {
+    const response = await this.clientProgrammingService.findOne(id, isSuperAdmin ? undefined : siteId);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
     }
@@ -88,7 +121,14 @@ export class ClientProgrammingController {
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateClientProgrammingDto: UpdateClientProgrammingDto,
+    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
+    @CurrentUser('siteId') siteId: number,
   ) {
+    if(!isSuperAdmin && updateClientProgrammingDto.id_site !== siteId) {
+      throw new ForbiddenException(
+        'No tienes permiso para actualizar una programación en este sitio',
+      );
+    }
     const response = await this.clientProgrammingService.update(
       id,
       updateClientProgrammingDto,
@@ -105,10 +145,13 @@ export class ClientProgrammingController {
     @CurrentUser('siteId') siteId: number,
     @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
   ) {
-    const response = await this.clientProgrammingService.remove(id, isSuperAdmin ? undefined : siteId);
+    const response = await this.clientProgrammingService.remove(
+      id,
+      isSuperAdmin ? undefined : siteId,
+    );
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
-    }else if (response['status'] === 403) {
+    } else if (response['status'] === 403) {
       throw new ForbiddenException(response['message']);
     }
     return response;

@@ -19,10 +19,14 @@ import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { SiteInterceptor } from 'src/common/interceptors/site.interceptor';
+import { RolesGuard } from 'src/auth/guards/roles.guard';
+import { Roles } from 'src/auth/decorators/roles.decorator';
+import { Role } from '@prisma/client';
 
 @Controller('client')
-@UseGuards(JwtAuthGuard)
 @UseInterceptors(SiteInterceptor)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Role.SUPERADMIN, Role.ADMIN )
 @ApiBearerAuth('access-token')
 export class ClientController {
   constructor(private readonly clientService: ClientService) {}
@@ -51,7 +55,7 @@ export class ClientController {
   }
 
   @Get()
-  async findAll() {
+  async findAll(@CurrentUser('siteId') siteId: number) {
     const response = await this.clientService.findAll();
     return response;
   }

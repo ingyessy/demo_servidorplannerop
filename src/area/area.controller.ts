@@ -19,9 +19,13 @@ import { UseGuards } from '@nestjs/common';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { SiteInterceptor } from 'src/common/interceptors/site.interceptor';
+import { RolesGuard } from 'src/auth/guards/roles.guard';
+import { Roles } from 'src/auth/decorators/roles.decorator';
+import { Role } from '@prisma/client';
 
 @Controller('area')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Role.SUPERADMIN, Role.SUPERVISOR)
 @ApiBearerAuth('access-token')
 @UseInterceptors(SiteInterceptor)
 export class AreaController {
@@ -30,9 +34,26 @@ export class AreaController {
   @Post()
   async create(
     @Body() createAreaDto: CreateAreaDto,
+    @CurrentUser('siteId') siteId: number,
+    @CurrentUser('subsiteId') subsiteId: number,
+    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
+    @CurrentUser('isSupervisor') isSupervisor: boolean,
     @CurrentUser('userId') userId: number,
   ) {
     createAreaDto.id_user = userId;
+    if (!isSuperAdmin) {
+      if (createAreaDto.id_site !== siteId) {
+        throw new ForbiddenException(
+          'You do not have permission to create an area in this site',
+        );
+      }
+      if (isSupervisor && createAreaDto.id_subsite !== subsiteId) {
+        throw new ForbiddenException(
+          'You do not have permission to create an area in this subsite',
+        );
+      }
+    }
+
     const response = await this.areaService.create(createAreaDto);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
@@ -41,13 +62,25 @@ export class AreaController {
   }
 
   @Get()
-  findAll() {
-    return this.areaService.findAll();
+ async findAll(
+    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
+    @CurrentUser('siteId') siteId: number,
+  ) {
+    const response = await this.areaService.findAll(!isSuperAdmin ? siteId : undefined);
+    return response;
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.areaService.findOne(id);
+  async findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
+    @CurrentUser('siteId') siteId: number,
+  ) {
+    const response = await this.areaService.findOne(id, !isSuperAdmin ? siteId : undefined);
+    if (response['status'] === 404) {
+      throw new NotFoundException(response['message']);
+    }
+    return response;
   }
 
   @Patch(':id')
@@ -71,9 +104,11 @@ export class AreaController {
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser('siteId') siteId: number,
     @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
-
   ) {
-    const response = await this.areaService.remove(id, isSuperAdmin ? undefined : siteId);
+    const response = await this.areaService.remove(
+      id,
+      isSuperAdmin ? undefined : siteId,
+    );
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
     } else if (response['status'] === 403) {

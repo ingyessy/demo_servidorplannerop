@@ -61,9 +61,9 @@ export class WorkerService {
    * @param dni numero de identificacion del trabajador a buscar
    * @returns respuesta de la busqueda del trabajador
    */
-  async finDni(dni: string) {
+  async finDni(dni: string, id_site?: number) {
     const response = await this.prisma.worker.findFirst({
-      where: { dni },
+      where: { dni, id_site },
     });
     if (!response) {
       return { message: 'Not found', status: 404 };
@@ -75,9 +75,12 @@ export class WorkerService {
    * obtener todos los trabajadores
    * @returns resupuesta de la busqueda de todos los trabajadores
    */
-  async findAll() {
+  async findAll(id_site?: number) {
     try {
       const response = await this.prisma.worker.findMany({
+        where: {
+          id_site,
+        },
         include: {
           jobArea: {
             select: {
@@ -102,50 +105,14 @@ export class WorkerService {
     }
   }
   /**
-   * obtener un trabajador por su codigo
-   * @param code codigo del trabajador a buscar
-   * @returns respuesta de la busqueda del trabajador
-   */
-  async findUniqueCode(code: string) {
-    try {
-      const response = await this.prisma.worker.findUnique({
-        where: { code },
-      });
-      if (!response) {
-        return { message: 'Code not found', status: 404 };
-      }
-      return response;
-    } catch (error) {
-      throw new Error(error);
-    }
-  }
-  /**
-   * obtener un trabajador por su telefono
-   * @param phone telefono del trabajador a buscar
-   * @returns respuesta de la busqueda del trabajador
-   */
-  async findUniquePhone(phone: string) {
-    try {
-      const response = await this.prisma.worker.findFirst({
-        where: { phone },
-      });
-      if (!response) {
-        return { message: 'Phone not found', status: 404 };
-      }
-      return response;
-    } catch (error) {
-      throw new Error(error);
-    }
-  }
-  /**
    * obtener un trabajador por su ID
    * @param id id del trabajador a buscar
    * @returns resupuesta de la busqueda del trabajador
    */
-  async findOne(id: number) {
+  async findOne(id: number, id_site?: number, id_subsite?: number) {
     try {
       const response = await this.prisma.worker.findUnique({
-        where: { id },
+        where: { id , id_site, id_subsite },
         include: {
           jobArea: {
             select: {
@@ -192,10 +159,6 @@ export class WorkerService {
    */
   async update(id: number, updateWorkerDto: UpdateWorkerDto) {
     try {
-      const validateWorker = await this.findOne(id);
-      if (validateWorker['status'] === 404) {
-        return { message: 'Worker not found', status: 404 };
-      }
       const response = await this.prisma.worker.update({
         where: { id },
         data: updateWorkerDto,

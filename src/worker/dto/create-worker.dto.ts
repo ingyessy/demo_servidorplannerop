@@ -81,4 +81,10 @@ export class CreateWorkerDto {
   @Type(() => Number)
   @IsOptional()
   id_site?: number;
+
+  @ApiProperty({ example: '301' })
+  @IsNumber()
+  @Type(() => Number)
+  @IsOptional()
+  id_subsite?: number;
 }

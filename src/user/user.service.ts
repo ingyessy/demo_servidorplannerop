@@ -36,9 +36,11 @@ export class UserService {
    * obtene todos los usuarios
    * @returns respuesta de la busqueda de todos los usuarios
    */
-  async findAll() {
+  async findAll(id_site?: number, id_subsite?: number) {
     try {
-      const response = await this.prisma.user.findMany();
+      const response = await this.prisma.user.findMany({
+        where: { id_site, id_subsite },
+      });
       return response;
     } catch (error) {
       throw new Error(error);
@@ -49,11 +51,12 @@ export class UserService {
    * @param dni numero de identificacion del usuario a buscar
    * @returns respuesta de la busqueda del usuario
    */
-  async findOne(dni: string) {
+  async findOne(dni: string, id_site?: number) {
     try {
       const response = await this.prisma.user.findUnique({
         where: {
           dni,
+          id_site,
         },
       });
       if (!response) {
@@ -150,9 +153,9 @@ export class UserService {
         },
         include: {
           Site: {
-            select:{
+            select: {
               name: true,
-            }
+            },
           },
         },
       });

@@ -27,12 +27,12 @@ import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 @Controller('user')
 @ApiBearerAuth('access-token')
 @UseInterceptors(SiteInterceptor)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Post()
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.SUPERADMIN)
+  @Roles(Role.SUPERADMIN, Role.ADMIN)
   async create(
     @Request() req,
     @Body() createUserDto: CreateUserDto,
@@ -61,15 +61,27 @@ export class UserController {
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard)
-  findAll() {
-    return this.userService.findAll();
+  @Roles(Role.SUPERADMIN, Role.ADMIN, Role.SUPERVISOR)
+  findAll(
+    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
+    @CurrentUser('siteId') siteId: number,
+  ) {
+    return this.userService.findAll(
+      isSuperAdmin ? siteId : undefined,
+    );
   }
 
   @Get(':dni')
-  @UseGuards(JwtAuthGuard)
-  async findOne(@Param('dni') dni: string) {
-    const response = await this.userService.findOne(dni);
+  @Roles(Role.SUPERADMIN, Role.ADMIN, Role.SUPERVISOR)
+  async findOne(
+    @Param('dni') dni: string,
+    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
+    @CurrentUser('siteId') siteId: number,
+  ) {
+    const response = await this.userService.findOne(
+      dni,
+      isSuperAdmin ? siteId : undefined,
+    );
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
     }
@@ -77,8 +89,7 @@ export class UserController {
   }
 
   @Patch(':dni')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.SUPERADMIN)
+  @Roles(Role.SUPERADMIN, Role.ADMIN)
   async update(
     @Request() req,
     @Param('dni') dni: string,
@@ -86,15 +97,20 @@ export class UserController {
     @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
     @CurrentUser('siteId') siteId: number,
   ) {
+    const userToUpdate = await this.userService.findOne(dni);
     if (!isSuperAdmin) {
       if (updateUserDto.id_site && updateUserDto.id_site !== siteId) {
         throw new ForbiddenException(
           `You can only update workers in your site (${siteId})`,
         );
       }
+      if ('id_site' in userToUpdate && userToUpdate.id_site !== siteId) {
+        throw new ForbiddenException(
+          `You can only update workers in your site (${siteId})`,
+        );
+      }
       updateUserDto.id_site = siteId;
     }
-    const userToUpdate = await this.userService.findOne(dni);
     const currentUserRole = req.user.role;
     if (userToUpdate['status'] === 404) {
       throw new NotFoundException(userToUpdate['message']);
@@ -117,10 +133,22 @@ export class UserController {
   }
 
   @Delete(':dni')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.SUPERADMIN)
-  async remove(@Request() req, @Param('dni') dni: string) {
+  @Roles(Role.SUPERADMIN, Role.ADMIN)
+  async remove(
+    @Request() req,
+    @Param('dni') dni: string,
+    @CurrentUser('siteId') siteId: number,
+    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
+  ) {
     const userToDelete = await this.userService.findOne(dni);
+
+    if (!isSuperAdmin) {
+      if ('id_site' in userToDelete && userToDelete.id_site !== siteId) {
+        throw new ForbiddenException(
+          `You can only delete workers in your site (${siteId})`,
+        );
+      }
+    }
 
     if (userToDelete['status'] === 404) {
       throw new NotFoundException(userToDelete['message']);

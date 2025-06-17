@@ -46,6 +46,8 @@ export class WorkerController {
     @CurrentUser('userId') userId: number,
     @CurrentUser('siteId') siteId: number,
     @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
+    @CurrentUser('subsiteId') subsiteId: number,
+    @CurrentUser('isSupervisor') isSupervisor: boolean,
   ) {
     createWorkerDto.id_user = userId;
     if (!isSuperAdmin) {
@@ -56,6 +58,18 @@ export class WorkerController {
       }
       createWorkerDto.id_site = siteId;
     }
+    if (isSupervisor) {
+      if (
+        createWorkerDto.id_subsite &&
+        createWorkerDto.id_subsite !== subsiteId
+      ) {
+        throw new ForbiddenException(
+          `You can only create workers in your subsite (${subsiteId})`,
+        );
+      }
+      createWorkerDto.id_subsite = subsiteId;
+    }
+
     const response = await this.workerService.create(createWorkerDto);
     if (response['status'] === 409) {
       throw new ConflictException(response['message']);
@@ -77,8 +91,12 @@ export class WorkerController {
   async findAll(
     @Query('format') format: string = 'json',
     @Res({ passthrough: true }) res: Response,
+    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
+    @CurrentUser('siteId') siteId: number,
   ) {
-    const response = await this.workerService.findAll();
+    const response = await this.workerService.findAll(
+      !isSuperAdmin ? siteId : undefined,
+    );
     if (!Array.isArray(response)) {
       return response;
     }
@@ -96,8 +114,15 @@ export class WorkerController {
   }
 
   @Get(':dni')
-  async findDni(@Param('dni') dni: string) {
-    const response = await this.workerService.finDni(dni);
+  async findDni(
+    @Param('dni') dni: string,
+    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
+    @CurrentUser('siteId') siteId: number,
+  ) {
+    const response = await this.workerService.finDni(
+      dni,
+      !isSuperAdmin ? siteId : undefined,
+    );
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
     }
@@ -105,8 +130,15 @@ export class WorkerController {
   }
 
   @Get(':id')
-  async findOne(@Param('id', ParseIntPipe) id: number) {
-    const response = await this.workerService.findOne(id);
+  async findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
+    @CurrentUser('siteId') siteId: number,
+  ) {
+    const response = await this.workerService.findOne(
+      id,
+      !isSuperAdmin ? siteId : undefined,
+    );
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
     }
@@ -120,6 +152,8 @@ export class WorkerController {
     @Body() updateWorkerDto: UpdateWorkerDto,
     @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
     @CurrentUser('siteId') siteId: number,
+    @CurrentUser('subsiteId') subsiteId: number,
+    @CurrentUser('isSupervisor') isSupervisor: boolean,
   ) {
     if (!isSuperAdmin) {
       if (updateWorkerDto.id_site && updateWorkerDto.id_site !== siteId) {
@@ -129,15 +163,40 @@ export class WorkerController {
       }
       updateWorkerDto.id_site = siteId;
     }
-    const response = await this.workerService.update(id, updateWorkerDto);
-    if (response['status'] === 404) {
-      throw new NotFoundException(response['message']);
+    const validateId = await this.workerService.findOne(id);
+    if (isSupervisor) {
+      if (validateId['id_subsite'] !== subsiteId) {
+        throw new ForbiddenException(
+          `You can only update workers in your subsite (${subsiteId})`,
+        );
+      }
+      updateWorkerDto.id_subsite = subsiteId;
     }
+    if (validateId['status'] === 404) {
+      throw new NotFoundException(validateId['message']);
+    }
+    const response = await this.workerService.update(id, updateWorkerDto);
+
     return response;
   }
 
   @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.workerService.remove(id);
+  async remove(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
+    @CurrentUser('siteId') siteId: number,
+    @CurrentUser('subsiteId') subsiteId: number,
+    @CurrentUser('isSupervisor') isSupervisor: boolean,
+  ) {
+    const validateId = await this.workerService.findOne(
+      id,
+      !isSuperAdmin ? siteId : undefined,
+      isSupervisor ? subsiteId : undefined,
+    );
+    if (validateId['status'] === 404) {
+      throw new ConflictException('Unathorized to delete this worker');
+    }
+    const response = await this.workerService.remove(id);
+    return response;
   }
 }

@@ -42,9 +42,13 @@ export class ClientProgrammingService {
     }
   }
 
-  async findAll() {
+  async findAll(id_site?: number) {
     try {
-      const response = await this.prisma.clientProgramming.findMany();
+      const response = await this.prisma.clientProgramming.findMany({
+        where: {
+          id_site,
+        },
+      });
       if (!response || response.length === 0) {
         return {
           status: 404,
@@ -57,7 +61,7 @@ export class ClientProgrammingService {
     }
   }
 
-  async findOne(id: number) {
+  async findOne(id: number, id_site?: number) {
     try {
       const response = await this.prisma.clientProgramming.findUnique({
         where: {
@@ -76,7 +80,7 @@ export class ClientProgrammingService {
     }
   }
 
-  async findAllFiltered(filters: FilterClientProgrammingDto) {
+  async findAllFiltered(filters: FilterClientProgrammingDto, id_site?: number) {
     try {
       // Construir el objeto where dinámicamente
       const whereConditions: any = {};
@@ -88,6 +92,10 @@ export class ClientProgrammingService {
 
       if (filters.status) {
         whereConditions.status = filters.status[0];
+      }
+
+      if (id_site !== undefined) {
+        whereConditions.id_site = id_site;
       }
       //  else {
       //   // Por defecto solo traer UNASSIGNED
