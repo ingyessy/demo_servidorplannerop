@@ -62,11 +62,14 @@ export class AreaController {
   }
 
   @Get()
- async findAll(
+  @Roles(Role.SUPERADMIN, Role.SUPERVISOR, Role.ADMIN, Role.GH)
+  async findAll(
     @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
     @CurrentUser('siteId') siteId: number,
   ) {
-    const response = await this.areaService.findAll(!isSuperAdmin ? siteId : undefined);
+    const response = await this.areaService.findAll(
+      !isSuperAdmin ? siteId : undefined,
+    );
     return response;
   }
 
@@ -76,7 +79,10 @@ export class AreaController {
     @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
     @CurrentUser('siteId') siteId: number,
   ) {
-    const response = await this.areaService.findOne(id, !isSuperAdmin ? siteId : undefined);
+    const response = await this.areaService.findOne(
+      id,
+      !isSuperAdmin ? siteId : undefined,
+    );
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
     }

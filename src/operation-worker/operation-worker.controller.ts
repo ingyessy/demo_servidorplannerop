@@ -5,10 +5,14 @@ import { RemoveWorkersDto } from './dto/remove-workers.dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { DateTransformPipe } from 'src/pipes/date-transform/date-transform.pipe';
+import { RolesGuard } from 'src/auth/guards/roles.guard';
+import { Roles } from 'src/auth/decorators/roles.decorator';
+import { Role } from '@prisma/client';
 
 @ApiTags('Operation Workers')
 @Controller('operation-worker')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Role.SUPERVISOR, Role.ADMIN, Role.SUPERADMIN)
 @ApiBearerAuth('access-token')
 export class OperationWorkerController {
   constructor(private readonly operationWorkerService: OperationWorkerService) {}

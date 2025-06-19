@@ -139,7 +139,7 @@ export class OperationService {
         id_client: createOperationDto.id_client,
         workerIds: allWorkerIds,
         inChargedIds: createOperationDto.inChargedIds,
-      });
+      }, groups);
 
       if (
         validationResult &&
@@ -160,13 +160,17 @@ export class OperationService {
         return operation;
       }
       // Asignar trabajadores y encargados
-      await this.relationService.assignWorkersAndInCharge(
+      const response = await this.relationService.assignWorkersAndInCharge(
         operation.id,
         workerIds,
         groups,
         createOperationDto.inChargedIds || [],
         id_subsite,
+        id_site,
       );
+      if (response && (response.status === 403 || response.status === 400)) {
+        return response;
+      }
       return { id: operation.id };
     } catch (error) {
       console.error('Error creating operation with workers:', error);
@@ -263,7 +267,6 @@ export class OperationService {
         dateEnd,
         timeStrat,
         timeEnd,
-        id_subsite,
       );
 
       // Update operation
@@ -287,8 +290,10 @@ export class OperationService {
         id_subsite,
       );
 
-      if (res && res.status === 404) {
-        return res;
+      if (res !== undefined) {
+        if (res.updated && (res.updated.status === 404 || res.updated.status === 403 || res.updated.status === 400)) {
+          return res.updated;
+        }
       }
       // Get updated operation
       const updatedOperation = await this.findOne(id);
@@ -314,7 +319,6 @@ export class OperationService {
     dateEnd?: string,
     timeStrat?: string,
     timeEnd?: string,
-    id_subsite?: number,
   ) {
     const updateData = { ...directFields };
 
@@ -322,13 +326,6 @@ export class OperationService {
     if (dateEnd) updateData.dateEnd = new Date(dateEnd);
     if (timeStrat) updateData.timeStrat = timeStrat;
     if (timeEnd) updateData.timeEnd = timeEnd;
-    if (id_subsite !== undefined) {
-      if (directFields.id_subsite !== id_subsite) {
-        throw new ConflictException('Subsite does not match');
-      }
-      updateData.id_subsite = id_subsite;
-    }
-
     return updateData;
   }
   /**

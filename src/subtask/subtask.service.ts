@@ -10,12 +10,17 @@ export class SubtaskService {
     private prisma: PrismaService,
     private validation: ValidationService,
   ) {}
-  async create(createSubtaskDto: CreateSubtaskDto) {
+  async create(createSubtaskDto: CreateSubtaskDto, id_site?: number) {
     try {
       const validationIdTask = await this.validation.validateAllIds({
         id_task: createSubtaskDto.id_task,
       });
-      console.log('validationIdTask', validationIdTask);
+      if (id_site && validationIdTask.task.id_site !== id_site) {
+        return {
+          status: 403,
+          message: 'Forbidden: Task does not belong to this site',
+        };
+      }
       const response = await this.prisma.subTask.create({
         data: {
           ...createSubtaskDto,
@@ -55,8 +60,23 @@ export class SubtaskService {
     }
   }
 
-  async update(id: number, updateSubtaskDto: UpdateSubtaskDto) {
+  async update(
+    id: number,
+    updateSubtaskDto: UpdateSubtaskDto,
+    id_site?: number,
+  ) {
     try {
+      const validationIdTask = await this.validation.validateAllIds({
+        id_task: updateSubtaskDto.id_task,
+      });
+      if (id_site && validationIdTask.task) {
+        if (validationIdTask.task.id_site !== id_site) {
+          return {
+            status: 403,
+            message: 'Forbidden: Task does not belong to this site',
+          };
+        }
+      }
       const response = await this.prisma.subTask.update({
         where: { id },
         data: {
@@ -69,8 +89,12 @@ export class SubtaskService {
     }
   }
 
-  async remove(id: number) {
+  async remove(id: number, id_site?: number) {
     try {
+      const validationSubtask = await this.findOne(id, id_site);
+      if (validationSubtask.status === 404) {
+        return validationSubtask;
+      }
       const response = await this.prisma.subTask.delete({
         where: { id },
       });

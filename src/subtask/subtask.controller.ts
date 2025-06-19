@@ -8,6 +8,7 @@ import {
   Delete,
   UseGuards,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { SubtaskService } from './subtask.service';
 import { CreateSubtaskDto } from './dto/create-subtask.dto';
@@ -28,8 +29,17 @@ export class SubtaskController {
   constructor(private readonly subtaskService: SubtaskService) {}
 
   @Post()
-  create(@Body() createSubtaskDto: CreateSubtaskDto) {
-    return this.subtaskService.create(createSubtaskDto);
+  async create(
+    @Body() createSubtaskDto: CreateSubtaskDto,
+    @CurrentUser('siteId') siteId: number,
+  ) {
+    const response = await this.subtaskService.create(createSubtaskDto, siteId);
+    if (response['status'] === 403) {
+      throw new ForbiddenException(
+        'Forbidden: Task does not belong to this site',
+      );
+    }
+    return response;
   }
 
   @Get()
@@ -67,18 +77,33 @@ export class SubtaskController {
     @Param('id', ParseIntPipe) id: number,
     @Body() updateSubtaskDto: UpdateSubtaskDto,
     @CurrentUser('siteId') siteId: number,
-    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
   ) {
-    const validateId = await this.findOne(id, siteId, isSuperAdmin);
-    if(validateId['status'] === 404){
-      throw  new NotFoundException('Subtask not found');
+    const response = await this.subtaskService.update(
+      id,
+      updateSubtaskDto,
+      siteId,
+    );
+    if (response['status'] === 403) {
+      throw new ForbiddenException(
+        'Forbidden: Task does not belong to this site',
+      );
     }
-    const response = await this.subtaskService.update(id, updateSubtaskDto);
     return response;
   }
 
   @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.subtaskService.remove(id);
+  async remove(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser('siteId') siteId: number,
+    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
+  ) {
+    const response = await this.subtaskService.remove(
+      id,
+      !isSuperAdmin ? siteId : undefined,
+    );
+    if (response['status'] === 404) {
+      throw new NotFoundException('Subtask not found');
+    }
+    return response;
   }
 }

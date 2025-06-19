@@ -88,8 +88,8 @@ export class OperationController {
     createOperationDto.id_user = userId;
     const response = await this.operationService.createWithWorkers(
       createOperationDto,
-      isSupervisor ? subsiteId : undefined,
-      isAdmin ? siteId : undefined,
+      !isSuperAdmin ? subsiteId : undefined,
+      !isSuperAdmin ? siteId : undefined,
     );
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
@@ -119,7 +119,6 @@ export class OperationController {
     @CurrentUser('siteId') siteId: number,
     @CurrentUser('subsiteId') subsiteId: number,
   ) {
-    console.log(siteId, subsiteId, isSuperAdmin, isSupervisor);
     const response = await this.operationService.findAll(
       !isSuperAdmin ? siteId : undefined,
       isSupervisor ? subsiteId : undefined,
@@ -403,11 +402,13 @@ export class OperationController {
     const response = await this.operationService.update(
       id,
       updateOperationDto,
-      isSupervisor ? subsiteId : undefined,
-      isAdmin ? siteId : undefined,
+      !isSuperAdmin ? subsiteId : undefined,
+      !isSuperAdmin ? siteId : undefined,
     );
     if (response && response['status'] === 404) {
       throw new NotFoundException(response['message']);
+    }else if (response && response['status'] === 400) {
+      throw new BadRequestException(response['message']);
     }
     return response;
   }
@@ -420,6 +421,7 @@ export class OperationController {
     @CurrentUser('siteId') siteId: number,
     @CurrentUser('subsiteId') subsiteId: number,
   ) {
+    console.log
     const response = await this.operationService.remove(
       id,
       isAdmin ? siteId : undefined,

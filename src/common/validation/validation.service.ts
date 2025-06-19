@@ -20,6 +20,7 @@ export class ValidationService {
     code_worker,
     dni_worker,
     workerIds,
+    allTaskIds,
     inChargedIds,
     phone_worker,
   }: {
@@ -32,6 +33,7 @@ export class ValidationService {
     code_worker?: string;
     phone_worker?: string;
     workerIds?: number[];
+    allTaskIds?: number[];
     inChargedIds?: number[];
   }) {
     try {
@@ -67,7 +69,7 @@ export class ValidationService {
 
         if (!task) {
           return { message: 'Task not found', status: 404 };
-        }else if(task){
+        } else if (task) {
           response.task = task;
         }
       }
@@ -207,6 +209,44 @@ export class ValidationService {
           return { message: 'Operation not found', status: 404 };
         }
       }
+
+      // 11. Validar todas las tareas si se proporcionan IDs
+      if (allTaskIds && allTaskIds.length > 0) {
+        const existingTasks = await this.prisma.task.findMany({
+          where: {
+            id: {
+              in: allTaskIds,
+            },
+          },
+          select: {
+            id: true,
+            id_site: true,
+            id_subsite: true,
+            SubTask: { select: { id: true, name: true, id_task: true } },
+          },
+        });
+
+        const existingTaskIds = existingTasks.map((task) => task.id);
+        const existingTaskSitesAndSubsite = existingTasks.map((task) => ({
+          id: task.id,
+          id_site: task.id_site,
+          id_subsite: task.id_subsite,
+          subTask: task.SubTask,
+        }));
+        const nonExistingTaskIds = allTaskIds.filter(
+          (taskId) => !existingTaskIds.includes(taskId),
+        );
+
+        if (nonExistingTaskIds.length > 0) {
+          console.log('Tasks not found:', nonExistingTaskIds);
+          return {
+            message: `Tasks not found: ${nonExistingTaskIds.join(', ')}`,
+            status: 404,
+          };
+        }
+
+        response.existingTaskIds = existingTaskSitesAndSubsite;
+      }
       return response;
     } catch (error) {
       console.error('Error validating IDs:', error);
@@ -327,20 +367,6 @@ export class ValidationService {
     const validateIds = await this.validateAllIds({
       workerIds,
     });
-    if (id_subsite && validateIds.existingWorkerIds) {
-      const workersWithInvalidSubsite = validateIds.existingWorkerIds.filter(
-        (worker) => worker.id_subsite !== id_subsite,
-      );
-      if (workersWithInvalidSubsite.length > 0) {
-        const invalidWorkerIds = workersWithInvalidSubsite.map((w) => w.id);
-        return {
-          message: `Not access to workers with IDs: ${invalidWorkerIds.join(
-            ', ',
-          )}`,
-          status: 403,
-        };
-      }
-    }
     if (id_site && validateIds.existingWorkerIds) {
       const workersWithInvalidSite = validateIds.existingWorkerIds.filter(
         (worker) => worker.id_site !== id_site,
@@ -348,7 +374,7 @@ export class ValidationService {
       if (workersWithInvalidSite.length > 0) {
         const invalidWorkerIds = workersWithInvalidSite.map((w) => w.id);
         return {
-          message: `Not access to workers with IDs: ${invalidWorkerIds.join(
+          message: `Not access to workers with IDs site: ${invalidWorkerIds.join(
             ', ',
           )}`,
           status: 403,
@@ -356,6 +382,107 @@ export class ValidationService {
       }
     }
     return null;
+  }
+
+  /**
+   * Valida que las SubTasks pertenezcan a las Tasks especificadas
+   * @param taskSubTaskRelations - Array de objetos con id_task e id_subtask
+   * @returns Validación de relaciones correctas
+   */
+  async validateTaskSubTaskRelations(
+    taskSubTaskRelations: { id_task: number; id_subtask: number }[],
+  ) {
+    try {
+      if (!taskSubTaskRelations || taskSubTaskRelations.length === 0) {
+        return { success: true };
+      }
+
+      // Obtener todas las tasks involucradas
+      const taskIds = [
+        ...new Set(taskSubTaskRelations.map((rel) => rel.id_task)),
+      ];
+      const subTaskIds = [
+        ...new Set(taskSubTaskRelations.map((rel) => rel.id_subtask)),
+      ];
+
+      // Validar que todas las tasks existan con sus subtasks Y obtener su id_subsite
+      const existingTasks = await this.prisma.task.findMany({
+        where: { id: { in: taskIds } },
+        select: {
+          id: true,
+          id_subsite: true, // ✅ AGREGAR PARA VALIDAR SUBSITE
+          SubTask: {
+            select: { id: true, name: true, id_task: true },
+          },
+        },
+      });
+
+      // ✅ NUEVA VALIDACIÓN: VERIFICAR QUE TODAS LAS TASKS SEAN DE LA MISMA SUBSITE
+      const taskSubSites = existingTasks.map((task) => task.id_subsite);
+      const uniqueSubSites = [...new Set(taskSubSites)];
+      if (uniqueSubSites.length > 1) {
+        const taskDetails = existingTasks.map((task) => ({
+          taskId: task.id,
+          subSite: task.id_subsite,
+        }));
+
+        return {
+          message: 'All tasks in an operation must belong to the same SubSite',
+          status: 400,
+          details: `Found tasks from ${uniqueSubSites.length} different SubSites: ${uniqueSubSites.join(', ')}`,
+          taskSubSiteConflict: {
+            foundSubSites: uniqueSubSites,
+            taskDetails: taskDetails,
+          },
+        };
+      }
+      // Crear mapa de subtasks por task (código original)
+      const taskSubTaskMap = new Map();
+      existingTasks.forEach((task) => {
+        const subTaskIds = task.SubTask.map((st) => st.id);
+        taskSubTaskMap.set(task.id, subTaskIds);
+      });
+
+      // Validar cada relación (código original)
+      const invalidRelations: Array<{
+        id_task: number;
+        id_subtask: number;
+        availableSubTasks: number[];
+      }> = [];
+      taskSubTaskRelations.forEach((relation) => {
+        const validSubTaskIds = taskSubTaskMap.get(relation.id_task) || [];
+
+        if (!validSubTaskIds.includes(relation.id_subtask)) {
+          invalidRelations.push({
+            id_task: relation.id_task,
+            id_subtask: relation.id_subtask,
+            availableSubTasks: validSubTaskIds,
+          });
+        }
+      });
+
+      if (invalidRelations.length > 0) {
+        return {
+          message: 'Invalid Task-SubTask relations found',
+          status: 400,
+          invalidRelations: invalidRelations,
+          details: invalidRelations.map(
+            (ir) =>
+              `SubTask ${ir.id_subtask} does not belong to Task ${ir.id_task}. Available SubTasks: [${ir.availableSubTasks.join(', ')}]`,
+          ),
+        };
+      }
+
+      return {
+        success: true,
+        validatedRelations: taskSubTaskRelations,
+        taskSubTaskMap: Object.fromEntries(taskSubTaskMap),
+        validatedSubSite: uniqueSubSites[0], // ✅ RETORNAR LA SUBSITE VALIDADA
+      };
+    } catch (error) {
+      console.error('Error validating Task-SubTask relations:', error);
+      throw new Error(`Error validating relations: ${error.message}`);
+    }
   }
 
   /**

@@ -115,6 +115,8 @@ model Operation_Worker {
   timeStart    String?
   id_group     String?
   id_task      Int?
+  id_subtask   Int?
+  subTask      SubTask?  @relation(fields: [id_subtask], references: [id])
   task         Task?     @relation(fields: [id_task], references: [id])
   operation    Operation @relation(fields: [id_operation], references: [id])
   worker       Worker    @relation(fields: [id_worker], references: [id])
@@ -136,11 +138,12 @@ model Task {
 }
 
 model SubTask {
-  id      Int              @id @default(autoincrement())
-  name    String
-  status  StatusActivation @default(ACTIVE)
-  id_task Int
-  task    Task             @relation(fields: [id_task], references: [id])
+  id               Int                @id @default(autoincrement())
+  name             String
+  status           StatusActivation   @default(ACTIVE)
+  id_task          Int
+  task             Task               @relation(fields: [id_task], references: [id])
+  Operation_Worker Operation_Worker[]
 }
 
 model Client {

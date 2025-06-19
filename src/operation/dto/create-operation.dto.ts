@@ -104,6 +104,7 @@ export class CreateOperationDto {
         timeStart: '08:00',
         timeEnd: '17:00',
         id_task: 1,
+        id_subtask: 1,
       },
     ],
   })

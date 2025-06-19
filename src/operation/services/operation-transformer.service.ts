@@ -4,7 +4,6 @@ import { Injectable } from '@nestjs/common';
 export class OperationTransformerService {
   transformOperationResponse(operation) {
     if (!operation) return null;
-
     const { id_area, id_task, workers, inChargeOperation, ...rest } = operation;
     // Transformar trabajadores incluyendo el groupId
     const workersWithSchedule =
@@ -23,6 +22,8 @@ export class OperationTransformerService {
           timeEnd: w.timeEnd || null,
           id_task: w.task ? w.task.id : null,
           task: w.task ? w.task.name : null,
+          id_subtask: w.subTask ? w.subTask.id : null,
+          subtask: w.subTask ? w.subTask.name : null,
         },
       })) || [];
 

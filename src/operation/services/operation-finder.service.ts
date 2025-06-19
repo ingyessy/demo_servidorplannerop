@@ -60,6 +60,7 @@ export class OperationFinderService {
             name: true,
           },
         },
+         subTask: true,
       },
     },
     inChargeOperation: {
@@ -115,9 +116,6 @@ export class OperationFinderService {
    */
   async findOne(id: number, id_site?: number, id_subsite?: number) {
     try {
-      console.log(
-        `Finding operation with ID: ${id}, Site: ${id_site}, Subsite: ${id_subsite}`,
-      );
       const response = await this.prisma.operation.findUnique({
         where: { id, id_site, id_subsite },
         include: this.defaultInclude,
@@ -139,7 +137,11 @@ export class OperationFinderService {
    * @param statuses - Estados para filtrar las operaciones
    * @returns Lista de operaciones filtradas o mensaje de error
    */
-  async findByStatuses(statuses: StatusOperation[], id_site?: number, id_subsite?: number) {
+  async findByStatuses(
+    statuses: StatusOperation[],
+    id_site?: number,
+    id_subsite?: number,
+  ) {
     try {
       // Verificar si los estados son válidos y si es en estado completadas
       const isCompletedOnly =

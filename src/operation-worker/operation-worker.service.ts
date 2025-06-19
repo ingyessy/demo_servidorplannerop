@@ -77,8 +77,13 @@ export class OperationWorkerService {
           workerIds: allWorkerIds,
         });
 
-        const validateWorkerIds = await this.validationService.validateWorkerIds(allWorkerIds, id_subsite, id_site);
-        if(validateWorkerIds?.status === 403){
+        const validateWorkerIds =
+          await this.validationService.validateWorkerIds(
+            allWorkerIds,
+            id_subsite,
+            id_site,
+          );
+        if (validateWorkerIds?.status === 403) {
           return validateWorkerIds;
         }
 
@@ -165,6 +170,7 @@ export class OperationWorkerService {
             timeEnd: group.timeEnd || null,
             id_group: groupId,
             id_task: group.id_task || null,
+            id_subtask: group.id_subtask || null,
           };
 
           // Crear una promesa de creación para cada trabajador en el grupo
@@ -572,14 +578,46 @@ export class OperationWorkerService {
         return { message: 'Operation not found', status: 404 };
       }
 
+      const taskSubTaskRelations: { id_task: number; id_subtask: number }[] =
+        [];
+
+      for (const worker of workersToUpdate || []) {
+        if (worker.id_task && worker.id_subtask) {
+          taskSubTaskRelations.push({
+            id_task: worker.id_task,
+            id_subtask: worker.id_subtask,
+          });
+        }
+      }
+
+      // Solo validar si hay relaciones task-subtask
+      if (taskSubTaskRelations.length > 0) {
+       
+        const validationResult =
+          await this.validationService.validateTaskSubTaskRelations(
+            taskSubTaskRelations,
+          );
+
+        if (validationResult.status === 400) {
+          return validationResult;
+        }
+      }
       // Contadores para el reporte final
       let groupsUpdated = 0;
       let totalWorkersUpdated = 0;
 
       // Por cada grupo de trabajadores a actualizar
       for (const group of workersToUpdate) {
-        const { dateStart, timeStart, dateEnd, timeEnd, id_group, workerIds } =
-          group;
+        const {
+          dateStart,
+          timeStart,
+          dateEnd,
+          timeEnd,
+          id_group,
+          workerIds,
+          id_subtask,
+          id_task,
+        } = group;
 
         // VALIDACIÓN CRÍTICA: Verificar que el id_group existe en la operación
         if (!id_group) {
@@ -642,6 +680,7 @@ export class OperationWorkerService {
               timeStart: groupConfig.timeStart,
               timeEnd: groupConfig.timeEnd,
               id_task: groupConfig.id_task,
+              id_subtask: groupConfig.id_subtask,
             }));
 
             await this.prisma.operation_Worker.createMany({
@@ -677,6 +716,14 @@ export class OperationWorkerService {
 
         if (timeEnd !== undefined) {
           updateData.timeEnd = timeEnd || null;
+        }
+
+        if (id_subtask !== undefined) {
+          updateData.id_subtask = id_subtask || null;
+        }
+
+        if (id_task !== undefined) {
+          updateData.id_task = id_task || null;
         }
 
         // Ejecutar la actualización del grupo completo (incluye los nuevos trabajadores)

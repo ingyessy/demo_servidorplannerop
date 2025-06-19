@@ -29,6 +29,7 @@ export class OperationRelationService {
     workersWithSchedule: WorkerScheduleDto[] = [],
     inChargedIds: number[] = [],
     id_subsite?: number | null,
+    id_site?: number | null,
   ) {
     // Eliminar duplicados
     const uniqueWorkerIds = [...new Set(workerIds)];
@@ -58,12 +59,19 @@ export class OperationRelationService {
     // Asignar trabajadores
     if (hasWorkers) {
       const reponse =
-        await this.operationWorkerService.assignWorkersToOperation({
-          id_operation: operationId,
-          workerIds: uniqueWorkerIds,
-          workersWithSchedule: uniqueWorkersWithSchedule,
-        });
-      if (reponse && reponse.status === 403) {
+        await this.operationWorkerService.assignWorkersToOperation(
+          {
+            id_operation: operationId,
+            workerIds: uniqueWorkerIds,
+            workersWithSchedule: uniqueWorkersWithSchedule,
+          },
+          null,
+          id_site,
+        );
+
+      console.error('Response from assignWorkersToOperation:', reponse);
+
+      if (reponse && (reponse.status === 403 || reponse.status === 400)) {
         return reponse;
       }
     }
@@ -102,8 +110,45 @@ export class OperationRelationService {
    * @param ids - Objeto con los IDs a validar
    * @returns Mensaje de error o null si todo es válido
    */
-  async validateOperationIds(ids: any) {
+  async validateOperationIds(
+    ids: any,
+    workersWithSchedule: WorkerScheduleDto[] = [],
+  ) {
     const validation = await this.validationService.validateAllIds(ids);
+    //validar todos los id_task por separado
+    const allTaskIds = workersWithSchedule
+      .map((group) => group.id_task)
+      .filter((id) => id !== undefined);
+
+    const allSubTaskIds = workersWithSchedule
+      .map((group) => group.id_subtask)
+      .filter((id) => id !== undefined);
+
+    if (allSubTaskIds.length > 0 && allTaskIds.length > 0) {
+      // Construir las relaciones task-subtask desde workersWithSchedule
+      const taskSubTaskRelations = workersWithSchedule
+        .filter((worker) => worker.id_task && worker.id_subtask)
+        .map((worker) => ({
+          id_task: worker.id_task!,
+          id_subtask: worker.id_subtask!,
+        }));
+
+      if (taskSubTaskRelations.length > 0) {
+        const relationValidation =
+          await this.validationService.validateTaskSubTaskRelations(
+            taskSubTaskRelations,
+          );
+
+        if (relationValidation.status === 400) {
+          return {
+            message: relationValidation.message,
+            status: 400,
+            details: relationValidation.details,
+            invalidRelations: relationValidation.invalidRelations,
+          };
+        }
+      }
+    }
 
     if (validation && 'status' in validation && validation.status === 404) {
       return validation;
@@ -122,38 +167,15 @@ export class OperationRelationService {
     id_site?: number | null,
   ) {
     if (!workerIds || !workerIds.length) return null;
-    const validateIds = await this.validationService.validateAllIds({
+    const validateWorkerIds = await this.validationService.validateWorkerIds(
       workerIds,
-    });
-    if (id_subsite && validateIds.existingWorkerIds) {
-      const workersWithInvalidSubsite = validateIds.existingWorkerIds.filter(
-        (worker) => worker.id_subsite !== id_subsite,
-      );
-      if (workersWithInvalidSubsite.length > 0) {
-        const invalidWorkerIds = workersWithInvalidSubsite.map((w) => w.id);
-        return {
-          message: `Not access to workers with IDs: ${invalidWorkerIds.join(
-            ', ',
-          )}`,
-          status: 403,
-        };
-      }
+      id_subsite,
+      id_site,
+    );
+
+    if (validateWorkerIds?.status !== 200) {
+      return validateWorkerIds;
     }
-    if (id_site && validateIds.existingWorkerIds) {
-      const workersWithInvalidSite = validateIds.existingWorkerIds.filter(
-        (worker) => worker.id_site !== id_site,
-      );
-      if (workersWithInvalidSite.length > 0) {
-        const invalidWorkerIds = workersWithInvalidSite.map((w) => w.id);
-        return {
-          message: `Not access to workers with IDs: ${invalidWorkerIds.join(
-            ', ',
-          )}`,
-          status: 403,
-        };
-      }
-    }
-    console.log('validateIds', validateIds);
     return null;
   }
 
@@ -211,8 +233,17 @@ export class OperationRelationService {
   ) {
     // Procesar actualizaciones de trabajadores
     if (workers) {
-      const res = await this.processWorkerUpdates(operationId, workers, id_site, id_subsite);
-      if (res && res.status === 404) {
+      const res = await this.processWorkerUpdates(
+        operationId,
+        workers,
+        id_site,
+        id_subsite,
+      );
+
+      if (
+        res &&
+        (res.updated.status === 404 || res.updated.status === 400 || res.updated.status === 403)
+      ) {
         return res;
       }
     }
@@ -250,11 +281,15 @@ export class OperationRelationService {
 
         if (simpleWorkers.length > 0 || scheduledGroups.length > 0) {
           results.connected =
-            await this.operationWorkerService.assignWorkersToOperation({
-              id_operation: operationId,
-              workerIds: simpleWorkers,
-              workersWithSchedule: scheduledGroups,
-            }, id_subsite, id_site);
+            await this.operationWorkerService.assignWorkersToOperation(
+              {
+                id_operation: operationId,
+                workerIds: simpleWorkers,
+                workersWithSchedule: scheduledGroups,
+              },
+              id_subsite,
+              id_site,
+            );
         }
       }
 
@@ -275,7 +310,6 @@ export class OperationRelationService {
             workers.update,
           );
       }
-
       return results;
     } catch (error) {
       console.error('Error processing worker updates:', error);

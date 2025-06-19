@@ -29,7 +29,6 @@ import { Role } from '@prisma/client';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.SUPERADMIN, Role.ADMIN)
 @UseInterceptors(SiteInterceptor)
-
 @ApiBearerAuth('access-token')
 export class TaskController {
   constructor(private readonly taskService: TaskService) {}
@@ -41,9 +40,8 @@ export class TaskController {
     @CurrentUser('userId') userId: number,
     @CurrentUser('siteId') siteId: number,
     @CurrentUser('subsiteId') subsiteId: number,
-
   ) {
-    if(!createTaskDto.id_site || !createTaskDto.id_subsite) {
+    if (!createTaskDto.id_site || !createTaskDto.id_subsite) {
       createTaskDto.id_site = siteId;
       createTaskDto.id_subsite = subsiteId;
     }
@@ -59,26 +57,35 @@ export class TaskController {
     return response;
   }
 
-  @Get()
+  @Get(':id')
   @Roles(Role.SUPERVISOR, Role.ADMIN, Role.SUPERADMIN)
-  findAll(
+  async findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser('siteId') siteId: number,
     @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
-     @CurrentUser('siteId') siteId: number,
   ) {
-    return this.taskService.findAll(!isSuperAdmin ? siteId : undefined);
-  }
-  @Get(':name')
-  async findByName(@Param('name') name: string) {
-    const response = await this.taskService.findOneTaskName(name);
+    const response = await this.taskService.findOne(id, !isSuperAdmin ? siteId : undefined);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
     }
     return response;
   }
 
-  @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.taskService.findOne(id);
+  @Get()
+  @Roles(Role.SUPERVISOR, Role.ADMIN, Role.SUPERADMIN)
+  findAll(
+    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
+    @CurrentUser('siteId') siteId: number,
+  ) {
+    return this.taskService.findAll(!isSuperAdmin ? siteId : undefined);
+  }
+  @Get('by-name/:name')
+  async findByName(@Param('name') name: string) {
+    const response = await this.taskService.findOneTaskName(name);
+    if (response['status'] === 404) {
+      throw new NotFoundException(response['message']);
+    }
+    return response;
   }
 
   @Patch(':id')
