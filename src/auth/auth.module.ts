@@ -8,23 +8,31 @@ import { UserService } from 'src/user/user.service';
 import { ConfigService } from '@nestjs/config';
 import { CacheModule } from '@nestjs/cache-manager';
 import { RolesGuard } from './guards/roles.guard';
+import { ValidationUserSiteService } from 'src/user/service/validation-user-site/validation-user-site.service';
 
 @Module({
   imports: [
     PassportModule,
     CacheModule.register({
-      ttl: 60 * 60 * 24, 
-      max: 100, 
+      ttl: 60 * 60 * 24,
+      max: 100,
     }),
     JwtModule.registerAsync({
       inject: [ConfigService],
-      useFactory: (configService: ConfigService)=>({
+      useFactory: (configService: ConfigService) => ({
         secret: configService.get<string>('SECRET_JWT'),
-        signOptions: {expiresIn: configService.get<string>('EXPIRES_IN')},
+        signOptions: { expiresIn: configService.get<string>('EXPIRES_IN') },
       }),
     }),
   ],
-  providers: [AuthService, JwtStrategy, PrismaService, UserService,RolesGuard],
-  exports: [AuthService, JwtModule,RolesGuard],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    PrismaService,
+    UserService,
+    RolesGuard,
+    ValidationUserSiteService,
+  ],
+  exports: [AuthService, JwtModule, RolesGuard],
 })
 export class AuthModule {}

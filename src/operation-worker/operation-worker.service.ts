@@ -567,6 +567,7 @@ export class OperationWorkerService {
   async updateWorkersSchedule(
     id_operation: number,
     workersToUpdate: WorkerScheduleDto[],
+    id_site?: number | null,
   ) {
     try {
       // Verificar que la operación existe
@@ -596,6 +597,7 @@ export class OperationWorkerService {
         const validationResult =
           await this.validationService.validateTaskSubTaskRelations(
             taskSubTaskRelations,
+            id_site
           );
 
         if (validationResult.status === 400) {

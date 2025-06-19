@@ -69,7 +69,6 @@ export class OperationRelationService {
           id_site,
         );
 
-      console.error('Response from assignWorkersToOperation:', reponse);
 
       if (reponse && (reponse.status === 403 || reponse.status === 400)) {
         return reponse;
@@ -113,6 +112,7 @@ export class OperationRelationService {
   async validateOperationIds(
     ids: any,
     workersWithSchedule: WorkerScheduleDto[] = [],
+    id_site?: number | null,
   ) {
     const validation = await this.validationService.validateAllIds(ids);
     //validar todos los id_task por separado
@@ -137,6 +137,7 @@ export class OperationRelationService {
         const relationValidation =
           await this.validationService.validateTaskSubTaskRelations(
             taskSubTaskRelations,
+            id_site,
           );
 
         if (relationValidation.status === 400) {
@@ -308,6 +309,7 @@ export class OperationRelationService {
           await this.operationWorkerService.updateWorkersSchedule(
             operationId,
             workers.update,
+            id_site,
           );
       }
       return results;

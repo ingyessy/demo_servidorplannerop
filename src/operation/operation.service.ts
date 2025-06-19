@@ -139,7 +139,7 @@ export class OperationService {
         id_client: createOperationDto.id_client,
         workerIds: allWorkerIds,
         inChargedIds: createOperationDto.inChargedIds,
-      }, groups);
+      }, groups, id_site);
 
       if (
         validationResult &&

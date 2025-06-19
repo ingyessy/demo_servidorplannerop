@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { HttpStatus, Injectable, UnauthorizedException } from '@nestjs/common';
 import { CreateLoginDto } from './dto/create-login.dto';
 import { AuthService } from 'src/auth/auth.service';
 /**
@@ -21,7 +21,7 @@ export class LoginService {
       );
 
       if (!user) {
-        return "Invalid credentials";
+        return 'Invalid credentials';
       }
       const token = this.authService.generateToken(user);
       return token;
@@ -52,6 +52,50 @@ export class LoginService {
       return user;
     } catch (error) {
       throw new Error(error);
+    }
+  }
+
+  /**
+   * Refresca el token de acceso con nuevos valores de site/subsite
+   * @param token Token actual
+   * @param newSiteId Nuevo ID de site (opcional)
+   * @param newSubsiteId Nuevo ID de subsite (opcional)
+   * @returns Nuevo token de acceso
+   */
+  async refreshToken(token: string, newSiteId?: number, newSubsiteId?: number) {
+    try {
+      // Extraer ID de usuario del token
+      const userId = this.authService.extractUserIdFromToken(token);
+      if (!userId) {
+        return {
+          message: 'Invalid token',
+          statusCode: HttpStatus.UNAUTHORIZED,
+        };
+      }
+
+      // Verificar que el token no esté en la lista negra
+      const isBlacklisted = await this.authService.isTokenBlacklisted(token);
+      if (isBlacklisted) {
+        return {
+          message: 'Token is blacklisted',
+          statusCode: HttpStatus.UNAUTHORIZED,
+        };
+      }
+
+      // Invalidar token actual
+      await this.authService.invalidateToken(token);
+
+      // Generar nuevo token con los nuevos valores
+      const newToken = await this.authService.refreshUserToken(
+        userId,
+        newSiteId,
+        newSubsiteId,
+      );
+
+      return newToken;
+    } catch (error) {
+      console.error('Error refreshing token:', error);
+      throw new Error(`Error refreshing token: ${error.message}`);
     }
   }
 }
