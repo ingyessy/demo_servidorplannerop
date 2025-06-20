@@ -57,39 +57,15 @@ export class OperationController {
     @Body() createOperationDto: CreateOperationDto,
     @CurrentUser('userId') userId: number,
     @CurrentUser('siteId') siteId: number,
-    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
-    @CurrentUser('isSupervisor') isSupervisor: boolean,
     @CurrentUser('subsiteId') subsiteId: number,
-    @CurrentUser('isAdmin') isAdmin: boolean,
   ) {
-    if (!isSuperAdmin) {
-      if (createOperationDto.id_site && createOperationDto.id_site !== siteId) {
-        throw new ConflictException(
-          `You can only create operations in your site (${siteId})`,
-        );
-      }
-      createOperationDto.id_site = siteId;
-      if (!createOperationDto.id_subsite) {
-        createOperationDto.id_subsite = subsiteId;
-      }
-    }
-
-    if (isSupervisor) {
-      if (
-        createOperationDto.id_subsite &&
-        createOperationDto.id_subsite !== subsiteId
-      ) {
-        throw new ConflictException(
-          `You can only create operations in your subsite (${subsiteId})`,
-        );
-      }
-      createOperationDto.id_subsite = subsiteId;
-    }
     createOperationDto.id_user = userId;
+    createOperationDto.id_site = siteId;
+    createOperationDto.id_subsite = subsiteId;
     const response = await this.operationService.createWithWorkers(
       createOperationDto,
-      !isSuperAdmin ? subsiteId : undefined,
-      !isSuperAdmin ? siteId : undefined,
+      subsiteId,
+      siteId,
     );
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
@@ -114,15 +90,10 @@ export class OperationController {
   async findAll(
     @Query('format') format: 'json' | 'excel' | 'base64',
     @Res({ passthrough: true }) res: Response,
-    @CurrentUser('isSupervisor') isSupervisor: boolean,
-    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
     @CurrentUser('siteId') siteId: number,
     @CurrentUser('subsiteId') subsiteId: number,
   ) {
-    const response = await this.operationService.findAll(
-      !isSuperAdmin ? siteId : undefined,
-      isSupervisor ? subsiteId : undefined,
-    );
+    const response = await this.operationService.findAll(siteId, subsiteId);
 
     if (!Array.isArray(response)) {
       return response;
@@ -155,8 +126,6 @@ export class OperationController {
   async getWorkerDistributionByHour(
     @Query(new ValidationPipe({ transform: true, whitelist: true }))
     queryDto: WorkerDistributionQueryDto,
-    @CurrentUser('isSupervisor') isSupervisor: boolean,
-    @CurrentUser('isAdmin') isAdmin: boolean,
     @CurrentUser('siteId') siteId: number,
     @CurrentUser('subsiteId') subsiteId: number,
   ) {
@@ -166,8 +135,8 @@ export class OperationController {
     }
     return this.workerAnalyticsService.getWorkerDistributionByHour(
       queryDto.date,
-      isAdmin ? siteId : undefined,
-      isSupervisor ? subsiteId : undefined,
+      siteId,
+      subsiteId,
     );
   }
 
@@ -176,15 +145,17 @@ export class OperationController {
   async getWorkerHoursReport(
     @Query(new ValidationPipe({ transform: true, whitelist: true }))
     queryDto: WorkerHoursReportQueryDto,
-    @CurrentUser('isSupervisor') isSupervisor: boolean,
-    @CurrentUser('isAdmin') isAdmin: boolean,
     @CurrentUser('siteId') siteId: number,
     @CurrentUser('subsiteId') subsiteId: number,
   ) {
-    console.log(isAdmin, isSupervisor, siteId, subsiteId);
     const month = queryDto.month || new Date().getMonth() + 1;
     const year = queryDto.year || new Date().getFullYear();
-    return this.workerAnalyticsService.getWorkerHoursReport(month, year, isAdmin ? siteId : undefined, isSupervisor ? subsiteId : undefined);
+    return this.workerAnalyticsService.getWorkerHoursReport(
+      month,
+      year,
+      siteId,
+      subsiteId,
+    );
   }
 
   @Get('paginated')
@@ -199,25 +170,21 @@ export class OperationController {
       'Si es false, devuelve todos los registros sin paginación. Por defecto: true',
   })
   async findAllPaginated(
+    @CurrentUser('siteId') siteId: number,
+    @CurrentUser('subsiteId') subsiteId: number,
     @Query(new ValidationPipe({ transform: true, whitelist: true }))
     queryParams: PaginatedOperationQueryDto,
     @Query('activatePaginated', new BooleanTransformPipe(true))
-    @CurrentUser('isSupervisor')
-    isSupervisor: boolean,
-    @CurrentUser('isAdmin') isAdmin: boolean,
-    @CurrentUser('siteId') siteId: number,
-    @CurrentUser('subsiteId') subsiteId: number,
-    @CurrentUser('role') userRole: Role,
     activatePaginated: boolean,
   ) {
     try {
       // Construir el objeto de filtros
       const filters: OperationFilterDto = {};
 
-      if (userRole === Role.ADMIN) {
+      if (siteId) {
         filters.id_site = siteId;
       }
-      if (userRole === Role.SUPERVISOR) {
+      if (subsiteId) {
         filters.id_subsite = subsiteId;
       }
       if (queryParams.status && queryParams.status.length > 0) {
@@ -266,8 +233,6 @@ export class OperationController {
   @Get('by-status')
   async findByStatus(
     @Query('status') statusParam: StatusOperation | StatusOperation[],
-    @CurrentUser('isSupervisor') isSupervisor: boolean,
-    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
     @CurrentUser('siteId') siteId: number,
     @CurrentUser('subsiteId') subsiteId: number,
   ) {
@@ -292,8 +257,8 @@ export class OperationController {
 
     const response = await this.operationService.findActiveOperations(
       statusesToUse,
-      !isSuperAdmin ? siteId : undefined,
-      isSupervisor ? subsiteId : undefined,
+      siteId,
+      subsiteId,
     );
 
     if (response['status'] === 404) {
@@ -307,16 +272,14 @@ export class OperationController {
   async findByDate(
     @Query('dateStart', DateTransformPipe) dateStart: Date,
     @Query('dateEnd', DateTransformPipe) dateEnd: Date,
-    @CurrentUser('isSupervisor') isSupervisor: boolean,
-    @CurrentUser('isAdmin') isAdmin: boolean,
     @CurrentUser('siteId') siteId: number,
     @CurrentUser('subsiteId') subsiteId: number,
   ) {
     const response = await this.operationService.findOperationRangeDate(
       dateStart,
       dateEnd,
-      isAdmin ? siteId : undefined,
-      isSupervisor ? subsiteId : undefined,
+      siteId,
+      subsiteId,
     );
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
@@ -327,15 +290,13 @@ export class OperationController {
   @Get('by-user')
   async findByWorker(
     @CurrentUser('userId') id: number,
-    @CurrentUser('isAdmin') isAdmin: boolean,
     @CurrentUser('siteId') siteId: number,
-    @CurrentUser('isSupervisor') isSupervisor: boolean,
     @CurrentUser('subsiteId') subsiteId: number,
   ) {
     const response = await this.operationService.findOperationByUser(
       id,
-      isAdmin ? siteId : undefined,
-      isSupervisor ? subsiteId : undefined,
+      siteId,
+      subsiteId,
     );
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
@@ -346,22 +307,10 @@ export class OperationController {
   @Get(':id')
   async findOne(
     @Param('id', ParseIntPipe) id: number,
-    @CurrentUser('isSupervisor') isSupervisor: boolean,
-    @CurrentUser('isAdmin') isAdmin: boolean,
     @CurrentUser('siteId') siteId: number,
     @CurrentUser('subsiteId') subsiteId: number,
-    @CurrentUser('isGH') isGH: boolean,
   ) {
-    if (isGH) {
-      throw new BadRequestException(
-        'You cannot access this endpoint as a GH user',
-      );
-    }
-    const response = await this.operationService.findOne(
-      id,
-      isAdmin ? siteId : undefined,
-      isSupervisor ? subsiteId : undefined,
-    );
+    const response = await this.operationService.findOne(id, siteId, subsiteId);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
     }
@@ -373,41 +322,18 @@ export class OperationController {
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateOperationDto: UpdateOperationDto,
-    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
     @CurrentUser('siteId') siteId: number,
-    @CurrentUser('isSupervisor') isSupervisor: boolean,
     @CurrentUser('subsiteId') subsiteId: number,
-    @CurrentUser('isAdmin') isAdmin: boolean,
   ) {
-    if (!isSuperAdmin) {
-      if (updateOperationDto.id_site && updateOperationDto.id_site !== siteId) {
-        throw new ConflictException(
-          `You can only update operations in your site (${siteId})`,
-        );
-      }
-      updateOperationDto.id_site = siteId;
-    }
-
-    if (isSupervisor) {
-      if (
-        updateOperationDto.id_subsite &&
-        updateOperationDto.id_subsite !== subsiteId
-      ) {
-        throw new ConflictException(
-          `You can only update operations in your subsite (${subsiteId})`,
-        );
-      }
-      updateOperationDto.id_subsite = subsiteId;
-    }
     const response = await this.operationService.update(
       id,
       updateOperationDto,
-      !isSuperAdmin ? subsiteId : undefined,
-      !isSuperAdmin ? siteId : undefined,
+      subsiteId,
+      siteId,
     );
     if (response && response['status'] === 404) {
       throw new NotFoundException(response['message']);
-    }else if (response && response['status'] === 400) {
+    } else if (response && response['status'] === 400) {
       throw new BadRequestException(response['message']);
     }
     return response;
@@ -421,7 +347,7 @@ export class OperationController {
     @CurrentUser('siteId') siteId: number,
     @CurrentUser('subsiteId') subsiteId: number,
   ) {
-    console.log
+    console.log;
     const response = await this.operationService.remove(
       id,
       isAdmin ? siteId : undefined,

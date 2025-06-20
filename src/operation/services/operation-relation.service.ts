@@ -4,6 +4,9 @@ import { OperationWorkerService } from 'src/operation-worker/operation-worker.se
 import { OperationInChargeService } from 'src/in-charged/in-charged.service';
 import { UpdateOperationDto } from '../dto/update-operation.dto';
 import { ValidationService } from 'src/common/validation/validation.service';
+import { ValidationWorkerService } from 'src/common/validation/services/validation-worker/validation-worker.service';
+import { ValidationClientProgrammingService } from 'src/common/validation/services/validation-client-programming/validation-client-programming.service';
+import { ValidationTaskAndSubtaskService } from 'src/common/validation/services/validation-task-and-subtask/validation-task-and-subtask.service';
 
 /**
  * Servicio para gestionar relaciones de operaciones
@@ -14,6 +17,9 @@ export class OperationRelationService {
     private operationWorkerService: OperationWorkerService,
     private operationInChargeService: OperationInChargeService,
     private validationService: ValidationService,
+    private validationWaorkerService: ValidationWorkerService,
+    private validationClientProgramming: ValidationClientProgrammingService,
+    private validationTaskAndSubtaskService: ValidationTaskAndSubtaskService,
   ) {}
 
   /**
@@ -135,7 +141,7 @@ export class OperationRelationService {
 
       if (taskSubTaskRelations.length > 0) {
         const relationValidation =
-          await this.validationService.validateTaskSubTaskRelations(
+          await this.validationTaskAndSubtaskService.validateTaskSubTaskRelations(
             taskSubTaskRelations,
             id_site,
           );
@@ -168,7 +174,7 @@ export class OperationRelationService {
     id_site?: number | null,
   ) {
     if (!workerIds || !workerIds.length) return null;
-    const validateWorkerIds = await this.validationService.validateWorkerIds(
+    const validateWorkerIds = await this.validationWaorkerService.validateWorkerIds(
       workerIds,
       id_subsite,
       id_site,
@@ -205,7 +211,7 @@ export class OperationRelationService {
    * @param id_clientProgramming - ID de la programación del cliente
    */
   async validateClientProgramming(id_clientProgramming: number | null) {
-    const validate = await this.validationService.validateClientProgramming({
+    const validate = await this.validationClientProgramming.validateClientProgramming({
       id_clientProgramming,
     });
 

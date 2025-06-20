@@ -2,19 +2,19 @@ import { Injectable } from '@nestjs/common';
 import { CreateClientProgrammingDto } from './dto/create-client-programming.dto';
 import { UpdateClientProgrammingDto } from './dto/update-client-programming.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { ValidationService } from 'src/common/validation/validation.service';
 import { FilterClientProgrammingDto } from './dto/filter-client-programming.dto';
+import { ValidationClientProgrammingService } from 'src/common/validation/services/validation-client-programming/validation-client-programming.service';
 
 @Injectable()
 export class ClientProgrammingService {
   constructor(
     private prisma: PrismaService,
-    private validation: ValidationService,
+    private validationClientProgramming: ValidationClientProgrammingService
   ) {}
   async create(createClientProgrammingDto: CreateClientProgrammingDto) {
     try {
       const validationProgramming =
-        await this.validation.validateClientProgramming({
+        await this.validationClientProgramming.validateClientProgramming({
           service_request: createClientProgrammingDto.service_request,
           service: createClientProgrammingDto.service,
           client: createClientProgrammingDto.client,
