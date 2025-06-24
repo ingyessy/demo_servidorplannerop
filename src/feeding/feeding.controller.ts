@@ -38,13 +38,9 @@ export class FeedingController {
   @UsePipes(DateTransformPipe)
   async create(
     @Body() createFeedingDto: CreateFeedingDto,
-    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
     @CurrentUser('siteId') siteId: number,
   ) {
-    const response = await this.feedingService.create(
-      createFeedingDto,
-      isSuperAdmin ? undefined : siteId,
-    );
+    const response = await this.feedingService.create(createFeedingDto, siteId);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
     } else if (response['status'] === 409) {
@@ -54,13 +50,8 @@ export class FeedingController {
   }
 
   @Get()
-  async findAll(
-    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
-    @CurrentUser('siteId') siteId: number,
-  ) {
-    const response = await this.feedingService.findAll(
-      isSuperAdmin ? undefined : siteId,
-    );
+  async findAll(@CurrentUser('siteId') siteId: number) {
+    const response = await this.feedingService.findAll(siteId);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
     }
@@ -84,14 +75,13 @@ export class FeedingController {
     queryParams: PaginatedWorkerFeedingQueryDto,
     @Query('activatePaginated', new BooleanTransformPipe(true))
     activatePaginated: boolean,
-    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
     @CurrentUser('siteId') siteId: number,
   ) {
     try {
       // Construir el objeto de filtros
       const filters: FilterWorkerFeedingDto = {};
 
-      if (!isSuperAdmin) {
+      if (siteId) {
         filters.id_site = siteId;
       }
 
@@ -128,12 +118,8 @@ export class FeedingController {
   async findOne(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser('siteId') id_site: number,
-    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
   ) {
-    const response = await this.feedingService.findOne(
-      id,
-      isSuperAdmin ? undefined : id_site,
-    );
+    const response = await this.feedingService.findOne(id, id_site);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
     }
@@ -143,12 +129,8 @@ export class FeedingController {
   async findByOperation(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser('siteId') id_site: number,
-    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
   ) {
-    const response = await this.feedingService.findByOperation(
-      id,
-      isSuperAdmin ? undefined : id_site,
-    );
+    const response = await this.feedingService.findByOperation(id, id_site);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
     }
@@ -159,13 +141,12 @@ export class FeedingController {
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateFeedingDto: UpdateFeedingDto,
-    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
     @CurrentUser('siteId') siteId: number,
   ) {
     const response = await this.feedingService.update(
       id,
       updateFeedingDto,
-      isSuperAdmin ? undefined : siteId,
+      siteId,
     );
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
@@ -178,10 +159,9 @@ export class FeedingController {
   @Delete(':id')
   async remove(
     @Param('id', ParseIntPipe) id: number,
-    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
     @CurrentUser('siteId') siteId: number,
   ) {
-    const response = await this.feedingService.remove(id, isSuperAdmin ? undefined : siteId);
+    const response = await this.feedingService.remove(id, siteId);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
     } else if (response['status'] === 409) {

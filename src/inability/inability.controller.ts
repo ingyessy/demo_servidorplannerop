@@ -42,13 +42,12 @@ export class InabilityController {
   async create(
     @Body() createInabilityDto: CreateInabilityDto,
     @CurrentUser('userId') userId: number,
-    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
     @CurrentUser('siteId') siteId: number,
   ) {
     createInabilityDto.id_user = userId;
     const response = await this.inabilityService.create(
       createInabilityDto,
-      isSuperAdmin ? undefined : siteId,
+      siteId,
     );
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
@@ -60,12 +59,9 @@ export class InabilityController {
 
   @Get()
   async findAll(
-    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
     @CurrentUser('siteId') siteId: number,
   ) {
-    const response = await this.inabilityService.findAll(
-      isSuperAdmin ? undefined : siteId,
-    );
+    const response = await this.inabilityService.findAll(siteId);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
     } else if (response['status'] === 409) {
@@ -77,13 +73,9 @@ export class InabilityController {
   @Get(':id')
   async findOne(
     @Param('id', ParseIntPipe) id: number,
-    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
     @CurrentUser('siteId') siteId: number,
   ) {
-    const response = await this.inabilityService.findOne(
-      id,
-      isSuperAdmin ? undefined : siteId,
-    );
+    const response = await this.inabilityService.findOne(id, siteId);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
     }
@@ -102,9 +94,8 @@ export class InabilityController {
     @Query('format') format: string = 'json',
     @Res({ passthrough: true }) res: Response,
     @CurrentUser('siteId') siteId: number,
-    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
   ) {
-    if (!isSuperAdmin) {
+    if (siteId) {
       filters.id_site = siteId;
     }
     const response = await this.inabilityService.findByFilters(filters);
@@ -140,13 +131,12 @@ export class InabilityController {
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateInabilityDto: UpdateInabilityDto,
-    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
     @CurrentUser('siteId') siteId: number,
   ) {
     const response = await this.inabilityService.update(
       id,
       updateInabilityDto,
-      isSuperAdmin ? undefined : siteId,
+      siteId,
     );
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
@@ -159,10 +149,9 @@ export class InabilityController {
   @Delete(':id')
   async remove(
     @Param('id', ParseIntPipe) id: number,
-    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
     @CurrentUser('siteId') siteId: number,
   ) {
-    const response = await this.inabilityService.remove(id, isSuperAdmin ? undefined : siteId);
+    const response = await this.inabilityService.remove(id, siteId);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
     }else if (response['status'] === 409) {

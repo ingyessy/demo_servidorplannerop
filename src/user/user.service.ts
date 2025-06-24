@@ -19,8 +19,8 @@ export class UserService {
     try {
       const validationUser = await this.findOne(createUserDto.dni);
       const userByUsername = await this.findByUsername(createUserDto.username);
-      if (validationUser['status'] != 404 || userByUsername != null) {
-        return { message: 'User already DNI exists', status: 409 };
+      if (validationUser['status'] !== 404 || userByUsername !== null) {
+        return { message: 'User already DNI/Username exists', status: 409 };
       }
 
       const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
@@ -36,10 +36,10 @@ export class UserService {
    * obtene todos los usuarios
    * @returns respuesta de la busqueda de todos los usuarios
    */
-  async findAll(id_site?: number, id_subsite?: number) {
+  async findAll(id_site?: number) {
     try {
       const response = await this.prisma.user.findMany({
-        where: { id_site, id_subsite },
+        where: { id_site },
       });
       return response;
     } catch (error) {

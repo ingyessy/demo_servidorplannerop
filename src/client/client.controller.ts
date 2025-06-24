@@ -35,28 +35,18 @@ export class ClientController {
   async create(
     @Body() createClientDto: CreateClientDto,
     @CurrentUser('userId') userId: number,
-    @CurrentUser('siteId') siteId: number,
-    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
   ) {
-    if (!isSuperAdmin) {
-      if (createClientDto.id_site && createClientDto.id_site !== siteId) {
-        throw new ForbiddenException(
-          `You can only create clients in your site (${siteId})`,
-        );
-      }
-      createClientDto.id_site = siteId;
-    }
     createClientDto.id_user = userId;
     const response = await this.clientService.create(createClientDto);
     if (response['status'] === 404) {
-     throw new NotFoundException(response['message']);
+      throw new NotFoundException(response['message']);
     }
     return response;
   }
 
   @Get()
   @Roles(Role.SUPERVISOR, Role.ADMIN, Role.SUPERADMIN)
-  async findAll(@CurrentUser('siteId') siteId: number) {
+  async findAll() {
     const response = await this.clientService.findAll();
     return response;
   }
@@ -75,16 +65,7 @@ export class ClientController {
     @Param('id', ParseIntPipe) id: number,
     @Body() updateClientDto: UpdateClientDto,
     @CurrentUser('userId') userId: number,
-    @CurrentUser('siteId') siteId: number,
-    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
   ) {
-    if (!isSuperAdmin) {
-      if (updateClientDto.id_site && updateClientDto.id_site !== siteId) {
-        throw new ForbiddenException(
-          `You can only update clients in your site (${siteId})`,
-        );
-      }
-    }
     updateClientDto.id_user = userId;
     const response = await this.clientService.update(id, updateClientDto);
     if (response['status'] === 404) {
@@ -97,7 +78,7 @@ export class ClientController {
   async remove(@Param('id', ParseIntPipe) id: number) {
     const response = await this.clientService.remove(id);
     if (response['status'] === 404) {
-     throw new NotFoundException(response['message']);
+      throw new NotFoundException(response['message']);
     }
     return response;
   }

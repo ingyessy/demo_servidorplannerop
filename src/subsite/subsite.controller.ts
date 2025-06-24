@@ -28,10 +28,9 @@ export class SubsiteController {
   @Post()
   create(
     @Body() createSubsiteDto: CreateSubsiteDto,
-    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
     @CurrentUser('siteId') siteId: number,
   ) {
-    if (!isSuperAdmin) {
+    if (siteId) {
       createSubsiteDto.id_site = siteId;
       if (createSubsiteDto.id_site && createSubsiteDto.id_site !== siteId) {
         throw new Error(
@@ -43,8 +42,8 @@ export class SubsiteController {
   }
 
   @Get()
-  async findAll() {
-    const response = await this.subsiteService.findAll();
+  async findAll(@CurrentUser('siteId') siteId: number) {
+    const response = await this.subsiteService.findAll(siteId);
     if (response['status'] === 404) {
       return { status: 404, message: 'No subsites found' };
     }
@@ -52,8 +51,11 @@ export class SubsiteController {
   }
 
   @Get(':id')
-  async findOne(@Param('id', ParseIntPipe) id: number) {
-    const response = await this.subsiteService.findOne(id);
+  async findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser('siteId') siteId: number,
+  ) {
+    const response = await this.subsiteService.findOne(id, siteId);
     if (response['status'] === 404) {
       return { status: 404, message: 'Subsite not found' };
     }
@@ -64,22 +66,30 @@ export class SubsiteController {
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateSubsiteDto: UpdateSubsiteDto,
+    @CurrentUser('siteId') siteId: number,
   ) {
-    const existingSubsite = await this.subsiteService.findOne(id);
+    const existingSubsite = await this.subsiteService.findOne(id, siteId);
     if (existingSubsite['status'] === 404) {
       return { status: 404, message: 'Subsite not found' };
     }
-    const response = await this.subsiteService.update(id, updateSubsiteDto);
+    const response = await this.subsiteService.update(
+      id,
+      updateSubsiteDto,
+      siteId,
+    );
     return response;
   }
 
   @Delete(':id')
-  async remove(@Param('id', ParseIntPipe) id: number) {
-    const existingSubsite = await this.subsiteService.findOne(id);
+  async remove(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser('siteId') siteId: number,
+  ) {
+    const existingSubsite = await this.subsiteService.findOne(id, siteId);
     if (existingSubsite['status'] === 404) {
       return { status: 404, message: 'Subsite not found' };
     }
-    const response = await this.subsiteService.remove(id);
+    const response = await this.subsiteService.remove(id, siteId);
     return response;
   }
 }

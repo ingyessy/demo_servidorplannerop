@@ -43,7 +43,6 @@ export class ClientProgrammingController {
     @Body() createClientProgrammingDto: CreateClientProgrammingDto,
     @CurrentUser('userId') userId: number,
     @CurrentUser('siteId') siteId: number,
-    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
     @CurrentUser('subsiteId') subsiteId: number,
   ) {
     createClientProgrammingDto.id_user = userId;
@@ -54,7 +53,7 @@ export class ClientProgrammingController {
       createClientProgrammingDto.id_site = siteId;
       createClientProgrammingDto.id_subsite = subsiteId;
     }
-    if (!isSuperAdmin && createClientProgrammingDto.id_site !== siteId) {
+    if (siteId && createClientProgrammingDto.id_site !== siteId) {
       throw new ForbiddenException(
         'No tienes permiso para crear una programación en este sitio',
       );
@@ -75,12 +74,11 @@ export class ClientProgrammingController {
   @ApiOperation({ summary: 'Obtener programaciones de cliente con filtros' })
   async findAllFiltered(
     @Query() filters: FilterClientProgrammingDto,
-    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
     @CurrentUser('siteId') siteId: number,
   ) {
     const response = await this.clientProgrammingService.findAllFiltered(
       filters,
-      !isSuperAdmin ? siteId : undefined,
+      siteId,
     );
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
@@ -89,13 +87,8 @@ export class ClientProgrammingController {
   }
 
   @Get()
-  async findAll(
-    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
-    @CurrentUser('siteId') siteId: number,
-  ) {
-    const response = await this.clientProgrammingService.findAll(
-      isSuperAdmin ? undefined : siteId,
-    );
+  async findAll(@CurrentUser('siteId') siteId: number) {
+    const response = await this.clientProgrammingService.findAll(siteId);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
     }
@@ -105,14 +98,12 @@ export class ClientProgrammingController {
   @Get(':id')
   async findOne(
     @Param('id', ParseIntPipe) id: number,
-    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
     @CurrentUser('siteId') siteId: number,
   ) {
-    const response = await this.clientProgrammingService.findOne(id, isSuperAdmin ? undefined : siteId);
+    const response = await this.clientProgrammingService.findOne(id, siteId);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
     }
-    console.log(response);
     return response;
   }
 
@@ -121,10 +112,9 @@ export class ClientProgrammingController {
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateClientProgrammingDto: UpdateClientProgrammingDto,
-    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
     @CurrentUser('siteId') siteId: number,
   ) {
-    if(!isSuperAdmin && updateClientProgrammingDto.id_site !== siteId) {
+    if (siteId && updateClientProgrammingDto.id_site !== siteId) {
       throw new ForbiddenException(
         'No tienes permiso para actualizar una programación en este sitio',
       );
@@ -143,12 +133,8 @@ export class ClientProgrammingController {
   async remove(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser('siteId') siteId: number,
-    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
   ) {
-    const response = await this.clientProgrammingService.remove(
-      id,
-      isSuperAdmin ? undefined : siteId,
-    );
+    const response = await this.clientProgrammingService.remove(id, siteId);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
     } else if (response['status'] === 403) {

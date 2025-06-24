@@ -76,13 +76,13 @@ export class CreateWorkerDto {
   })
   dateRetierment: string;
 
-  @ApiProperty({ example: '201' })
+  @ApiHideProperty()
   @IsNumber()
   @Type(() => Number)
   @IsOptional()
   id_site?: number;
 
-  @ApiProperty({ example: '301' })
+  @ApiHideProperty()
   @IsNumber()
   @Type(() => Number)
   @IsOptional()

@@ -62,9 +62,8 @@ export class TaskController {
   async findOne(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser('siteId') siteId: number,
-    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
   ) {
-    const response = await this.taskService.findOne(id, !isSuperAdmin ? siteId : undefined);
+    const response = await this.taskService.findOne(id, siteId);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
     }
@@ -73,15 +72,15 @@ export class TaskController {
 
   @Get()
   @Roles(Role.SUPERVISOR, Role.ADMIN, Role.SUPERADMIN)
-  findAll(
-    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
-    @CurrentUser('siteId') siteId: number,
-  ) {
-    return this.taskService.findAll(!isSuperAdmin ? siteId : undefined);
+  findAll(@CurrentUser('siteId') siteId: number) {
+    return this.taskService.findAll(siteId);
   }
   @Get('by-name/:name')
-  async findByName(@Param('name') name: string) {
-    const response = await this.taskService.findOneTaskName(name);
+  async findByName(
+    @Param('name') name: string,
+    @CurrentUser('siteId') siteId: number,
+  ) {
+    const response = await this.taskService.findOneTaskName(name, siteId);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
     }
@@ -93,7 +92,15 @@ export class TaskController {
     @Param('id', ParseIntPipe) id: number,
     @Body() updateTaskDto: UpdateTaskDto,
     @CurrentUser('userId') userId: number,
+    @CurrentUser('siteId') siteId: number,
   ) {
+    if (!updateTaskDto.id_site) {
+      if (updateTaskDto.id_site != siteId) {
+        throw new ConflictException(
+          'You cannot update a task from another site',
+        );
+      }
+    }
     updateTaskDto.id_user = userId;
     const response = await this.taskService.update(id, updateTaskDto);
     if (response['status'] === 404) {

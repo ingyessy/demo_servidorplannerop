@@ -19,11 +19,11 @@ export class SubsiteService {
     }
   }
 
-  async findAll() {
+  async findAll(id_site?: number) {
     try {
       const response = await this.prisma.subSite.findMany({
-        include: {
-          site: true,
+        where: {
+          id_site,
         },
       });
       if (!response || response.length === 0) {
@@ -35,10 +35,10 @@ export class SubsiteService {
     }
   }
 
-  async findOne(id: number) {
+  async findOne(id: number, id_site?: number) {
     try {
       const response = await this.prisma.subSite.findUnique({
-        where: { id },
+        where: { id , id_site},
         include: {
           site: true,
         },
@@ -52,10 +52,10 @@ export class SubsiteService {
     }
   }
 
-  async update(id: number, updateSubsiteDto: UpdateSubsiteDto) {
+  async update(id: number, updateSubsiteDto: UpdateSubsiteDto, id_site?: number) {
     try {
       const response = await this.prisma.subSite.update({
-        where: { id },
+        where: { id, id_site },
         data: {
           ...updateSubsiteDto,
         },
@@ -66,10 +66,10 @@ export class SubsiteService {
     }
   }
 
-  async remove(id: number) {
+  async remove(id: number, id_site?: number) {
     try {
       const response = await this.prisma.subSite.delete({
-        where: { id },
+        where: { id, id_site },
       });
       return response;
     } catch (error) {

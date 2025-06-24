@@ -20,7 +20,7 @@ export class WorkerService {
    * @param createWorkerDto datos del trabajador a crear
    * @returns respuesta de la creacion del trabajador
    */
-  async create(createWorkerDto: CreateWorkerDto) {
+  async create(createWorkerDto: CreateWorkerDto, id_site?: number) {
     try {
       const { dni, id_area, id_user, phone, code } = createWorkerDto;
       const validation = await this.validationService.validateAllIds({
@@ -30,6 +30,12 @@ export class WorkerService {
         code_worker: code,
         phone_worker: phone,
       });
+      if (validation['area'].id_site !== id_site) {
+        return {
+          message: 'Not authorized to create worker in this area',
+          status: 409,
+        };
+      }
       // Si hay un error, retornarlo
       if (
         validation &&
@@ -109,10 +115,10 @@ export class WorkerService {
    * @param id id del trabajador a buscar
    * @returns resupuesta de la busqueda del trabajador
    */
-  async findOne(id: number, id_site?: number, id_subsite?: number) {
+  async findOne(id: number, id_site?: number) {
     try {
       const response = await this.prisma.worker.findUnique({
-        where: { id , id_site, id_subsite },
+        where: { id, id_site },
         include: {
           jobArea: {
             select: {
@@ -122,7 +128,6 @@ export class WorkerService {
           },
         },
       });
-
       if (!response) {
         return { message: 'Worker not found', status: 404 };
       }
@@ -157,10 +162,19 @@ export class WorkerService {
    * @param updateWorkerDto datos del trabajador a actualizar
    * @returns respuesta de la actualizacion del trabajador
    */
-  async update(id: number, updateWorkerDto: UpdateWorkerDto) {
+  async update(id: number, updateWorkerDto: UpdateWorkerDto, id_site?: number) {
     try {
+      const validation = await this.validationService.validateAllIds({
+        id_area: updateWorkerDto.id_area,
+      });
+      if (validation['area'].id_site !== id_site) {
+        return {
+          message: 'Not authorized to update worker in this area',
+          status: 409,
+        };
+      }
       const response = await this.prisma.worker.update({
-        where: { id },
+        where: { id, id_site },
         data: updateWorkerDto,
       });
       return response;

@@ -34,10 +34,6 @@ export class SiteController {
     @Body() createSiteDto: CreateSiteDto,
     @CurrentUser('userId') userId: number,
   ) {
-    const currentUserRole = req.user.role;
-    if (currentUserRole !== Role.SUPERADMIN) {
-      throw new ConflictException('Only superadmin can create sites');
-    }
     createSiteDto.id_user = userId;
     const response = await this.siteService.create(createSiteDto);
     if (response.status === 409) {
@@ -48,13 +44,8 @@ export class SiteController {
 
   @Get()
   @Roles(Role.SUPERADMIN, Role.ADMIN)
-  async findAll(
-    @CurrentUser('siteId') siteId: number,
-    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
-  ) {
-    const response = await this.siteService.findAll(
-      !isSuperAdmin ? siteId : undefined,
-    );
+  async findAll(@CurrentUser('siteId') siteId: number) {
+    const response = await this.siteService.findAll(siteId);
     if (response['status'] === 404) {
       return { status: 404, message: 'No sites found' };
     }
@@ -63,10 +54,8 @@ export class SiteController {
 
   @Get(':id')
   @Roles(Role.SUPERADMIN, Role.ADMIN)
-  async findOne(
-    @Param('id', ParseIntPipe) id: number,
-  ) {
-    const response = await this.siteService.findOne(id);
+  async findOne(@Param('id', ParseIntPipe) id: number, @CurrentUser('siteId') siteId: number) {
+    const response = await this.siteService.findOne(id, siteId);
     if (response['status'] === 404) {
       return { status: 404, message: 'Site not found' };
     }

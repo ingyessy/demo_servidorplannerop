@@ -54,6 +54,7 @@ export class ValidationService {
         const area = await this.prisma.jobArea.findUnique({
           where: { id: id_area },
         });
+        response.area = area;
 
         if (!area) {
           return { message: 'Area not found', status: 404 };

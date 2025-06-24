@@ -41,10 +41,11 @@ export class TaskService {
    * @param name nombre de la tarea a buscar
    * @returns respuesta de la busqueda de la tarea
    */
-  async findOneTaskName(name: string) {
+  async findOneTaskName(name: string, id_site?: number) {
     try {
       const response = await this.prisma.task.findMany({
         where: {
+          id_site: id_site,
           name: {
             equals: name,
             mode: 'insensitive',

@@ -36,22 +36,12 @@ export class AreaController {
     @Body() createAreaDto: CreateAreaDto,
     @CurrentUser('siteId') siteId: number,
     @CurrentUser('subsiteId') subsiteId: number,
-    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
-    @CurrentUser('isSupervisor') isSupervisor: boolean,
     @CurrentUser('userId') userId: number,
   ) {
     createAreaDto.id_user = userId;
-    if (!isSuperAdmin) {
-      if (createAreaDto.id_site !== siteId) {
-        throw new ForbiddenException(
-          'You do not have permission to create an area in this site',
-        );
-      }
-      if (isSupervisor && createAreaDto.id_subsite !== subsiteId) {
-        throw new ForbiddenException(
-          'You do not have permission to create an area in this subsite',
-        );
-      }
+    if (!createAreaDto.id_site || !createAreaDto.id_subsite) {
+      createAreaDto.id_site = siteId;
+      createAreaDto.id_subsite = subsiteId;
     }
 
     const response = await this.areaService.create(createAreaDto);
@@ -63,26 +53,17 @@ export class AreaController {
 
   @Get()
   @Roles(Role.SUPERADMIN, Role.SUPERVISOR, Role.ADMIN, Role.GH)
-  async findAll(
-    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
-    @CurrentUser('siteId') siteId: number,
-  ) {
-    const response = await this.areaService.findAll(
-      !isSuperAdmin ? siteId : undefined,
-    );
+  async findAll(@CurrentUser('siteId') siteId: number) {
+    const response = await this.areaService.findAll(siteId);
     return response;
   }
 
   @Get(':id')
   async findOne(
     @Param('id', ParseIntPipe) id: number,
-    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
     @CurrentUser('siteId') siteId: number,
   ) {
-    const response = await this.areaService.findOne(
-      id,
-      !isSuperAdmin ? siteId : undefined,
-    );
+    const response = await this.areaService.findOne(id, siteId);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
     }
@@ -94,8 +75,12 @@ export class AreaController {
     @Param('id', ParseIntPipe) id: number,
     @Body() updateAreaDto: UpdateAreaDto,
     @CurrentUser('userId') userId: number,
+    @CurrentUser('siteId') siteId: number,
   ) {
     updateAreaDto.id_user = userId;
+    if (updateAreaDto.id_site && updateAreaDto.id_site !== siteId) {
+      throw new ForbiddenException('You cannot update an area from another site');
+    }
     const response = await this.areaService.update(id, updateAreaDto);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
@@ -109,11 +94,10 @@ export class AreaController {
   async remove(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser('siteId') siteId: number,
-    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
   ) {
     const response = await this.areaService.remove(
       id,
-      isSuperAdmin ? undefined : siteId,
+      siteId,
     );
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);

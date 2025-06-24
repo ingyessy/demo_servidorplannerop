@@ -1,6 +1,7 @@
 import { ApiHideProperty, ApiProperty } from '@nestjs/swagger';
+import { StatusActivation } from '@prisma/client';
 import { Type } from 'class-transformer';
-import { IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class CreateClientDto {
   @ApiProperty({ example: 'Juan' })
@@ -13,9 +14,9 @@ export class CreateClientDto {
   @IsOptional()
   id_user?: number;
 
-  @ApiProperty({ example: '1' })
-  @Type(() => Number)
-  @IsNumber()
-  @IsOptional()
-  id_site?: number;
+  @ApiProperty({ example: `${Object.values(StatusActivation).join(', ')}` })
+  @IsEnum(StatusActivation, {
+    message: `status debe ser uno de los siguientes valores: ${Object.values(StatusActivation).join(', ')}`,
+  })
+  status: StatusActivation;
 }

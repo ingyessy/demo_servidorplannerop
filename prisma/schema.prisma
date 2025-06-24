@@ -153,10 +153,6 @@ model Client {
   status     StatusActivation @default(ACTIVE)
   user       User             @relation(fields: [id_user], references: [id])
   operations Operation[]
-  Site       Site             @relation(fields: [id_site], references: [id])
-  id_site    Int              @default(1)
-  id_subsite Int?
-  subSite    SubSite?         @relation(fields: [id_subsite], references: [id])
 }
 
 model CalledAttention {
@@ -234,7 +230,6 @@ model Site {
   workers           Worker[]
   operations        Operation[]
   jobAreas          JobArea[]
-  clients           Client[]
   tasks             Task[]
   ClientProgramming ClientProgramming[]
   SubSite           SubSite[]
@@ -251,7 +246,6 @@ model SubSite {
   Worker            Worker[]
   Operation         Operation[]
   Task              Task[]
-  Client            Client[]
   ClientProgramming ClientProgramming[]
 }
 

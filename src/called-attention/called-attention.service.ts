@@ -39,7 +39,7 @@ export class CalledAttentionService {
       const validation = await this.validation.validateAllIds({
         workerIds: [createCalledAttentionDto.id_worker],
       });
-      const workerValidation = validation?.existingWorkers?.[0];
+      const workerValidation = validation?.existingWorkerIds?.[0];
       if (id_site != undefined) {
         if (workerValidation && workerValidation.id_site !== id_site) {
           return {
@@ -51,7 +51,7 @@ export class CalledAttentionService {
       if (validation && 'status' in validation && validation.status === 404) {
         return validation;
       }
-  
+
       const response = await this.prisma.calledAttention.create({
         data: {
           ...createCalledAttentionDto,
@@ -229,7 +229,7 @@ export class CalledAttentionService {
         const validateWorker = await this.validation.validateAllIds({
           workerIds: [id_worker],
         });
-        const wokerValidation = validateWorker?.existingWorkers?.[0];
+        const wokerValidation = validateWorker?.existingWorkerIds?.[0];
         if (wokerValidation && wokerValidation.id_site != id_site) {
           return {
             message: 'Not authorized to update attention',
@@ -252,7 +252,7 @@ export class CalledAttentionService {
         return validadionGlobal;
       }
 
-      const workerValidation = validadionGlobal?.existingWorkers?.[0];
+      const workerValidation = validadionGlobal?.existingWorkerIds?.[0];
       if (id_site != undefined) {
         if (workerValidation && workerValidation.id_site != id_site) {
           return {

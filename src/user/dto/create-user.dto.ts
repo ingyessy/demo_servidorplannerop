@@ -40,4 +40,10 @@ export class CreateUserDto {
   @Transform(({ value }) => Number(value))
   @IsOptional()
   id_site?: number;
+
+  @ApiProperty({ example: '1' })
+  @IsNumber()
+  @Transform(({ value }) => Number(value))
+  @IsOptional()
+  id_subsite?: number;
 }
