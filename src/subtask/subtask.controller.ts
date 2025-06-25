@@ -9,6 +9,7 @@ import {
   UseGuards,
   NotFoundException,
   ForbiddenException,
+  ConflictException,
 } from '@nestjs/common';
 import { SubtaskService } from './subtask.service';
 import { CreateSubtaskDto } from './dto/create-subtask.dto';
@@ -38,6 +39,8 @@ export class SubtaskController {
       throw new ForbiddenException(
         'Forbidden: Task does not belong to this site',
       );
+    }else if (response['status'] === 409) {
+      throw new ConflictException(response['message']);
     }
     return response;
   }

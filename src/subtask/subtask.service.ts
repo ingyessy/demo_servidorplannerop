@@ -28,6 +28,15 @@ export class SubtaskService {
       });
       return response;
     } catch (error) {
+      if (error.code === 'P2002') {
+        const target = error.meta?.target;
+        const fieldName = Array.isArray(target) ? target[0] : target;
+
+        return {
+          message: `Subtask with ${fieldName} '${createSubtaskDto[fieldName]}' already exists`,
+          status: 409,
+        };
+      }
       throw new Error('Error creating subtask');
     }
   }

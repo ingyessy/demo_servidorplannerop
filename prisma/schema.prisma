@@ -140,6 +140,7 @@ model Task {
 model SubTask {
   id               Int                @id @default(autoincrement())
   name             String
+  code             String             @unique
   status           StatusActivation   @default(ACTIVE)
   id_task          Int
   task             Task               @relation(fields: [id_task], references: [id])
