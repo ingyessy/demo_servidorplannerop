@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { StatusActivation } from '@prisma/client';
 import { Transform } from 'class-transformer';
-import { IsEnum, IsNumber, IsString } from 'class-validator';
+import { IsEnum, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class CreateSubsiteDto {
   @ApiProperty({ example: 'Subsite Name' })
@@ -17,6 +17,7 @@ export class CreateSubsiteDto {
 
   @ApiProperty({ example: '12' })
   @IsNumber()
+  @IsOptional()
   @Transform(({ value }) => Number(value))
-  id_site: number;
+  id_site?: number;
 }

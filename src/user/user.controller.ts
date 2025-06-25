@@ -50,6 +50,10 @@ export class UserController {
       throw new ForbiddenException('Admins cannot create superadmin accounts');
     }
 
+    if (currentUserRole === Role.ADMIN && createUserDto.id_site !== siteId) {
+      throw new ForbiddenException('Not authorized to create user for this site');
+    }
+
     const response = await this.userService.create(createUserDto);
     if (response['status'] === 409) {
       throw new ConflictException(response['message']);
@@ -71,12 +75,11 @@ export class UserController {
   @Roles(Role.SUPERADMIN, Role.ADMIN, Role.SUPERVISOR)
   async findOne(
     @Param('dni') dni: string,
-    @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
     @CurrentUser('siteId') siteId: number,
   ) {
     const response = await this.userService.findOne(
       dni,
-      isSuperAdmin ? siteId : undefined,
+      siteId ,
     );
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);

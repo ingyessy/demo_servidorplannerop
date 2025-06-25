@@ -33,7 +33,9 @@ export class SiteService {
     try {
       const response = await this.prisma.site.findMany({
         include: { SubSite: true },
-        where: { id: id_site },
+        where: {
+          id: id_site
+        }
       });
       if (!response || response.length === 0) {
         return { message: 'No sites found', status: 404 };

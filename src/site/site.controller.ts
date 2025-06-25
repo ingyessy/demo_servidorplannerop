@@ -44,8 +44,8 @@ export class SiteController {
 
   @Get()
   @Roles(Role.SUPERADMIN, Role.ADMIN)
-  async findAll(@CurrentUser('siteId') siteId: number) {
-    const response = await this.siteService.findAll(siteId);
+  async findAll(@CurrentUser('siteId') siteId: number, @CurrentUser('isSuperAdmin') isSuperAdmin: boolean) {
+    const response = await this.siteService.findAll(!isSuperAdmin ? siteId : undefined);
     if (response['status'] === 404) {
       return { status: 404, message: 'No sites found' };
     }

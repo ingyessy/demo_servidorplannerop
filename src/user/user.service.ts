@@ -3,13 +3,17 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
+import { ValidationService } from 'src/common/validation/validation.service';
 /**
  * Servicio para gestionar usuarios
  * @class UserService
  */
 @Injectable()
 export class UserService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private validation: ValidationService,
+  ) {}
   /**
    * crea un usuario
    * @param createUserDto datos del usuario a crear
@@ -19,6 +23,16 @@ export class UserService {
     try {
       const validationUser = await this.findOne(createUserDto.dni);
       const userByUsername = await this.findByUsername(createUserDto.username);
+      const validate = await this.validation.validateAllIds({
+        id_subsite: createUserDto.id_subsite,
+      });
+  
+      if (validate && validate?.subsite?.id_site !== createUserDto.id_site) {
+        return {
+          message: 'This subsite does not belong to the site',
+          status: 409,
+        };
+      }
       if (validationUser['status'] !== 404 || userByUsername !== null) {
         return { message: 'User already DNI/Username exists', status: 409 };
       }

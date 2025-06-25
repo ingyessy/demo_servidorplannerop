@@ -8,10 +8,11 @@ import { UserService } from 'src/user/user.service';
 import { ConfigService } from '@nestjs/config';
 import { CacheModule } from '@nestjs/cache-manager';
 import { RolesGuard } from './guards/roles.guard';
-import { ValidationUserSiteService } from 'src/user/service/validation-user-site/validation-user-site.service';
+import { ValidationModule } from 'src/common/validation/validation.module';
 
 @Module({
   imports: [
+    ValidationModule,
     PassportModule,
     CacheModule.register({
       ttl: 60 * 60 * 24,
@@ -31,7 +32,6 @@ import { ValidationUserSiteService } from 'src/user/service/validation-user-site
     PrismaService,
     UserService,
     RolesGuard,
-    ValidationUserSiteService,
   ],
   exports: [AuthService, JwtModule, RolesGuard],
 })

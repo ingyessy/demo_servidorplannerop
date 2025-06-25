@@ -8,6 +8,6 @@ import { AuthModule } from 'src/auth/auth.module';
 @Module({
   imports: [AuthModule],
   controllers: [TaskController],
-  providers: [TaskService, PrismaService, UserService],
+  providers: [TaskService, PrismaService],
 })
 export class TaskModule {}

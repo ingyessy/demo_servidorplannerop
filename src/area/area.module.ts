@@ -8,6 +8,6 @@ import { AuthModule } from 'src/auth/auth.module';
 @Module({
   imports: [AuthModule],
   controllers: [AreaController],
-  providers: [AreaService, PrismaService, UserService],
+  providers: [AreaService, PrismaService],
 })
 export class AreaModule {}

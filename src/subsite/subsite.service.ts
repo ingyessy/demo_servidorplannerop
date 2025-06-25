@@ -10,7 +10,9 @@ export class SubsiteService {
     try {
       const response = await this.prisma.subSite.create({
         data: {
-          ...createSubsiteDto,
+          name: createSubsiteDto.name,
+          status: createSubsiteDto.status,
+          id_site: createSubsiteDto.id_site!,
         },
       });
       return response;

@@ -16,6 +16,7 @@ export class ValidationService {
     id_task,
     id_client,
     id_operation,
+    id_subsite,
     code_worker,
     dni_worker,
     workerIds,
@@ -27,6 +28,7 @@ export class ValidationService {
     id_area?: number;
     id_task?: number;
     id_client?: number;
+    id_subsite?: number;
     id_operation?: number;
     dni_worker?: string;
     code_worker?: string;
@@ -245,6 +247,19 @@ export class ValidationService {
         }
 
         response.existingTaskIds = existingTaskSitesAndSubsite;
+      }
+
+      // 12. Validar subsite si se proporciona
+      if (id_subsite !== undefined) {
+        const subsite = await this.prisma.subSite.findUnique({
+          where: { id: id_subsite },
+        });
+
+        if (!subsite) {
+          return { message: 'Subsite not found', status: 404 };
+        } else {
+          response.subsite = subsite;
+        }
       }
       return response;
     } catch (error) {
