@@ -31,7 +31,6 @@ export class CostCenterService {
           id_subsite: createCostCenterDto.id_subsite,
           id_user: createCostCenterDto.id_user!,
           id_client: createCostCenterDto.id_client,
-          id_site: createCostCenterDto.id_site!,
         },
       });
       return response;
@@ -51,7 +50,7 @@ export class CostCenterService {
   async findAll(id_site: number) {
     try {
       const response = await this.prisma.costCenter.findMany({
-        where: { id_site },
+        where: { subSite: { id_site } },
       });
       if (!response || response.length === 0) {
         return { status: 404, message: 'No cost centers found' };
@@ -66,7 +65,7 @@ export class CostCenterService {
   async findOne(id: number, id_site?: number) {
     try {
       const response = await this.prisma.costCenter.findUnique({
-        where: { id, id_site },
+        where: { id, subSite: { id_site } },
       });
       if (!response) {
         return { message: 'Cost center not found', status: 404 };

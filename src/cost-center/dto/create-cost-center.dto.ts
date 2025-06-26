@@ -3,7 +3,7 @@ import { Type } from 'class-transformer';
 import { IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class CreateCostCenterDto {
-  @ApiProperty({ example: 'Cost Center Code' })
+  @ApiProperty({ example: '0014' })
   @IsString()
   code: string;
 

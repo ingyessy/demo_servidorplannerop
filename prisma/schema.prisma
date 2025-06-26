@@ -239,7 +239,6 @@ model Site {
   tasks             Task[]
   ClientProgramming ClientProgramming[]
   SubSite           SubSite[]
-  CostCenter        CostCenter[]
 }
 
 model SubSite {
@@ -265,8 +264,6 @@ model CostCenter {
   user       User     @relation(fields: [id_user], references: [id])
   id_client  Int
   client     Client   @relation(fields: [id_client], references: [id])
-  id_site    Int
-  Site       Site     @relation(fields: [id_site], references: [id])
   id_subsite Int
   subSite    SubSite  @relation(fields: [id_subsite], references: [id])
   createdAt  DateTime @default(now())
@@ -294,8 +291,8 @@ model Tariff {
   costCenter          CostCenter       @relation(fields: [id_costCenter], references: [id])
   id_unidOfMeasure    Int
   unitOfMeasure       UnitOfMeasure    @relation(fields: [id_unidOfMeasure], references: [id])
-  paysheet_tariff     Int
-  facturation_tariff  Int
+  paysheet_tariff     Decimal          @db.Decimal(10, 2)
+  facturation_tariff  Decimal          @db.Decimal(10, 2)
   full_tariff         YES_NO
   compensatory        YES_NO
   hourly_paid_service YES_NO
