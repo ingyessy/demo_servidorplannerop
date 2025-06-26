@@ -31,6 +31,7 @@ import { ClientProgrammingModule } from './client-programming/client-programming
 import { SiteModule } from './site/site.module';
 import { SubsiteModule } from './subsite/subsite.module';
 import { SubtaskModule } from './subtask/subtask.module';
+import { CostCenterModule } from './cost-center/cost-center.module';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { SubtaskModule } from './subtask/subtask.module';
     SiteModule,
     SubsiteModule,
     SubtaskModule,
+    CostCenterModule,
   ],
   providers: [
     PrismaService,
