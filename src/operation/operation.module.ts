@@ -10,9 +10,16 @@ import { OperationTransformerService } from './services/operation-transformer.se
 import { OperationRelationService } from './services/operation-relation.service';
 import { WorkerAnalyticsService } from 'src/operation/services/workerAnalytics.service';
 import { PaginationModule } from 'src/common/services/pagination/pagination.module';
+import { AuthModule } from 'src/auth/auth.module';
+import { OperationWorkerModule } from 'src/operation-worker/operation-worker.module';
 
 @Module({
-  imports: [ValidationModule, PaginationModule],
+  imports: [
+    ValidationModule,
+    PaginationModule,
+    AuthModule,
+    OperationWorkerModule,
+  ],
   controllers: [OperationController],
   providers: [
     OperationService,
@@ -22,7 +29,7 @@ import { PaginationModule } from 'src/common/services/pagination/pagination.modu
     OperationFinderService,
     OperationTransformerService,
     OperationRelationService,
-    WorkerAnalyticsService
+    WorkerAnalyticsService,
   ],
 })
 export class OperationModule {}

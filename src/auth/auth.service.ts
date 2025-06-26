@@ -1,10 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { UserService } from 'src/user/user.service';
 import { Inject } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
+import { ValidationUserSiteService } from 'src/common/validation/services/validation-user-site/validation-user-site.service';
 
 /**
  * Servicio para gestionar la autenticación de usuarios
@@ -14,6 +15,7 @@ import { Cache } from 'cache-manager';
 export class AuthService {
   constructor(
     private user: UserService,
+    private validationUser: ValidationUserSiteService,
     private jwtService: JwtService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
@@ -56,6 +58,9 @@ export class AuthService {
       occupation: user.occupation,
       phone: user.phone,
       status: user.status,
+      id_site: user.id_site,
+      site: user.Site?.name || null,
+      id_subsite: user.id_subsite || null,
     };
 
     return {
@@ -195,8 +200,6 @@ export class AuthService {
         return 0;
       }
 
-   
-
       const expirationTime = decodedToken.exp * 1000; // Convertir a milisegundos
       const currentTime = Date.now();
 
@@ -210,6 +213,99 @@ export class AuthService {
     } catch (error) {
       console.error('Error getting token expiration time:', error);
       return 0;
+    }
+  }
+  /**
+   * Regenera un token con nuevos valores de site/subsite
+   * @param userId ID del usuario
+   * @param newSiteId Nuevo ID de site (opcional)
+   * @param newSubsiteId Nuevo ID de subsite (opcional)
+   * @returns Nuevo token de acceso
+   */
+  async refreshUserToken(
+    userId: number,
+    newSiteId?: number,
+    newSubsiteId?: number,
+  ): Promise<
+    { access_token: string } | { message: string; statusCode: HttpStatus }
+  > {
+    try {
+      // Obtener información actualizada del usuario
+      const user = await this.user.findOneById(userId);
+      if (!user || !('id_site' in user)) {
+        return {
+          message: 'User not found',
+          statusCode: HttpStatus.NOT_FOUND,
+        };
+      }
+
+      // Verificar que el usuario tenga acceso al site/subsite solicitado
+      if (newSiteId) {
+        // Verificar que el site existe y el usuario tiene acceso
+        const siteExists = await this.validationUser.validateUserSite(
+          userId,
+          newSiteId,
+        );
+        if (!siteExists) {
+          return {
+            message: `User does not have access to site ID ${newSiteId}`,
+            statusCode: HttpStatus.FORBIDDEN,
+          };
+        }
+      }
+
+      if (newSubsiteId) {
+        // Verificar que el subsite existe y pertenece al site
+        const subsiteExists = await this.validationUser.validateUserSubsite(
+          userId,
+          newSiteId || user.id_site,
+          newSubsiteId,
+        );
+        if (!subsiteExists) {
+          return {
+            message: `User does not have access to site ID ${newSiteId}`,
+            statusCode: HttpStatus.FORBIDDEN,
+          };
+        }
+      }
+
+      // Crear payload con la información actualizada
+      const payload = {
+        id: user.id,
+        username: user.username,
+        name: user.name,
+        role: user.role,
+        dni: user.dni,
+        occupation: user.occupation,
+        phone: user.phone,
+        status: user.status,
+        id_site: newSiteId || user.id_site,
+        site: newSiteId
+          ? await this.getSiteName(newSiteId)
+          : await this.getSiteName(user.id_site),
+        id_subsite: newSubsiteId || user.id_subsite || null,
+      };
+
+      return {
+        access_token: this.jwtService.sign(payload),
+      };
+    } catch (error) {
+      console.error('Error refreshing token:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Obtiene el nombre de un site por su ID
+   * @param siteId ID del site
+   * @returns Nombre del site
+   */
+  private async getSiteName(siteId: number): Promise<string | null> {
+    try {
+      const site = await this.validationUser.getSiteById(siteId);
+      return site?.name || null;
+    } catch {
+      return null;
     }
   }
 }

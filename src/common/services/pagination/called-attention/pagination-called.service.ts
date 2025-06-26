@@ -50,6 +50,7 @@ export class PaginationCalledService {
               dni: true,
               name: true,
               status: true,
+              id_site: true,
             },
           },
           user: {
@@ -77,6 +78,12 @@ export class PaginationCalledService {
     const whereClause: any = {};
     
     if (!filters) return whereClause;
+
+    // buscar po id site de trabajador 
+
+    if (filters.id_site) {
+      whereClause.worker = { id_site: filters.id_site };
+    }
 
     // Filtro por tipo de llamado de atención
     if (filters.type) {

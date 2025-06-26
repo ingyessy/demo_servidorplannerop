@@ -12,13 +12,22 @@ export class InabilityService {
     private validate: ValidationService,
   ) {}
 
-  async create(createInabilityDto: CreateInabilityDto) {
+  async create(createInabilityDto: CreateInabilityDto, id_site?: number) {
     try {
       const validation = await this.validate.validateAllIds({
         workerIds: [createInabilityDto.id_worker],
       });
       if (validation && 'status' in validation && validation.status === 404) {
         return validation;
+      }
+      if (id_site !== undefined) {
+        const workerValidation = validation?.existingWorkers?.[0];
+        if (workerValidation && workerValidation.id_site !== id_site) {
+          return {
+            message: 'Not authorized to create inability for this worker',
+            status: 409,
+          };
+        }
       }
       const response = await this.prisma.inability.create({
         data: { ...createInabilityDto },
@@ -30,9 +39,13 @@ export class InabilityService {
     }
   }
 
-  async findAll() {
+  async findAll(id_site?: number) {
     try {
-      const response = await this.prisma.inability.findMany();
+      const response = await this.prisma.inability.findMany({
+        where: {
+          worker:{id_site}
+        }
+      });
       if (!response || response.length === 0) {
         return { status: 404, message: 'No inabilities found' };
       }
@@ -42,10 +55,10 @@ export class InabilityService {
     }
   }
 
-  async findOne(id: number) {
+  async findOne(id: number, id_site?: number) {
     try {
       const response = await this.prisma.inability.findUnique({
-        where: { id },
+        where: { id, worker: { id_site } },
       });
       if (!response) {
         return { status: 404, message: `Inability with id ${id} not found` };
@@ -69,6 +82,9 @@ export class InabilityService {
       if (filters) {
         if (filters.id_worker) {
           where.id_worker = filters.id_worker;
+        }
+        if (filters.id_site) {
+          where.worker = { id_site: filters.id_site };
         }
         if (filters.type) {
           where.type = filters.type;
@@ -110,11 +126,22 @@ export class InabilityService {
     }
   }
 
-  async update(id: number, updateInabilityDto: UpdateInabilityDto) {
+  async update(id: number, updateInabilityDto: UpdateInabilityDto, id_site?: number) {
     try {
       const validation = await this.findOne(id);
       if (validation['status'] != undefined) {
         return validation;
+      }
+      if (id_site !== undefined) {
+        const workerValidation = await this.validate.validateAllIds({
+          workerIds: [validation['id_worker']],
+        });
+        if (workerValidation && workerValidation.id_site !== id_site) {
+          return {
+            message: 'Not authorized to update inability for this worker',
+            status: 409,
+          };
+        }
       }
       const response = await this.prisma.inability.update({
         where: { id },
@@ -126,11 +153,22 @@ export class InabilityService {
     }
   }
 
-  async remove(id: number) {
+  async remove(id: number, id_site?: number) {
     try {
       const validation = await this.findOne(id);
       if (validation['status'] != undefined) {
         return validation;
+      }
+      if (id_site !== undefined) {
+        const workerValidation = await this.validate.validateAllIds({
+          workerIds: [validation['id_worker']],
+        });
+        if (workerValidation && workerValidation.id_site !== id_site) {
+          return {
+            message: 'Not authorized to remove inability for this worker',
+            status: 409,
+          };
+        }
       }
       const response = await this.prisma.inability.delete({
         where: { id },

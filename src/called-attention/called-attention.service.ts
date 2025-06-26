@@ -28,18 +28,30 @@ export class CalledAttentionService {
    * @param createCalledAttentionDto datos de la atencion llamada a crear
    * @returns respuesta de la creacion de la atencion llamada
    */
-  async create(createCalledAttentionDto: CreateCalledAttentionDto) {
+  async create(
+    createCalledAttentionDto: CreateCalledAttentionDto,
+    id_site?: number,
+  ) {
     try {
       if (createCalledAttentionDto.id_user === undefined) {
         return { message: 'User ID is required', status: 400 };
       }
-
       const validation = await this.validation.validateAllIds({
         workerIds: [createCalledAttentionDto.id_worker],
       });
+      const workerValidation = validation?.existingWorkerIds?.[0];
+      if (id_site != undefined) {
+        if (workerValidation && workerValidation.id_site !== id_site) {
+          return {
+            message: 'Not authorized to create attention for this worker',
+            status: 409,
+          };
+        }
+      }
       if (validation && 'status' in validation && validation.status === 404) {
         return validation;
       }
+
       const response = await this.prisma.calledAttention.create({
         data: {
           ...createCalledAttentionDto,
@@ -56,7 +68,7 @@ export class CalledAttentionService {
    * Obtener todas las atenciones llamadas de trabajadores activos de los últimos 3 meses
    * @returns respuesta de la busqueda de todas las atenciones llamadas activas recientes
    */
-  async findAll() {
+  async findAll(id_site?: number) {
     try {
       // Calcular la fecha de hace 3 meses
       const threeMonthsAgo = new Date();
@@ -64,7 +76,6 @@ export class CalledAttentionService {
 
       const maxDate = new Date();
       maxDate.setDate(maxDate.getDate() + 1);
-
       const response = await this.prisma.calledAttention.findMany({
         where: {
           // Filtrar por estado del trabajador
@@ -72,6 +83,7 @@ export class CalledAttentionService {
             status: {
               notIn: ['UNAVALIABLE'],
             },
+            id_site: id_site,
           },
           // Filtrar por fecha (mes actual)
           createAt: {
@@ -84,6 +96,7 @@ export class CalledAttentionService {
             select: {
               dni: true,
               name: true,
+              id_site: true,
             },
           },
         },
@@ -111,11 +124,14 @@ export class CalledAttentionService {
    * @param id ID de la atencion llamada a buscar
    * @returns respuesta de la busqueda de la atencion llamada
    */
-  async findOne(id: number) {
+  async findOne(id: number, id_site?: number) {
     try {
       const response = await this.prisma.calledAttention.findUnique({
         where: {
           id,
+          worker: {
+            id_site: id_site,
+          },
         },
       });
       if (!response) {
@@ -132,14 +148,17 @@ export class CalledAttentionService {
    * @param id ID de la atencion llamada a buscar
    * @returns respuesta de la busqueda de la atencion llamada
    */
-  async findOneByIdWorker(id: number) {
+  async findOneByIdWorker(id: number, id_site?: number) {
     try {
       const response = await this.prisma.calledAttention.findMany({
         where: {
           id_worker: id,
+          worker: {
+            id_site: id_site,
+          },
         },
       });
-      if (!response) {
+      if (!response || response.length === 0) {
         return { message: 'Called Attention not found', status: 404 };
       }
       return response;
@@ -195,11 +214,28 @@ export class CalledAttentionService {
    * @param updateCalledAttentionDto datos de la atencion llamada a actualizar
    * @returns respuesta de la actualizacion de la atencion llamada
    */
-  async update(id: number, updateCalledAttentionDto: UpdateCalledAttentionDto) {
+  async update(
+    id: number,
+    updateCalledAttentionDto: UpdateCalledAttentionDto,
+    id_site?: number,
+  ) {
     try {
       const validationCalled = await this.findOne(id);
       if (validationCalled['status'] === 404) {
         return validationCalled;
+      }
+      if (id_site != undefined) {
+        const id_worker = validationCalled['id_worker'];
+        const validateWorker = await this.validation.validateAllIds({
+          workerIds: [id_worker],
+        });
+        const wokerValidation = validateWorker?.existingWorkerIds?.[0];
+        if (wokerValidation && wokerValidation.id_site != id_site) {
+          return {
+            message: 'Not authorized to update attention',
+            status: 409,
+          };
+        }
       }
       if (updateCalledAttentionDto.id_worker === undefined) {
         return { message: 'Worker ID is required', status: 400 };
@@ -207,12 +243,23 @@ export class CalledAttentionService {
       const validadionGlobal = await this.validation.validateAllIds({
         workerIds: [updateCalledAttentionDto.id_worker],
       });
+
       if (
         validadionGlobal &&
         'status' in validadionGlobal &&
         validadionGlobal.status === 404
       ) {
         return validadionGlobal;
+      }
+
+      const workerValidation = validadionGlobal?.existingWorkerIds?.[0];
+      if (id_site != undefined) {
+        if (workerValidation && workerValidation.id_site != id_site) {
+          return {
+            message: 'Not authorized to create attention for this worker',
+            status: 409,
+          };
+        }
       }
       const response = await this.prisma.calledAttention.update({
         where: { id },
@@ -230,11 +277,24 @@ export class CalledAttentionService {
    * @returns respuesta de la eliminacion de la atencion llamada
    * @throws Error
    */
-  async remove(id: number) {
+  async remove(id: number, id_site?: number) {
     try {
-      const validadionCalled = await this.findOne(id);
-      if (validadionCalled['status'] === 404) {
-        return validadionCalled;
+      const validationCalled = await this.findOne(id);
+      if (validationCalled['status'] === 404) {
+        return validationCalled;
+      }
+      if (id_site != undefined) {
+        const id_worker = validationCalled['id_worker'];
+        const validateWorker = await this.validation.validateAllIds({
+          workerIds: [id_worker],
+        });
+        const wokerValidation = validateWorker?.existingWorkers?.[0];
+        if (wokerValidation && wokerValidation.id_site != id_site) {
+          return {
+            message: 'Not authorized to remove attention',
+            status: 409,
+          };
+        }
       }
       const response = await this.prisma.calledAttention.delete({
         where: { id },

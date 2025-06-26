@@ -13,7 +13,7 @@ export class FeedingService {
     private validation: ValidationService,
     private paginationService: PaginationFeedingService,
   ) {}
-  async create(createFeedingDto: CreateFeedingDto) {
+  async create(createFeedingDto: CreateFeedingDto, id_site?: number) {
     try {
       const validation = await this.validation.validateAllIds({
         workerIds: [createFeedingDto.id_worker],
@@ -21,6 +21,23 @@ export class FeedingService {
       });
       if (validation && 'status' in validation && validation.status === 404) {
         return validation;
+      }
+
+      if (id_site !== undefined) {
+        const workerValidation = validation?.existingWorkers?.[0];
+        if (workerValidation && workerValidation.id_site !== id_site) {
+          return {
+            message: 'Not authorized to create feeding for this worker',
+            status: 409,
+          };
+        }
+        const operationValidation = validation['operation'].id_site;
+        if (operationValidation && operationValidation !== id_site) {
+          return {
+            message: 'Not authorized to create feeding for this operation',
+            status: 409,
+          };
+        }
       }
       const response = await this.prisma.workerFeeding.create({
         data: {
@@ -38,23 +55,31 @@ export class FeedingService {
     }
   }
 
-  async findAll() {
+  async findAll(id_site?: number) {
     try {
-      const response = await this.prisma.workerFeeding.findMany();
+      const response = await this.prisma.workerFeeding.findMany({
+        where: { worker: { id_site } },
+      });
+      if (!response || response.length === 0) {
+        return { message: 'No worker feeding records found', status: 404 };
+      }
       return response;
     } catch (error) {
       throw new Error(error);
     }
   }
 
-  async findOne(id: number) {
+  async findOne(id: number, id_site?: number) {
     try {
       const response = await this.prisma.workerFeeding.findUnique({
         where: {
           id,
+          worker: {
+            id_site,
+          },
         },
       });
-      if (!response) {
+      if (!response || Object.keys(response).length === 0) {
         return { message: 'Feeding not found', status: 404 };
       }
       return response;
@@ -63,14 +88,13 @@ export class FeedingService {
     }
   }
 
-    async findAllPaginated(
+  async findAllPaginated(
     page: number = 1,
     limit: number = 10,
     filters?: FilterWorkerFeedingDto,
     activatePaginated: boolean = true,
   ) {
     try {
-      
       // Usar el servicio de paginación para feeding
       const paginatedResponse =
         await this.paginationService.paginateWorkerFeeding({
@@ -99,20 +123,23 @@ export class FeedingService {
     }
   }
 
-  async findByOperation(id_operation: number) {
+  async findByOperation(id_operation: number, id_site?: number) {
     try {
       const validation = await this.validation.validateAllIds({
         id_operation,
-      })
+      });
       if (validation && 'status' in validation && validation.status === 404) {
         return validation;
       }
       const response = await this.prisma.workerFeeding.findMany({
         where: {
           id_operation,
+          worker: {
+            id_site,
+          },
         },
       });
-      if (!response) {
+      if (!response || response.length === 0) {
         return { message: 'Feeding not found', status: 404 };
       }
       return response;
@@ -121,7 +148,11 @@ export class FeedingService {
     }
   }
 
-  async update(id: number, updateFeedingDto: UpdateFeedingDto) {
+  async update(
+    id: number,
+    updateFeedingDto: UpdateFeedingDto,
+    id_site?: number,
+  ) {
     try {
       const validation = await this.validation.validateAllIds({
         id_operation: updateFeedingDto.id_operation,
@@ -130,8 +161,28 @@ export class FeedingService {
         return validation;
       }
       const validate = await this.findOne(id);
+
       if (validate && 'status' in validate && validate.status === 404) {
         return validate;
+      }
+      if (id_site !== undefined) {
+        const workerValidationData = await this.validation.validateAllIds({
+          workerIds: [validate['id_worker']],
+        });
+        const workerValidation = workerValidationData?.existingWorkers?.[0];
+        if (workerValidation && workerValidation.id_site !== id_site) {
+          return {
+            message: 'Not authorized to update feeding for this worker',
+            status: 409,
+          };
+        }
+        const operationValidation = validation['operation'].id_site;
+        if (operationValidation && operationValidation !== id_site) {
+          return {
+            message: 'Not authorized to update feeding for this operation',
+            status: 409,
+          };
+        }
       }
       const response = await this.prisma.workerFeeding.update({
         where: {
@@ -149,11 +200,23 @@ export class FeedingService {
     }
   }
 
-  async remove(id: number) {
+  async remove(id: number, id_site?: number) {
     try {
       const validate = await this.findOne(id);
       if (validate && 'status' in validate && validate.status === 404) {
         return validate;
+      }
+      if (id_site !== undefined) {
+        const workerValidationData = await this.validation.validateAllIds({
+          workerIds: [validate['id_worker']],
+        });
+        const workerValidation = workerValidationData?.existingWorkers?.[0];
+        if (workerValidation && workerValidation.id_site !== id_site) {
+          return {
+            message: 'Not authorized to delete feeding for this worker',
+            status: 409,
+          };
+        }
       }
       const response = await this.prisma.workerFeeding.delete({
         where: {

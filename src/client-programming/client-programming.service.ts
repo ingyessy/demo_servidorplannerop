@@ -2,19 +2,19 @@ import { Injectable } from '@nestjs/common';
 import { CreateClientProgrammingDto } from './dto/create-client-programming.dto';
 import { UpdateClientProgrammingDto } from './dto/update-client-programming.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { ValidationService } from 'src/common/validation/validation.service';
 import { FilterClientProgrammingDto } from './dto/filter-client-programming.dto';
+import { ValidationClientProgrammingService } from 'src/common/validation/services/validation-client-programming/validation-client-programming.service';
 
 @Injectable()
 export class ClientProgrammingService {
   constructor(
     private prisma: PrismaService,
-    private validation: ValidationService,
+    private validationClientProgramming: ValidationClientProgrammingService
   ) {}
   async create(createClientProgrammingDto: CreateClientProgrammingDto) {
     try {
       const validationProgramming =
-        await this.validation.validateClientProgramming({
+        await this.validationClientProgramming.validateClientProgramming({
           service_request: createClientProgrammingDto.service_request,
           service: createClientProgrammingDto.service,
           client: createClientProgrammingDto.client,
@@ -23,10 +23,10 @@ export class ClientProgrammingService {
           timeStart: createClientProgrammingDto.timeStart,
         });
       if (
-        validationProgramming &&
-        'status' in validationProgramming &&
-        validationProgramming.status === 409 ||
-        validationProgramming && validationProgramming.status === 404
+        (validationProgramming &&
+          'status' in validationProgramming &&
+          validationProgramming.status === 409) ||
+        (validationProgramming && validationProgramming.status === 404)
       ) {
         return validationProgramming;
       }
@@ -42,9 +42,13 @@ export class ClientProgrammingService {
     }
   }
 
-  async findAll() {
+  async findAll(id_site?: number) {
     try {
-      const response = await this.prisma.clientProgramming.findMany();
+      const response = await this.prisma.clientProgramming.findMany({
+        where: {
+          id_site,
+        },
+      });
       if (!response || response.length === 0) {
         return {
           status: 404,
@@ -57,14 +61,14 @@ export class ClientProgrammingService {
     }
   }
 
-  async findOne(id: number) {
+  async findOne(id: number, id_site?: number) {
     try {
       const response = await this.prisma.clientProgramming.findUnique({
         where: {
           id,
         },
       });
-      if (!response) {
+      if (!response || Object.keys(response).length === 0) {
         return {
           status: 404,
           message: 'Not Found Client Programming',
@@ -76,7 +80,7 @@ export class ClientProgrammingService {
     }
   }
 
-  async findAllFiltered(filters: FilterClientProgrammingDto) {
+  async findAllFiltered(filters: FilterClientProgrammingDto, id_site?: number) {
     try {
       // Construir el objeto where dinámicamente
       const whereConditions: any = {};
@@ -88,6 +92,10 @@ export class ClientProgrammingService {
 
       if (filters.status) {
         whereConditions.status = filters.status[0];
+      }
+
+      if (id_site !== undefined) {
+        whereConditions.id_site = id_site;
       }
       //  else {
       //   // Por defecto solo traer UNASSIGNED
@@ -148,11 +156,20 @@ export class ClientProgrammingService {
     }
   }
 
-  async remove(id: number) {
+  async remove(id: number, id_site?: number) {
     try {
       const validateId = await this.findOne(id);
       if (validateId && 'status' in validateId && validateId.status === 404) {
         return validateId;
+      }
+      if (id_site !== undefined) {
+        const validateSite = validateId['id_site'];
+        if (validateSite !== id_site) {
+          return {
+            message: 'Not authorized to delete this client programming',
+            status: 403,
+          };
+        }
       }
       const response = await this.prisma.clientProgramming.delete({
         where: { id },

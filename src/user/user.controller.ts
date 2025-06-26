@@ -11,6 +11,7 @@ import {
   UseGuards,
   Request,
   ForbiddenException,
+  UseInterceptors,
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -20,57 +21,84 @@ import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Role } from '@prisma/client';
 import { Roles } from 'src/auth/decorators/roles.decorator';
+import { SiteInterceptor } from 'src/common/interceptors/site.interceptor';
+import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 
 @Controller('user')
 @ApiBearerAuth('access-token')
+@UseInterceptors(SiteInterceptor)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Post()
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.SUPERADMIN)
-  async create(@Request() req, @Body() createUserDto: CreateUserDto) {
+  @Roles(Role.SUPERADMIN, Role.ADMIN)
+  async create(
+    @Request() req,
+    @Body() createUserDto: CreateUserDto,
+    @CurrentUser('siteId') siteId: number,
+    @CurrentUser('subsiteId') subsiteId: number,
+  ) {
+    if(!createUserDto.id_site || !createUserDto.id_subsite){
+      createUserDto.id_site = siteId;
+      createUserDto.id_subsite = subsiteId;
+    }
+
     const currentUserRole = req.user.role;
     const newUserRole = createUserDto.role;
     if (currentUserRole === Role.ADMIN && newUserRole === Role.SUPERADMIN) {
       throw new ForbiddenException('Admins cannot create superadmin accounts');
     }
 
+    if (currentUserRole === Role.ADMIN && createUserDto.id_site !== siteId) {
+      throw new ForbiddenException('Not authorized to create user for this site');
+    }
+
     const response = await this.userService.create(createUserDto);
-    if (response["status"] === 409) {
-      throw new ConflictException(response["message"]);
+    if (response['status'] === 409) {
+      throw new ConflictException(response['message']);
     }
     return response;
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard)
-  findAll() {
-    return this.userService.findAll();
+  @Roles(Role.SUPERADMIN, Role.ADMIN, Role.SUPERVISOR)
+  findAll(
+    @CurrentUser('siteId') siteId: number,
+  ) {
+    return this.userService.findAll(
+      siteId 
+    );
   }
 
   @Get(':dni')
-  @UseGuards(JwtAuthGuard)
-  async findOne(@Param('dni') dni: string) {
-    const response = await this.userService.findOne(dni);
-    if (response["status"] === 404) {
-      throw new NotFoundException(response["message"]);
+  @Roles(Role.SUPERADMIN, Role.ADMIN, Role.SUPERVISOR)
+  async findOne(
+    @Param('dni') dni: string,
+    @CurrentUser('siteId') siteId: number,
+  ) {
+    const response = await this.userService.findOne(
+      dni,
+      siteId ,
+    );
+    if (response['status'] === 404) {
+      throw new NotFoundException(response['message']);
     }
     return response;
   }
 
   @Patch(':dni')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.SUPERADMIN)
+  @Roles(Role.SUPERADMIN, Role.ADMIN)
   async update(
     @Request() req,
     @Param('dni') dni: string,
     @Body() updateUserDto: UpdateUserDto,
+    @CurrentUser('siteId') siteId: number,
   ) {
-    const userToUpdate = await this.userService.findOne(dni);
+    const userToUpdate = await this.userService.findOne(dni, siteId);
     const currentUserRole = req.user.role;
-    if (userToUpdate["status"] === 404) {
-      throw new NotFoundException(userToUpdate["message"]);
+    if (userToUpdate['status'] === 404) {
+      throw new NotFoundException(userToUpdate['message']);
     }
 
     if (
@@ -83,20 +111,22 @@ export class UserController {
       );
     }
     const response = await this.userService.update(dni, updateUserDto);
-    if (response["status"] === 404) {
-      throw new NotFoundException(response["message"]);
+    if (response['status'] === 404) {
+      throw new NotFoundException(response['message']);
     }
     return response;
   }
 
   @Delete(':dni')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.SUPERADMIN)
-  async remove(@Request() req, @Param('dni') dni: string) {
-    const userToDelete = await this.userService.findOne(dni);
-
-    if (userToDelete["status"] === 404) {
-      throw new NotFoundException(userToDelete["message"]);
+  @Roles(Role.SUPERADMIN, Role.ADMIN)
+  async remove(
+    @Request() req,
+    @Param('dni') dni: string,
+    @CurrentUser('siteId') siteId: number,
+  ) {
+    const userToDelete = await this.userService.findOne(dni, siteId);
+    if (userToDelete['status'] === 404) {
+      throw new NotFoundException(userToDelete['message']);
     }
     const currentUserRole = req.user.role;
     if (

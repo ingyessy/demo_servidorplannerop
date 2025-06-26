@@ -11,7 +11,7 @@ import { PaginateOperationService } from 'src/common/services/pagination/operati
 @Injectable()
 export class OperationFinderService {
   // Configuraciones de consulta reutilizables
-  
+
   private readonly defaultInclude = {
     client: {
       select: { name: true },
@@ -25,6 +25,16 @@ export class OperationFinderService {
     task: {
       select: {
         id: true,
+        name: true,
+      },
+    },
+    clientProgramming: {
+      select: {
+        service: true,
+      },
+    },
+    Site: {
+      select: {
         name: true,
       },
     },
@@ -43,12 +53,14 @@ export class OperationFinderService {
             name: true,
           },
         },
-        task: { // Cambiar 'task' por 'Task' (con T mayúscula)
+        task: {
+          // Cambiar 'task' por 'Task' (con T mayúscula)
           select: {
             id: true,
             name: true,
           },
         },
+         subTask: true,
       },
     },
     inChargeOperation: {
@@ -64,7 +76,6 @@ export class OperationFinderService {
       },
     },
   };
-  
 
   constructor(
     private prisma: PrismaService,
@@ -76,9 +87,16 @@ export class OperationFinderService {
    * Obtiene todas las operaciones con información detallada
    * @returns Lista de operaciones con relaciones incluidas
    */
-  async findAll() {
+  async findAll(id_site?: number, id_subsite?: number) {
     try {
+      console.log(
+        `Getting all operations for Site: ${id_site}, Subsite: ${id_subsite}`,
+      );
       const response = await this.prisma.operation.findMany({
+        where: {
+          id_site,
+          id_subsite,
+        },
         include: this.defaultInclude,
       });
 
@@ -96,10 +114,10 @@ export class OperationFinderService {
    * @param id - ID de la operación a buscar
    * @returns Operación encontrada o mensaje de error
    */
-  async findOne(id: number) {
+  async findOne(id: number, id_site?: number, id_subsite?: number) {
     try {
       const response = await this.prisma.operation.findUnique({
-        where: { id },
+        where: { id, id_site, id_subsite },
         include: this.defaultInclude,
       });
 
@@ -113,47 +131,17 @@ export class OperationFinderService {
       throw new Error(error.message);
     }
   }
-  /**
-   * Encuentra operaciones asociadas a un trabajador específico
-   * @param id_worker - ID del trabajador para buscar operaciones
-   * @returns Lista de operaciones asociadas al trabajador o mensaje de error
-   */
-  async findByWorker(id_worker: number) {
-    try {
-      const response = await this.prisma.operation.findMany({
-        where: {
-          workers: {
-            some: {
-              id_worker,
-            },
-          },
-        },
-        include: this.defaultInclude,
-        take: 10,
-        orderBy: {
-          dateStart: Prisma.SortOrder.desc,
-        },
-      });
-
-      if (response.length === 0) {
-        return { message: 'No operations found for this worker', status: 404 };
-      }
-
-      return response.map((op) =>
-        this.transformer.transformOperationResponse(op),
-      );
-    } catch (error) {
-      console.error(`Error finding operations for worker ${id_worker}:`, error);
-      throw new Error(error.message);
-    }
-  }
 
   /**
    * Encuentra todas las operaciones con los estados especificados
    * @param statuses - Estados para filtrar las operaciones
    * @returns Lista de operaciones filtradas o mensaje de error
    */
-  async findByStatuses(statuses: StatusOperation[]) {
+  async findByStatuses(
+    statuses: StatusOperation[],
+    id_site?: number,
+    id_subsite?: number,
+  ) {
     try {
       // Verificar si los estados son válidos y si es en estado completadas
       const isCompletedOnly =
@@ -165,6 +153,8 @@ export class OperationFinderService {
           status: {
             in: statuses,
           },
+          id_site: id_site,
+          id_subsite: id_subsite,
         },
         include: this.defaultInclude,
         orderBy: isCompletedOnly
@@ -203,7 +193,12 @@ export class OperationFinderService {
    * @param end Fecha de fin
    * @returns Resultado de la búsqueda
    */
-  async findByDateRange(start: Date, end: Date) {
+  async findByDateRange(
+    start: Date,
+    end: Date,
+    id_site?: number,
+    id_subsite?: number,
+  ) {
     try {
       const response = await this.prisma.operation.findMany({
         where: {
@@ -218,6 +213,7 @@ export class OperationFinderService {
                 lte: end,
               },
             },
+            { id_site: id_site, id_subsite: id_subsite },
           ],
         },
         include: this.defaultInclude,
@@ -270,10 +266,10 @@ export class OperationFinderService {
    * @param id_user ID del usuario para buscar operaciones
    * @returns Lista de operaciones asociadas al usuario o mensaje de error
    */
-  async findByUser(id_user: number) {
+  async findByUser(id_user: number, id_site?: number, id_subsite?: number) {
     try {
       const response = await this.prisma.operation.findMany({
-        where: { id_user },
+        where: { id_user, id_site, id_subsite },
         include: this.defaultInclude,
       });
 

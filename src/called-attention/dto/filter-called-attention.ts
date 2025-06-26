@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsBoolean, IsDate, IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsDate, IsEnum, IsNumber, IsOptional, IsString } from 'class-validator';
 import { Type } from 'class-transformer';
 import { Failures } from '@prisma/client';
 
@@ -52,4 +52,14 @@ export class FilterCalledAttentionDto {
   @Type(() => Boolean)
   @IsBoolean()
   activatePaginated?: boolean;
+
+  @ApiProperty({
+    description: 'ID del sitio para filtrar',
+    required: false,
+    type: Number,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  id_site?: number;
 }

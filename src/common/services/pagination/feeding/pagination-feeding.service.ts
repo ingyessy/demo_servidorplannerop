@@ -90,6 +90,10 @@ export class PaginationFeedingService {
 
     if (!filters) return whereClause;
 
+    if (filters.id_site) {
+      whereClause.worker = { id_site: filters.id_site };
+    }
+
     // Filtro por tipo de alimentación
     if (filters.type) {
       whereClause.type = filters.type;

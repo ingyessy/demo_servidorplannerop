@@ -45,4 +45,8 @@ export class FilterInabilityDto {
     message: `cause debe ser uno de los siguientes valores: ${Object.values(CauseDisability).join(', ')}`,
   })
   cause?: CauseDisability;
+
+  @IsNumber()
+  @IsOptional()
+  id_site?: number;
 }

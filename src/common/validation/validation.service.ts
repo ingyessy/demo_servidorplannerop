@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { StatusComplete } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 
 @Injectable()
@@ -17,9 +16,11 @@ export class ValidationService {
     id_task,
     id_client,
     id_operation,
+    id_subsite,
     code_worker,
     dni_worker,
     workerIds,
+    allTaskIds,
     inChargedIds,
     phone_worker,
   }: {
@@ -27,15 +28,19 @@ export class ValidationService {
     id_area?: number;
     id_task?: number;
     id_client?: number;
+    id_subsite?: number;
     id_operation?: number;
     dni_worker?: string;
     code_worker?: string;
     phone_worker?: string;
     workerIds?: number[];
+    allTaskIds?: number[];
     inChargedIds?: number[];
   }) {
     try {
       // 1. Validar usuario si se proporciona
+
+      let response: any = { succes: true };
       if (id_user !== undefined) {
         const user = await this.prisma.user.findUnique({
           where: { id: id_user },
@@ -51,6 +56,7 @@ export class ValidationService {
         const area = await this.prisma.jobArea.findUnique({
           where: { id: id_area },
         });
+        response.area = area;
 
         if (!area) {
           return { message: 'Area not found', status: 404 };
@@ -65,6 +71,8 @@ export class ValidationService {
 
         if (!task) {
           return { message: 'Task not found', status: 404 };
+        } else if (task) {
+          response.task = task;
         }
       }
 
@@ -137,10 +145,16 @@ export class ValidationService {
           },
           select: {
             id: true,
+            id_site: true,
+            id_subsite: true,
           },
         });
-
         const existingWorkerIds = existingWorkers.map((worker) => worker.id);
+        const existingWorkerSitesAndSubsite = existingWorkers.map((worker) => ({
+          id: worker.id,
+          id_site: worker.id_site,
+          id_subsite: worker.id_subsite,
+        }));
         const nonExistingWorkerIds = workerIds.filter(
           (workerId) => !existingWorkerIds.includes(workerId),
         );
@@ -152,6 +166,8 @@ export class ValidationService {
             status: 404,
           };
         }
+
+        response.existingWorkerIds = existingWorkerSitesAndSubsite;
       }
 
       // 9. Validar que todos los encargados existan si se proporcionan IDs
@@ -175,7 +191,6 @@ export class ValidationService {
         );
 
         if (nonExistingInChargedIds.length > 0) {
-          console.log('InCharged not found:', nonExistingInChargedIds);
           return {
             message: `InCharged not found: ${nonExistingInChargedIds.join(', ')}`,
             status: 404,
@@ -188,253 +203,68 @@ export class ValidationService {
         const operation = await this.prisma.operation.findUnique({
           where: { id: id_operation },
         });
-
+        if (operation) {
+          response.operation = operation;
+        }
         if (!operation) {
           return { message: 'Operation not found', status: 404 };
         }
       }
 
-      // Todos los IDs son válidos
-      return { success: true };
+      // 11. Validar todas las tareas si se proporcionan IDs
+      if (allTaskIds && allTaskIds.length > 0) {
+        const existingTasks = await this.prisma.task.findMany({
+          where: {
+            id: {
+              in: allTaskIds,
+            },
+          },
+          select: {
+            id: true,
+            id_site: true,
+            id_subsite: true,
+            SubTask: { select: { id: true, name: true, id_task: true } },
+          },
+        });
+
+        const existingTaskIds = existingTasks.map((task) => task.id);
+        const existingTaskSitesAndSubsite = existingTasks.map((task) => ({
+          id: task.id,
+          id_site: task.id_site,
+          id_subsite: task.id_subsite,
+          subTask: task.SubTask,
+        }));
+        const nonExistingTaskIds = allTaskIds.filter(
+          (taskId) => !existingTaskIds.includes(taskId),
+        );
+
+        if (nonExistingTaskIds.length > 0) {
+          console.log('Tasks not found:', nonExistingTaskIds);
+          return {
+            message: `Tasks not found: ${nonExistingTaskIds.join(', ')}`,
+            status: 404,
+          };
+        }
+
+        response.existingTaskIds = existingTaskSitesAndSubsite;
+      }
+
+      // 12. Validar subsite si se proporciona
+      if (id_subsite !== undefined) {
+        const subsite = await this.prisma.subSite.findUnique({
+          where: { id: id_subsite },
+        });
+
+        if (!subsite) {
+          return { message: 'Subsite not found', status: 404 };
+        } else {
+          response.subsite = subsite;
+        }
+      }
+      return response;
     } catch (error) {
       console.error('Error validating IDs:', error);
       throw new Error(`Error validating IDs: ${error.message}`);
-    }
-  }
-
-  /**
-   * Validar si ya existe la programacion cliente
-   * @param service_request - Solicitud de servicio
-   * @param service - Servicio
-   * @param dateStart - Fecha de inicio
-   * @param timeStart - Hora de inicio
-   * @param client - Cliente
-   * @param ubication - Ubicación
-   * @param id_operation - ID de la operación
-   *
-   */
-   async validateClientProgramming({
-    id_clientProgramming,
-    service_request,
-    service,
-    dateStart,
-    timeStart,
-    client,
-    ubication,
-  }: {
-    id_clientProgramming?: number | null;
-    service_request?: string;
-    service?: string;
-    dateStart?: string | Date; 
-    timeStart?: string;
-    client?: string;
-    ubication?: string;
-  }) {
-    try {
-      // Verificar que la programación del cliente no exista (TODOS los campos deben coincidir)
-      if (
-        service_request &&
-        service &&
-        dateStart &&
-        timeStart &&
-        client &&
-        ubication
-      ) {
-  
-        let targetDate: Date;
-  
-        // Manejar tanto strings como objetos Date
-        if (typeof dateStart === 'string') {
-          if (dateStart.includes('-')) {
-            // Formato "YYYY-MM-DD"
-            const [year, month, day] = dateStart.split('-').map(Number);
-            targetDate = new Date(year, month - 1, day, 0, 0, 0, 0);
-          } else {
-            // Otros formatos de string
-            targetDate = new Date(dateStart);
-            targetDate.setHours(0, 0, 0, 0);
-          }
-        } else if (dateStart instanceof Date) {
-          // Ya es un objeto Date
-          targetDate = new Date(dateStart);
-          targetDate.setHours(0, 0, 0, 0);
-        } else {
-          throw new Error('Invalid date format');
-        }
-        
-  
-        const existingProgramming = await this.prisma.clientProgramming.findFirst({
-          where: {
-            service_request,
-            service,
-            dateStart: targetDate,
-            timeStart,
-            client,
-            ubication,
-          },
-        });
-  
-  
-        if (existingProgramming) {
-          return {
-            message: 'Client programming already exists',
-            status: 409,
-          };
-        }
-      }
-  
-      // Verificar si el service_request ya existe (pero excluir el registro actual si estamos editando)
-      if (service_request) {
-        const serviceRequest = await this.prisma.clientProgramming.findFirst({
-          where: { 
-            service_request,
-            // Si estamos editando, excluir el registro actual
-            ...(id_clientProgramming && { id: { not: id_clientProgramming } })
-          },
-        });
-        
-        if (serviceRequest) {
-          return { message: 'Service request already exists', status: 409 };
-        }
-      }
-  
-      // Verificar si existe y tiene estado asignado
-      if (id_clientProgramming) {
-        const validateId = await this.prisma.clientProgramming.findUnique({
-          where: { id: id_clientProgramming },
-        });
-        
-        if (!validateId) {
-          return { message: 'Client programming not found', status: 404 };
-        }
-        
-        const programming = await this.prisma.clientProgramming.findFirst({
-          where: {
-            id: id_clientProgramming,
-            status: StatusComplete.ASSIGNED,
-          },
-        });
-        
-        if (programming) {
-          return {
-            message: 'Client programming already exists and is assigned',
-            status: 409,
-          };
-        }
-      }
-  
-      // Si no existe, se puede proceder con la creación
-      return { success: true };
-    } catch (error) {
-      console.error('Error validating client programming:', error);
-      throw new Error(`Error validating client programming: ${error.message}`);
-    }
-  }
-
-  /**
-   * Valida que un trabajador esté asignado a una operación
-   * @param operationId - ID de la operación
-   * @param workerId - ID del trabajador
-   * @returns Objeto indicando si la relación existe o mensaje de error
-   */
-  async validateWorkerInOperation(operationId: number, workerId: number) {
-    try {
-      console.log('Validating worker in operation:', { operationId, workerId });
-
-      // Verificar que la operación existe
-      const operation = await this.prisma.operation.findUnique({
-        where: { id: operationId },
-      });
-
-      if (!operation) {
-        console.log('Operation not found:', operationId);
-        return { message: 'Operation not found', status: 404 };
-      }
-
-      // Verificar que el trabajador existe
-      const worker = await this.prisma.worker.findUnique({
-        where: { id: workerId },
-      });
-
-      if (!worker) {
-        console.log('Worker not found:', workerId);
-        return { message: 'Worker not found', status: 404 };
-      }
-
-      // Verificar la relación entre trabajador y operación
-      const relation = await this.prisma.operation_Worker.findFirst({
-        where: {
-          id_operation: operationId,
-          id_worker: workerId,
-        },
-      });
-
-      if (!relation) {
-        console.log('Relation not found between operation and worker');
-        return {
-          message: `Worker ${workerId} is not assigned to operation ${operationId}`,
-          status: 404,
-        };
-      }
-
-      console.log('Worker is assigned to operation');
-      return { success: true };
-    } catch (error) {
-      console.error('Error validating worker in operation:', error);
-      throw new Error(
-        `Error validating worker-operation relation: ${error.message}`,
-      );
-    }
-  }
-
-  /**
-   * Verifica si un código de trabajador ya existe
-   * @param code - Código a verificar
-   * @returns true si ya existe, false si no
-   */
-  async workerCodeExists(code: string): Promise<boolean> {
-    try {
-      const existingWorker = await this.prisma.worker.findUnique({
-        where: { code },
-      });
-      return !!existingWorker;
-    } catch (error) {
-      console.error('Error checking if worker code exists:', error);
-      throw new Error(`Error checking worker code: ${error.message}`);
-    }
-  }
-
-  /**
-   * Verifica si un DNI de trabajador ya existe
-   * @param dni - DNI a verificar
-   * @returns true si ya existe, false si no
-   */
-  async workerDniExists(dni: string): Promise<boolean> {
-    try {
-      const existingWorker = await this.prisma.worker.findUnique({
-        where: { dni },
-      });
-      return !!existingWorker;
-    } catch (error) {
-      console.error('Error checking if worker DNI exists:', error);
-      throw new Error(`Error checking worker DNI: ${error.message}`);
-    }
-  }
-
-  /**
-   * Verifica si un teléfono de trabajador ya existe
-   * @param phone - Teléfono a verificar
-   * @returns true si ya existe, false si no
-   */
-  async workerPhoneExists(phone: string): Promise<boolean> {
-    try {
-      const existingWorker = await this.prisma.worker.findFirst({
-        where: { phone },
-      });
-      return !!existingWorker;
-    } catch (error) {
-      console.error('Error checking if worker phone exists:', error);
-      throw new Error(`Error checking worker phone: ${error.message}`);
     }
   }
 }

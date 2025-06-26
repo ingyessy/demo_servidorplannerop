@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { CreateClientDto } from './dto/create-client.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { StatusActivation } from '@prisma/client';
 /**
  * Servicio para gestionar clientes
  * @class ClientService
@@ -34,7 +33,7 @@ export class ClientService {
    */
   async findAll() {
     try {
-      const response = await this.prisma.client.findMany();
+      const response = await this.prisma.client.findMany({});
 
       return response;
     } catch (error) {

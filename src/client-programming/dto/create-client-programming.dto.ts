@@ -52,4 +52,15 @@ export class CreateClientProgrammingDto {
   @Type(() => Number)
   @IsOptional()
   id_user: number;
+
+  @IsNumber()
+  @Type(() => Number)
+  @IsOptional()
+  id_site: number;
+
+  @IsNumber()
+  @Type(() => Number)
+  @IsOptional()
+  id_subsite: number;
 }
+

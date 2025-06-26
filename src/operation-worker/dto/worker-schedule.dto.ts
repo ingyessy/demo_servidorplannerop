@@ -61,4 +61,13 @@ export class WorkerScheduleDto {
   @IsOptional()
   @IsNumber()
   id_task?: number;
+
+  @ApiProperty({
+    description: 'Id de la subtarea asociada a este grupo de trabajadores',
+    example: 1,
+    required: false,
+  })
+  @IsOptional()
+  @IsNumber()
+  id_subtask?: number;
 }

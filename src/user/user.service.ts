@@ -3,14 +3,17 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
-import { StatusActivation } from '@prisma/client';
+import { ValidationService } from 'src/common/validation/validation.service';
 /**
  * Servicio para gestionar usuarios
  * @class UserService
  */
 @Injectable()
 export class UserService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private validation: ValidationService,
+  ) {}
   /**
    * crea un usuario
    * @param createUserDto datos del usuario a crear
@@ -20,8 +23,18 @@ export class UserService {
     try {
       const validationUser = await this.findOne(createUserDto.dni);
       const userByUsername = await this.findByUsername(createUserDto.username);
-      if (validationUser['status'] != 404 || userByUsername != null) {
-        return { message: 'User already DNI exists', status: 409 };
+      const validate = await this.validation.validateAllIds({
+        id_subsite: createUserDto.id_subsite,
+      });
+  
+      if (validate && validate?.subsite?.id_site !== createUserDto.id_site) {
+        return {
+          message: 'This subsite does not belong to the site',
+          status: 409,
+        };
+      }
+      if (validationUser['status'] !== 404 || userByUsername !== null) {
+        return { message: 'User already DNI/Username exists', status: 409 };
       }
 
       const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
@@ -37,9 +50,11 @@ export class UserService {
    * obtene todos los usuarios
    * @returns respuesta de la busqueda de todos los usuarios
    */
-  async findAll() {
+  async findAll(id_site?: number) {
     try {
-      const response = await this.prisma.user.findMany();
+      const response = await this.prisma.user.findMany({
+        where: { id_site },
+      });
       return response;
     } catch (error) {
       throw new Error(error);
@@ -50,11 +65,12 @@ export class UserService {
    * @param dni numero de identificacion del usuario a buscar
    * @returns respuesta de la busqueda del usuario
    */
-  async findOne(dni: string) {
+  async findOne(dni: string, id_site?: number) {
     try {
       const response = await this.prisma.user.findUnique({
         where: {
           dni,
+          id_site,
         },
       });
       if (!response) {
@@ -73,8 +89,7 @@ export class UserService {
   async findOneById(id: number) {
     try {
       const response = await this.prisma.user.findUnique({
-        where: { id ,
-        },
+        where: { id },
       });
       if (!response) {
         return { message: 'User not found', status: 404 };
@@ -149,6 +164,13 @@ export class UserService {
       const response = await this.prisma.user.findUnique({
         where: {
           username,
+        },
+        include: {
+          Site: {
+            select: {
+              name: true,
+            },
+          },
         },
       });
       return response;

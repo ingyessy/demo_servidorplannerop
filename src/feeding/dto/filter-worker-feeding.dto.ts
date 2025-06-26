@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsBoolean, IsDate, IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsDate, IsEnum, IsNumber, IsOptional, IsString } from 'class-validator';
 import { Type } from 'class-transformer';
 import { FeedingStatus } from '@prisma/client';
 
@@ -52,4 +52,9 @@ export class FilterWorkerFeedingDto {
   @Type(() => Boolean)
   @IsBoolean()
   activatePaginated?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
+  id_site?: number;
 }

@@ -10,6 +10,7 @@ import {
   UsePipes,
   NotFoundException,
   ConflictException,
+  UseInterceptors,
 } from '@nestjs/common';
 import { TaskService } from './task.service';
 import { CreateTaskDto } from './dto/create-task.dto';
@@ -19,66 +20,101 @@ import { ApiBearerAuth } from '@nestjs/swagger';
 import { ToLowerCasePipe } from 'src/pipes/to-lowercase/to-lowercase.pipe';
 import { ParseIntPipe } from 'src/pipes/parse-int/parse-int.pipe';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
+import { SiteInterceptor } from 'src/common/interceptors/site.interceptor';
+import { RolesGuard } from 'src/auth/guards/roles.guard';
+import { Roles } from 'src/auth/decorators/roles.decorator';
+import { Role } from '@prisma/client';
 
 @Controller('task')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Role.SUPERADMIN, Role.ADMIN)
+@UseInterceptors(SiteInterceptor)
 @ApiBearerAuth('access-token')
 export class TaskController {
   constructor(private readonly taskService: TaskService) {}
 
   @Post()
   @UsePipes(new ToLowerCasePipe())
-  async create(@Body() createTaskDto: CreateTaskDto, @CurrentUser("userId") userId: number) {
+  async create(
+    @Body() createTaskDto: CreateTaskDto,
+    @CurrentUser('userId') userId: number,
+    @CurrentUser('siteId') siteId: number,
+    @CurrentUser('subsiteId') subsiteId: number,
+  ) {
+    if (!createTaskDto.id_site || !createTaskDto.id_subsite) {
+      createTaskDto.id_site = siteId;
+      createTaskDto.id_subsite = subsiteId;
+    }
     createTaskDto.id_user = userId;
     const response = await this.taskService.create(createTaskDto);
     if (response['status'] === 404) {
-      throw new NotFoundException(response["message"]);
+      throw new NotFoundException(response['message']);
     }
-    if (response["status"] === 409) {
-      throw new ConflictException(response["message"]);
+    if (response['status'] === 409) {
+      throw new ConflictException(response['message']);
     }
 
-    return response;
-  }
-
-  @Get()
-  findAll() {
-    return this.taskService.findAll();
-  }
-  @Get(':name')
-  async findByName(@Param('name') name: string) {
-    const response = await this.taskService.findOneTaskName(name);
-    if (response["status"] === 404) {
-      throw new NotFoundException(response["message"]);
-    }
     return response;
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.taskService.findOne(id);
+  @Roles(Role.SUPERVISOR, Role.ADMIN, Role.SUPERADMIN)
+  async findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser('siteId') siteId: number,
+  ) {
+    const response = await this.taskService.findOne(id, siteId);
+    if (response['status'] === 404) {
+      throw new NotFoundException(response['message']);
+    }
+    return response;
+  }
+
+  @Get()
+  @Roles(Role.SUPERVISOR, Role.ADMIN, Role.SUPERADMIN)
+  findAll(@CurrentUser('siteId') siteId: number) {
+    return this.taskService.findAll(siteId);
+  }
+  @Get('by-name/:name')
+  async findByName(
+    @Param('name') name: string,
+    @CurrentUser('siteId') siteId: number,
+  ) {
+    const response = await this.taskService.findOneTaskName(name, siteId);
+    if (response['status'] === 404) {
+      throw new NotFoundException(response['message']);
+    }
+    return response;
   }
 
   @Patch(':id')
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateTaskDto: UpdateTaskDto,
-    @CurrentUser("userId") userId: number,
+    @CurrentUser('userId') userId: number,
+    @CurrentUser('siteId') siteId: number,
   ) {
+    if (!updateTaskDto.id_site) {
+      if (updateTaskDto.id_site != siteId) {
+        throw new ConflictException(
+          'You cannot update a task from another site',
+        );
+      }
+    }
     updateTaskDto.id_user = userId;
     const response = await this.taskService.update(id, updateTaskDto);
-    if (response["status"] === 404) {
-      throw new NotFoundException(response["message"]);
+    if (response['status'] === 404) {
+      throw new NotFoundException(response['message']);
     }
-   
+
     return response;
   }
 
   @Delete(':id')
   async remove(@Param('id', ParseIntPipe) id: number) {
     const response = await this.taskService.remove(id);
-    if (response["status"] === 404) {
-      throw new NotFoundException(response["message"]);
+    if (response['status'] === 404) {
+      throw new NotFoundException(response['message']);
     }
     return response;
   }

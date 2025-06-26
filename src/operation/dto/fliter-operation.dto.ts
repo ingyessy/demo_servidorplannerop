@@ -63,4 +63,12 @@ export class OperationFilterDto {
   @IsOptional()
   @IsString()
   search?: string;
+
+  @IsOptional()
+  @IsString()
+  id_subsite?: number;
+
+  @IsOptional()
+  @IsString()
+  id_site?: number;
 }

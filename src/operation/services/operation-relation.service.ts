@@ -4,6 +4,9 @@ import { OperationWorkerService } from 'src/operation-worker/operation-worker.se
 import { OperationInChargeService } from 'src/in-charged/in-charged.service';
 import { UpdateOperationDto } from '../dto/update-operation.dto';
 import { ValidationService } from 'src/common/validation/validation.service';
+import { ValidationWorkerService } from 'src/common/validation/services/validation-worker/validation-worker.service';
+import { ValidationClientProgrammingService } from 'src/common/validation/services/validation-client-programming/validation-client-programming.service';
+import { ValidationTaskAndSubtaskService } from 'src/common/validation/services/validation-task-and-subtask/validation-task-and-subtask.service';
 
 /**
  * Servicio para gestionar relaciones de operaciones
@@ -14,83 +17,96 @@ export class OperationRelationService {
     private operationWorkerService: OperationWorkerService,
     private operationInChargeService: OperationInChargeService,
     private validationService: ValidationService,
+    private validationWaorkerService: ValidationWorkerService,
+    private validationClientProgramming: ValidationClientProgrammingService,
+    private validationTaskAndSubtaskService: ValidationTaskAndSubtaskService,
   ) {}
 
-/**
- * Asigna trabajadores y encargados a una operación
- * @param operationId - ID de la operación
- * @param workerIds - IDs de trabajadores simples
- * @param workersWithSchedule - Grupos de trabajadores programados
- * @param inChargedIds - IDs de encargados
- */
-async assignWorkersAndInCharge(
-  operationId: number,
-  workerIds: number[] = [],
-  workersWithSchedule: WorkerScheduleDto[] = [],
-  inChargedIds: number[] = [],
-) {
-  // Eliminar duplicados
-  const uniqueWorkerIds = [...new Set(workerIds)];
-  const uniqueInChargedIds = [...new Set(inChargedIds)];
+  /**
+   * Asigna trabajadores y encargados a una operación
+   * @param operationId - ID de la operación
+   * @param workerIds - IDs de trabajadores simples
+   * @param workersWithSchedule - Grupos de trabajadores programados
+   * @param inChargedIds - IDs de encargados
+   */
+  async assignWorkersAndInCharge(
+    operationId: number,
+    workerIds: number[] = [],
+    workersWithSchedule: WorkerScheduleDto[] = [],
+    inChargedIds: number[] = [],
+    id_subsite?: number | null,
+    id_site?: number | null,
+  ) {
+    // Eliminar duplicados
+    const uniqueWorkerIds = [...new Set(workerIds)];
+    const uniqueInChargedIds = [...new Set(inChargedIds)];
 
-  // Eliminar duplicados en los trabajadores con programación
-  const uniqueWorkersWithSchedule: WorkerScheduleDto[] = [];
+    // Eliminar duplicados en los trabajadores con programación
+    const uniqueWorkersWithSchedule: WorkerScheduleDto[] = [];
 
-  // Procesar cada grupo de trabajadores con programación
-  for (const schedule of workersWithSchedule) {
-    if (schedule.workerIds && Array.isArray(schedule.workerIds)) {
-      // Filtrar IDs duplicados dentro del mismo grupo
-      const uniqueIds = [...new Set(schedule.workerIds)];
+    // Procesar cada grupo de trabajadores con programación
+    for (const schedule of workersWithSchedule) {
+      if (schedule.workerIds && Array.isArray(schedule.workerIds)) {
+        // Filtrar IDs duplicados dentro del mismo grupo
+        const uniqueIds = [...new Set(schedule.workerIds)];
+
+        // Agregar el grupo completo sin filtrar por apariciones en otros grupos
+        uniqueWorkersWithSchedule.push({
+          ...schedule,
+          workerIds: uniqueIds,
+        });
+      }
+    }
+
+    const hasWorkers =
+      uniqueWorkerIds.length > 0 || uniqueWorkersWithSchedule.length > 0;
+    const hasInCharge = uniqueInChargedIds && uniqueInChargedIds.length > 0;
+
+    // Asignar trabajadores
+    if (hasWorkers) {
+      const reponse =
+        await this.operationWorkerService.assignWorkersToOperation(
+          {
+            id_operation: operationId,
+            workerIds: uniqueWorkerIds,
+            workersWithSchedule: uniqueWorkersWithSchedule,
+          },
+          null,
+          id_site,
+        );
 
 
-      // Agregar el grupo completo sin filtrar por apariciones en otros grupos
-      uniqueWorkersWithSchedule.push({
-        ...schedule,
-        workerIds: uniqueIds
+      if (reponse && (reponse.status === 403 || reponse.status === 400)) {
+        return reponse;
+      }
+    }
+
+    // Asignar encargados
+    if (hasInCharge) {
+      await this.operationInChargeService.assignInChargeToOperation({
+        id_operation: operationId,
+        userIds: uniqueInChargedIds,
       });
-
-       
     }
   }
-
- const hasWorkers = uniqueWorkerIds.length > 0 || uniqueWorkersWithSchedule.length > 0;
-  const hasInCharge = uniqueInChargedIds && uniqueInChargedIds.length > 0;
-
-
-  // Asignar trabajadores
-  if (hasWorkers) {
-    await this.operationWorkerService.assignWorkersToOperation({
-      id_operation: operationId,
-      workerIds: uniqueWorkerIds,
-      workersWithSchedule: uniqueWorkersWithSchedule,
-    });
-  }
-
-  // Asignar encargados
-  if (hasInCharge) {
-    console.log('Assigning in charge to operation:')
-    await this.operationInChargeService.assignInChargeToOperation({
-      id_operation: operationId,
-      userIds: uniqueInChargedIds,
-    });
-  }
-}
   /**
    * Extrae los IDs de trabajadores de grupos programados
    * @param workersWithSchedule - Grupos de trabajadores programados
    * @returns Array de IDs de trabajadores
    */
-  extractScheduledWorkerIds(workersWithSchedule: WorkerScheduleDto[] = []): number[] {
+  extractScheduledWorkerIds(
+    workersWithSchedule: WorkerScheduleDto[] = [],
+  ): number[] {
     const ids: number[] = [];
-    
+
     if (!workersWithSchedule.length) return ids;
-    
-    workersWithSchedule.forEach(group => {
+
+    workersWithSchedule.forEach((group) => {
       if (group.workerIds && Array.isArray(group.workerIds)) {
         ids.push(...group.workerIds);
       }
     });
-    
+
     return ids;
   }
 
@@ -99,13 +115,74 @@ async assignWorkersAndInCharge(
    * @param ids - Objeto con los IDs a validar
    * @returns Mensaje de error o null si todo es válido
    */
-  async validateOperationIds(ids: any) {
+  async validateOperationIds(
+    ids: any,
+    workersWithSchedule: WorkerScheduleDto[] = [],
+    id_site?: number | null,
+  ) {
     const validation = await this.validationService.validateAllIds(ids);
-    
+    //validar todos los id_task por separado
+    const allTaskIds = workersWithSchedule
+      .map((group) => group.id_task)
+      .filter((id) => id !== undefined);
+
+    const allSubTaskIds = workersWithSchedule
+      .map((group) => group.id_subtask)
+      .filter((id) => id !== undefined);
+
+    if (allSubTaskIds.length > 0 && allTaskIds.length > 0) {
+      // Construir las relaciones task-subtask desde workersWithSchedule
+      const taskSubTaskRelations = workersWithSchedule
+        .filter((worker) => worker.id_task && worker.id_subtask)
+        .map((worker) => ({
+          id_task: worker.id_task!,
+          id_subtask: worker.id_subtask!,
+        }));
+
+      if (taskSubTaskRelations.length > 0) {
+        const relationValidation =
+          await this.validationTaskAndSubtaskService.validateTaskSubTaskRelations(
+            taskSubTaskRelations,
+            id_site,
+          );
+
+        if (relationValidation.status === 400) {
+          return {
+            message: relationValidation.message,
+            status: 400,
+            details: relationValidation.details,
+            invalidRelations: relationValidation.invalidRelations,
+          };
+        }
+      }
+    }
+
     if (validation && 'status' in validation && validation.status === 404) {
       return validation;
     }
-    
+
+    return null;
+  }
+  /**
+   *  Valida los IDs de trabajadores
+   * @param workerIds
+   * @returns
+   */
+  async validateWorkerIds(
+    workerIds: number[],
+    id_subsite?: number | null,
+    id_site?: number | null,
+  ) {
+    if (!workerIds || !workerIds.length) return null;
+    const validateWorkerIds = await this.validationWaorkerService.validateWorkerIds(
+      workerIds,
+      id_subsite,
+      id_site,
+    );
+
+    if (validateWorkerIds?.status !== 200) {
+      return validateWorkerIds;
+    }
     return null;
   }
 
@@ -116,14 +193,16 @@ async assignWorkersAndInCharge(
    */
   async validateInChargedIds(updateDto: UpdateOperationDto) {
     if (!updateDto.inCharged?.connect?.length) return null;
-    
-    const inChargedIds = updateDto.inCharged.connect.map(item => item.id);
-    const validateIds = await this.validationService.validateAllIds({ inChargedIds });
-    
+
+    const inChargedIds = updateDto.inCharged.connect.map((item) => item.id);
+    const validateIds = await this.validationService.validateAllIds({
+      inChargedIds,
+    });
+
     if (validateIds && 'status' in validateIds && validateIds.status === 404) {
       return validateIds;
     }
-    
+
     return null;
   }
 
@@ -132,12 +211,17 @@ async assignWorkersAndInCharge(
    * @param id_clientProgramming - ID de la programación del cliente
    */
   async validateClientProgramming(id_clientProgramming: number | null) {
-    const validate = await this.validationService.validateClientProgramming({id_clientProgramming});
-    
-    if (validate && 'status' in validate && validate.status === 409 || validate.status === 404) {
+    const validate = await this.validationClientProgramming.validateClientProgramming({
+      id_clientProgramming,
+    });
+
+    if (
+      (validate && 'status' in validate && validate.status === 409) ||
+      validate.status === 404
+    ) {
       return validate;
     }
-    
+
     return null;
   }
 
@@ -147,13 +231,28 @@ async assignWorkersAndInCharge(
    * @param workers - Datos de actualización de trabajadores
    * @param inCharged - Datos de actualización de encargados
    */
-  async processRelationUpdates(operationId: number, workers?: any, inCharged?: any) {
+  async processRelationUpdates(
+    operationId: number,
+    workers?: any,
+    inCharged?: any,
+    id_site?: number | null,
+    id_subsite?: number | null,
+  ) {
     // Procesar actualizaciones de trabajadores
     if (workers) {
-     const res = await this.processWorkerUpdates(operationId, workers);
-     if (res && res.status === 404) {
-       return res;
-     }
+      const res = await this.processWorkerUpdates(
+        operationId,
+        workers,
+        id_site,
+        id_subsite,
+      );
+
+      if (
+        res &&
+        (res.updated.status === 404 || res.updated.status === 400 || res.updated.status === 403)
+      ) {
+        return res;
+      }
     }
 
     // Procesar actualizaciones de encargados
@@ -162,58 +261,72 @@ async assignWorkersAndInCharge(
     }
   }
 
- /**
- * Procesa las actualizaciones de trabajadores
- * @param operationId - ID de la operación
- * @param workers - Datos de actualización de trabajadores
- * @returns Resultado de las operaciones
- */
-private async processWorkerUpdates(operationId: number, workers: any): Promise<any> {
-  const results = {
-    connected: null as any,
-    disconnected: null as any,
-    updated: null as any,
-  };
-
-  try {
-    // Conectar nuevos trabajadores
-    if (workers.connect?.length) {
-      const { simpleWorkers, scheduledGroups } = this.separateWorkerTypes(workers.connect);
-      
-      if (simpleWorkers.length > 0 || scheduledGroups.length > 0) {
-        results.connected = await this.operationWorkerService.assignWorkersToOperation({
-          id_operation: operationId,
-          workerIds: simpleWorkers,
-          workersWithSchedule: scheduledGroups,
-        });
-      }
-    }
-
-    // Desconectar trabajadores (MODIFICADO)
-    if (workers.disconnect?.length) {
-      results.disconnected = await this.operationWorkerService.removeWorkersFromOperation({
-        id_operation: operationId,
-        workersToRemove: workers.disconnect, // ← CAMBIO: Pasar array completo con id_group opcional
-      });
-    }
-
-    // Actualizar programación de trabajadores
-    if (workers.update?.length) {
-      results.updated = await this.operationWorkerService.updateWorkersSchedule(
-        operationId,
-        workers.update,
-      );
-    }
-
-    return results;
-  } catch (error) {
-    console.error('Error processing worker updates:', error);
-    return {
-      error: error.message,
-      status: 500
+  /**
+   * Procesa las actualizaciones de trabajadores
+   * @param operationId - ID de la operación
+   * @param workers - Datos de actualización de trabajadores
+   * @returns Resultado de las operaciones
+   */
+  private async processWorkerUpdates(
+    operationId: number,
+    workers: any,
+    id_site?: number | null,
+    id_subsite?: number | null,
+  ): Promise<any> {
+    const results = {
+      connected: null as any,
+      disconnected: null as any,
+      updated: null as any,
     };
+
+    try {
+      // Conectar nuevos trabajadores
+      if (workers.connect?.length) {
+        const { simpleWorkers, scheduledGroups } = this.separateWorkerTypes(
+          workers.connect,
+        );
+
+        if (simpleWorkers.length > 0 || scheduledGroups.length > 0) {
+          results.connected =
+            await this.operationWorkerService.assignWorkersToOperation(
+              {
+                id_operation: operationId,
+                workerIds: simpleWorkers,
+                workersWithSchedule: scheduledGroups,
+              },
+              id_subsite,
+              id_site,
+            );
+        }
+      }
+
+      // Desconectar trabajadores (MODIFICADO)
+      if (workers.disconnect?.length) {
+        results.disconnected =
+          await this.operationWorkerService.removeWorkersFromOperation({
+            id_operation: operationId,
+            workersToRemove: workers.disconnect, // ← CAMBIO: Pasar array completo con id_group opcional
+          });
+      }
+
+      // Actualizar programación de trabajadores
+      if (workers.update?.length) {
+        results.updated =
+          await this.operationWorkerService.updateWorkersSchedule(
+            operationId,
+            workers.update,
+            id_site,
+          );
+      }
+      return results;
+    } catch (error) {
+      console.error('Error processing worker updates:', error);
+      return {
+        error: error.message,
+        status: 500,
+      };
+    }
   }
-}
 
   /**
    * Separa trabajadores en simples y programados
@@ -249,8 +362,8 @@ private async processWorkerUpdates(operationId: number, workers: any): Promise<a
   private async processInChargedUpdates(operationId: number, inCharged: any) {
     // Conectar encargados
     if (inCharged.connect?.length) {
-      const inChargedIds = inCharged.connect.map(item => item.id);
-      
+      const inChargedIds = inCharged.connect.map((item) => item.id);
+
       if (inChargedIds.length > 0) {
         await this.operationInChargeService.assignInChargeToOperation({
           id_operation: operationId,
@@ -261,8 +374,8 @@ private async processWorkerUpdates(operationId: number, workers: any): Promise<a
 
     // Desconectar encargados
     if (inCharged.disconnect?.length) {
-      const inChargedIds = inCharged.disconnect.map(item => item.id);
-      
+      const inChargedIds = inCharged.disconnect.map((item) => item.id);
+
       if (inChargedIds.length > 0) {
         await this.operationInChargeService.removeInChargeFromOperation({
           id_operation: operationId,

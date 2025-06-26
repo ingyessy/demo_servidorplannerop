@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "SubTask" ALTER COLUMN "code" SET DATA TYPE TEXT;

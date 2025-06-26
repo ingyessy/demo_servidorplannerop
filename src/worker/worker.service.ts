@@ -3,7 +3,7 @@ import { CreateWorkerDto } from './dto/create-worker.dto';
 import { UpdateWorkerDto } from './dto/update-worker.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ValidationService } from 'src/common/validation/validation.service';
-import { AuthService } from 'src/auth/auth.service';
+
 /**
  * Servicio para gestionar trabajadores
  * @class workerService
@@ -14,14 +14,13 @@ export class WorkerService {
   constructor(
     private prisma: PrismaService,
     private validationService: ValidationService,
-    private authService: AuthService,
   ) {}
   /**
    * craer un trabajador
    * @param createWorkerDto datos del trabajador a crear
    * @returns respuesta de la creacion del trabajador
    */
-  async create(createWorkerDto: CreateWorkerDto) {
+  async create(createWorkerDto: CreateWorkerDto, id_site?: number) {
     try {
       const { dni, id_area, id_user, phone, code } = createWorkerDto;
       const validation = await this.validationService.validateAllIds({
@@ -31,8 +30,18 @@ export class WorkerService {
         code_worker: code,
         phone_worker: phone,
       });
+      if (validation['area'].id_site !== id_site) {
+        return {
+          message: 'Not authorized to create worker in this area',
+          status: 409,
+        };
+      }
       // Si hay un error, retornarlo
-      if (validation && 'status' in validation && (validation.status === 404 || validation.status === 409)) {
+      if (
+        validation &&
+        'status' in validation &&
+        (validation.status === 404 || validation.status === 409)
+      ) {
         return validation;
       }
 
@@ -53,32 +62,40 @@ export class WorkerService {
       throw new Error(error.message || String(error));
     }
   }
- /**
-  * obtener trabajador por dni
-  * @param dni numero de identificacion del trabajador a buscar
-  * @returns respuesta de la busqueda del trabajador
-  */
- async finDni(dni: string){
-  const response = await this.prisma.worker.findFirst({
-    where:{dni}
-  });
-  if (!response){
-    return {message:"Not found", status:404}
+  /**
+   * obtener trabajador por dni
+   * @param dni numero de identificacion del trabajador a buscar
+   * @returns respuesta de la busqueda del trabajador
+   */
+  async finDni(dni: string, id_site?: number) {
+    const response = await this.prisma.worker.findFirst({
+      where: { dni, id_site },
+    });
+    if (!response) {
+      return { message: 'Not found', status: 404 };
+    }
+    return response;
   }
-  return response;
- }
 
   /**
    * obtener todos los trabajadores
    * @returns resupuesta de la busqueda de todos los trabajadores
    */
-  async findAll() {
+  async findAll(id_site?: number) {
     try {
       const response = await this.prisma.worker.findMany({
+        where: {
+          id_site,
+        },
         include: {
           jobArea: {
             select: {
               id: true,
+              name: true,
+            },
+          },
+          Site: {
+            select: {
               name: true,
             },
           },
@@ -94,50 +111,14 @@ export class WorkerService {
     }
   }
   /**
-   * obtener un trabajador por su codigo
-   * @param code codigo del trabajador a buscar
-   * @returns respuesta de la busqueda del trabajador
-   */
-  async findUniqueCode(code: string) {
-    try {
-      const response = await this.prisma.worker.findUnique({
-        where: { code },
-      });
-      if (!response) {
-        return { message: 'Code not found', status: 404 };
-      }
-      return response;
-    } catch (error) {
-      throw new Error(error);
-    }
-  }
-  /**
-   * obtener un trabajador por su telefono
-   * @param phone telefono del trabajador a buscar
-   * @returns respuesta de la busqueda del trabajador
-   */
-  async findUniquePhone(phone: string) {
-    try {
-      const response = await this.prisma.worker.findFirst({
-        where: { phone },
-      });
-      if (!response) {
-        return { message: 'Phone not found', status: 404 };
-      }
-      return response;
-    } catch (error) {
-      throw new Error(error);
-    }
-  }
-  /**
    * obtener un trabajador por su ID
    * @param id id del trabajador a buscar
    * @returns resupuesta de la busqueda del trabajador
    */
-  async findOne(id: number) {
+  async findOne(id: number, id_site?: number) {
     try {
       const response = await this.prisma.worker.findUnique({
-        where: { id },
+        where: { id, id_site },
         include: {
           jobArea: {
             select: {
@@ -147,7 +128,6 @@ export class WorkerService {
           },
         },
       });
-
       if (!response) {
         return { message: 'Worker not found', status: 404 };
       }
@@ -182,14 +162,19 @@ export class WorkerService {
    * @param updateWorkerDto datos del trabajador a actualizar
    * @returns respuesta de la actualizacion del trabajador
    */
-  async update(id: number, updateWorkerDto: UpdateWorkerDto) {
+  async update(id: number, updateWorkerDto: UpdateWorkerDto, id_site?: number) {
     try {
-      const validateWorker = await this.findOne(id);
-      if (validateWorker['status'] === 404) {
-        return { message: 'Worker not found', status: 404 };
+      const validation = await this.validationService.validateAllIds({
+        id_area: updateWorkerDto.id_area,
+      });
+      if (validation['area'].id_site !== id_site) {
+        return {
+          message: 'Not authorized to update worker in this area',
+          status: 409,
+        };
       }
       const response = await this.prisma.worker.update({
-        where: { id },
+        where: { id, id_site },
         data: updateWorkerDto,
       });
       return response;

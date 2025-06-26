@@ -104,6 +104,7 @@ export class CreateOperationDto {
         timeStart: '08:00',
         timeEnd: '17:00',
         id_task: 1,
+        id_subtask: 1,
       },
     ],
   })
@@ -118,4 +119,16 @@ export class CreateOperationDto {
   @IsNumber({}, { each: true })
   @IsOptional()
   inChargedIds?: number[];
+
+  @ApiProperty({example: '1'})
+  @IsNumber()
+  @Type(() => Number)
+  @IsOptional()
+  id_site?: number;
+
+  @ApiProperty({ example: '1' })
+  @IsNumber()
+  @Type(() => Number)
+  @IsOptional()
+  id_subsite?: number;
 }

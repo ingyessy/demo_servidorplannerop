@@ -13,6 +13,7 @@ import {
   Query,
   Res,
   ValidationPipe,
+  UseInterceptors,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { CalledAttentionService } from './called-attention.service';
@@ -26,9 +27,12 @@ import { ExcelExportService } from 'src/common/validation/services/excel-export.
 import { FilterCalledAttentionDto } from './dto/filter-called-attention';
 import { PaginatedCalledAttentionQueryDto } from './dto/paginate-called-attention.dto';
 import { BooleanTransformPipe } from 'src/pipes/boolean-transform/boolean-transform.pipe';
+import { SiteInterceptor } from 'src/common/interceptors/site.interceptor';
+import { Site } from 'src/site/entities/site.entity';
 
 @Controller('called-attention')
 @UseGuards(JwtAuthGuard)
+@UseInterceptors(SiteInterceptor)
 @ApiBearerAuth('access-token')
 export class CalledAttentionController {
   constructor(
@@ -40,10 +44,13 @@ export class CalledAttentionController {
   async create(
     @Body() createCalledAttentionDto: CreateCalledAttentionDto,
     @CurrentUser('userId') userId: number,
+    @CurrentUser('siteId') id_site: number,
   ) {
     createCalledAttentionDto.id_user = userId;
+    if(createCalledAttentionDto){}
     const response = await this.calledAttentionService.create(
       createCalledAttentionDto,
+      id_site,
     );
     if (response['status'] === 409) {
       throw new ConflictException(response['message']);
@@ -56,8 +63,14 @@ export class CalledAttentionController {
   }
 
   @Get('by-worker/:id')
-  async findWorker(@Param('id', ParseIntPipe) id: number) {
-    const response = await this.calledAttentionService.findOneByIdWorker(id);
+  async findWorker(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser('siteId') id_site: number,
+  ) {
+    const response = await this.calledAttentionService.findOneByIdWorker(
+      id,
+      id_site,
+    );
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
     } else if (response['status'] === 400) {
@@ -82,10 +95,15 @@ export class CalledAttentionController {
     queryParams: PaginatedCalledAttentionQueryDto,
     @Query('activatePaginated', new BooleanTransformPipe(true))
     activatePaginated: boolean,
+    @CurrentUser('siteId') id_site: number,
   ) {
     try {
       // Construir el objeto de filtros
       const filters: FilterCalledAttentionDto = {};
+
+      if (id_site) {
+        filters.id_site = id_site;
+      }
 
       if (queryParams.type) {
         filters.type = queryParams.type;
@@ -103,7 +121,6 @@ export class CalledAttentionController {
         filters.search = queryParams.search.trim();
       }
 
-
       // Si activatePaginated es falso, establecerlo en el objeto filters
       if (activatePaginated === false) {
         filters.activatePaginated = false;
@@ -114,7 +131,7 @@ export class CalledAttentionController {
         queryParams.page || 1,
         queryParams.limit || 10,
         filters,
-        activatePaginated
+        activatePaginated,
       );
     } catch (error) {
       if (error instanceof BadRequestException) {
@@ -134,8 +151,11 @@ export class CalledAttentionController {
   async findAll(
     @Query('format') format: string = 'json',
     @Res({ passthrough: true }) res: Response,
+    @CurrentUser('siteId') id_site: number,
   ) {
-    const response = await this.calledAttentionService.findAll();
+    const response = await this.calledAttentionService.findAll(
+      id_site,
+    );
 
     // Si no hay datos o hay un error, devolver la respuesta original
     if (!Array.isArray(response)) {
@@ -164,12 +184,27 @@ export class CalledAttentionController {
       );
     }
 
+    if (response['status'] === 404) {
+      throw new NotFoundException(response['message']);
+    }
+
     // Formato JSON por defecto (con passthrough: true)
     return response;
   }
   @Get(':id')
-  async findOne(@Param('id', ParseIntPipe) id: number) {
-    const response = await this.calledAttentionService.findOne(id);
+  async findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser('siteId') id_site: number,
+  ) {
+    const response = await this.calledAttentionService.findOne(
+      id,
+      id_site,
+    );
+    if (response['status'] === 404) {
+      throw new NotFoundException(response['message']);
+    } else if (response['status'] === 400) {
+      throw new BadRequestException(response['message']);
+    }
     return response;
   }
 
@@ -178,18 +213,38 @@ export class CalledAttentionController {
     @Param('id', ParseIntPipe) id: number,
     @Body() updateCalledAttentionDto: UpdateCalledAttentionDto,
     @CurrentUser('userId') userId: number,
+    @CurrentUser('siteId') id_site: number,
   ) {
     updateCalledAttentionDto.id_user = userId;
     const response = await this.calledAttentionService.update(
       id,
       updateCalledAttentionDto,
+      id_site,
     );
+    if (response['status'] === 409) {
+      throw new ConflictException(response['message']);
+    } else if (response['status'] === 404) {
+      throw new NotFoundException(response['message']);
+    } else if (response['status'] === 400) {
+      throw new BadRequestException(response['message']);
+    }
     return response;
   }
 
   @Delete(':id')
-  async remove(@Param('id', ParseIntPipe) id: number) {
-    const response = await this.calledAttentionService.remove(id);
+  async remove(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser('siteId') id_site: number,
+  ) {
+    const response = await this.calledAttentionService.remove(id, id_site);
+    if (response['status'] === 404) {
+      throw new NotFoundException(response['message']);
+    } else if (response['status'] === 400) {
+      throw new BadRequestException(response['message']);
+    } else if (response['status'] === 409) {
+      throw new ConflictException(response['message']);
+    }
+
     return response;
   }
 }
