@@ -60,7 +60,7 @@ export class OperationFinderService {
             name: true,
           },
         },
-         subTask: true,
+        tariff: { include: { subTask: true } },
       },
     },
     inChargeOperation: {

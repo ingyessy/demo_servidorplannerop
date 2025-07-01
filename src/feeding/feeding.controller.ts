@@ -39,7 +39,9 @@ export class FeedingController {
   async create(
     @Body() createFeedingDto: CreateFeedingDto,
     @CurrentUser('siteId') siteId: number,
+    @CurrentUser('userId') userId: number,
   ) {
+    createFeedingDto.id_user = userId;
     const response = await this.feedingService.create(createFeedingDto, siteId);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);

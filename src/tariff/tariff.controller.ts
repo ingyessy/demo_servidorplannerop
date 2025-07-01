@@ -50,8 +50,10 @@ export class TariffController {
   }
 
   @Get()
-  async findAll(@CurrentUser('siteId') siteId: number) {
-    const response = await this.tariffService.findAll(siteId);
+  async findAll(
+    @CurrentUser('subsiteId') subsiteId: number,
+  ) {
+    const response = await this.tariffService.findAll(subsiteId);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
     }

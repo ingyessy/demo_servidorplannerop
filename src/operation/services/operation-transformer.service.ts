@@ -25,6 +25,9 @@ export class OperationTransformerService {
           id_subtask: w.subTask ? w.subTask.id : null,
           subtask: w.subTask ? w.subTask.name : null,
           code_subtask: w.subTask ? w.subTask.code : null,
+          id_tariff: w.tariff ? w.tariff.id : null,
+          tariff: w.tariff ? w.tariff.subTask.name : null,
+          code_tariff: w.tariff ? w.tariff.code : null,
         },
       })) || [];
 

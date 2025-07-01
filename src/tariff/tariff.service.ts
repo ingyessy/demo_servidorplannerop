@@ -25,13 +25,15 @@ export class TariffService {
       ) {
         return validateIds;
       }
+      if (validateIds.subtask.code) {
+        createTariffDto.code = validateIds.subtask.code;
+      }
       const response = await this.prisma.tariff.create({
         data: {
           ...createTariffDto,
         },
       });
       return response;
-
     } catch (error) {
       if (error.code === 'P2002') {
         const target = error.meta?.target;
@@ -51,14 +53,12 @@ export class TariffService {
     }
   }
 
-  async findAll(id_site: number) {
+  async findAll(id_subsite?: number) {
     try {
       const response = await this.prisma.tariff.findMany({
         where: {
           costCenter: {
-            subSite: {
-              id_site,
-            },
+            id_subsite,
           },
         },
         include: {
@@ -79,7 +79,7 @@ export class TariffService {
   async findOne(id: number, id_site?: number) {
     try {
       const response = await this.prisma.tariff.findUnique({
-        where: { id , costCenter: { subSite: { id_site } } },
+        where: { id, costCenter: { subSite: { id_site } } },
         include: {
           subTask: true,
           costCenter: true,

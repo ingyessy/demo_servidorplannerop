@@ -34,7 +34,7 @@ export class AssignWorkersDto {
         timeStart: "08:00",
         timeEnd: "12:00",
         id_task: 1,
-        id_subtask: 1
+        id_tariff: 1
       },
       {
         workerIds: [3, 4],
@@ -43,7 +43,7 @@ export class AssignWorkersDto {
         timeStart: "13:00",
         timeEnd: "17:00",
         id_task: 2,
-        id_subtask: 2
+        id_tariff: 2
       }
     ]
   })

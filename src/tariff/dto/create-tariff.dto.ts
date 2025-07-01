@@ -4,8 +4,9 @@ import { Type } from 'class-transformer';
 import { IsEnum, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class CreateTariffDto {
-  @ApiProperty({ example: 'Tariff code' })
+  @ApiHideProperty()
   @IsString()
+  @IsOptional()
   code: string;
 
   @ApiProperty({ example: '1' })
