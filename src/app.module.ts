@@ -33,6 +33,7 @@ import { SubsiteModule } from './subsite/subsite.module';
 import { SubtaskModule } from './subtask/subtask.module';
 import { CostCenterModule } from './cost-center/cost-center.module';
 import { UnitOfMeasureModule } from './unit-of-measure/unit-of-measure.module';
+import { TariffModule } from './tariff/tariff.module';
 
 @Module({
   imports: [
@@ -65,6 +66,7 @@ import { UnitOfMeasureModule } from './unit-of-measure/unit-of-measure.module';
     SubtaskModule,
     CostCenterModule,
     UnitOfMeasureModule,
+    TariffModule,
   ],
   providers: [
     PrismaService,

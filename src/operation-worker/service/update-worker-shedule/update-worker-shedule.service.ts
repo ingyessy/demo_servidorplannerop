@@ -32,14 +32,38 @@ export class UpdateWorkerSheduleService {
         return { message: 'Operation not found', status: 404 };
       }
 
-      const taskSubTaskRelations: { id_task: number; id_subtask: number }[] =
-        [];
+      const taskSubTaskRelations: {
+        id_task: number;
+        id_tariff: number;
+      }[] = [];
 
       for (const worker of workersToUpdate || []) {
-        if (worker.id_task && worker.id_subtask) {
+        if (worker.id_group) {
+          // Obtener la información del grupo existente
+          const relatedWorker = await this.prisma.operation_Worker.findFirst({
+            where: {
+              id_operation: id_operation,
+              id_group: worker.id_group,
+            },
+          });
+
+          if (relatedWorker) {
+            // Solo llenar id_task si no se proporcionó en la solicitud
+            if (!worker.id_task) {
+              worker.id_task = relatedWorker.id_task ?? undefined;
+            }
+
+            // Solo llenar id_tariff si no se proporcionó en la solicitud
+            if (!worker.id_tariff) {
+              worker.id_tariff = relatedWorker.id_tariff ?? undefined;
+            }
+          }
+        }
+
+        if (worker.id_task && worker.id_tariff) {
           taskSubTaskRelations.push({
             id_task: worker.id_task,
-            id_subtask: worker.id_subtask,
+            id_tariff: worker.id_tariff,
           });
         }
       }
@@ -51,7 +75,7 @@ export class UpdateWorkerSheduleService {
             taskSubTaskRelations,
             id_site,
           );
-
+        // Si la validación falla, retornar el error
         if (validationResult.status === 400) {
           return validationResult;
         }
@@ -69,15 +93,16 @@ export class UpdateWorkerSheduleService {
           timeEnd,
           id_group,
           workerIds,
-          id_subtask,
           id_task,
+          id_tariff,
         } = group;
 
         // VALIDACIÓN CRÍTICA: Verificar que el id_group existe en la operación
         if (!id_group) {
-          throw new Error(
-            'id_group es requerido para actualizar un grupo existente',
-          );
+          return {
+            message: 'id_group es requerido para actualizar un grupo existente',
+            status: 400,
+          };
         }
 
         // Verificar que el grupo existe en la operación
@@ -134,7 +159,7 @@ export class UpdateWorkerSheduleService {
               timeStart: groupConfig.timeStart,
               timeEnd: groupConfig.timeEnd,
               id_task: groupConfig.id_task,
-              id_subtask: groupConfig.id_subtask,
+              id_tariff: groupConfig.id_tariff,
             }));
 
             await this.prisma.operation_Worker.createMany({
@@ -172,12 +197,12 @@ export class UpdateWorkerSheduleService {
           updateData.timeEnd = timeEnd || null;
         }
 
-        if (id_subtask !== undefined) {
-          updateData.id_subtask = id_subtask || null;
-        }
-
         if (id_task !== undefined) {
           updateData.id_task = id_task || null;
+        }
+
+        if (id_tariff !== undefined) {
+          updateData.id_tariff = id_tariff || null;
         }
 
         // Ejecutar la actualización del grupo completo (incluye los nuevos trabajadores)

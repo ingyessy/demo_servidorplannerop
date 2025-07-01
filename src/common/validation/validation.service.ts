@@ -14,6 +14,9 @@ export class ValidationService {
     id_user,
     id_area,
     id_task,
+    id_subtask,
+    id_costCenter,
+    id_unidOfMeasure,
     id_client,
     id_operation,
     id_subsite,
@@ -29,6 +32,9 @@ export class ValidationService {
     id_task?: number;
     id_client?: number;
     id_subsite?: number;
+    id_subtask?: number;
+    id_costCenter?: number;
+    id_unidOfMeasure?: number;
     id_operation?: number;
     dni_worker?: string;
     code_worker?: string;
@@ -259,6 +265,45 @@ export class ValidationService {
           return { message: 'Subsite not found', status: 404 };
         } else {
           response.subsite = subsite;
+        }
+      }
+
+      //13. Validar subtarea si se proporciona
+      if (id_subtask !== undefined) {
+        const subtask = await this.prisma.subTask.findUnique({
+          where: { id: id_subtask },
+        });
+
+        if (!subtask) {
+          return { message: 'Subtask not found', status: 404 };
+        } else {
+          response.subtask = subtask;
+        }
+      }
+
+      // 14. Validar centro de costo si se proporciona
+      if (id_costCenter !== undefined) {
+        const costCenter = await this.prisma.costCenter.findUnique({
+          where: { id: id_costCenter },
+        });
+
+        if (!costCenter) {
+          return { message: 'Cost center not found', status: 404 };
+        } else {
+          response.costCenter = costCenter;
+        }
+      }
+
+      // 15. Validar unidad de medida si se proporciona
+      if (id_unidOfMeasure !== undefined) {
+        const unitOfMeasure = await this.prisma.unitOfMeasure.findUnique({
+          where: { id: id_unidOfMeasure },
+        });
+
+        if (!unitOfMeasure) {
+          return { message: 'Unit of measure not found', status: 404 };
+        } else {
+          response.unitOfMeasure = unitOfMeasure;
         }
       }
       return response;

@@ -72,42 +72,18 @@ export class AssignWorkerToOperationService {
           return workerValidation;
         }
       }
-
-      // 3. Obtener trabajadores ya asignados
-      const currentWorkers = await this.prisma.operation_Worker.findMany({
-        where: { id_operation },
-        select: { id_worker: true },
-      });
-
-      const currentWorkerIds = currentWorkers.map((worker) => worker.id_worker);
-
-      // 4. Filtrar los trabajadores que ya están asignados
-      const simplesToAdd = allSimpleWorkerIds.filter(
-        (id) => !currentWorkerIds.includes(id),
-      );
-
       // Para los trabajadores programados, necesitamos filtrar por grupo
       const scheduledGroupsToProcess: typeof workersWithSchedule = [];
 
       workersWithSchedule.forEach((group) => {
         // Filtrar solo los IDs de trabajadores que no están asignados aún
-        const filteredIds = group.workerIds.filter(
-          (id) => !currentWorkerIds.includes(id),
-        );
 
-        if (filteredIds.length > 0) {
-          // Crear una copia del grupo con solo los trabajadores no asignados
-          scheduledGroupsToProcess.push({
-            ...group,
-            workerIds: filteredIds,
-          });
-        }
+        // Crear una copia del grupo con solo los trabajadores no asignados
+        scheduledGroupsToProcess.push({
+          ...group,
+          workerIds: group.workerIds,
+        });
       });
-
-      // Verificar si hay trabajadores nuevos para asignar
-      if (simplesToAdd.length === 0 && scheduledGroupsToProcess.length === 0) {
-        return { message: 'No new workers to assign', assignedWorkers: [] };
-      }
 
       // 5. Crear registros para trabajadores
       const assignmentPromises: Promise<any>[] = [];
@@ -119,8 +95,8 @@ export class AssignWorkerToOperationService {
       };
 
       // Asignar trabajadores simples (sin programación)
-      if (simplesToAdd.length > 0) {
-        const simpleAssignments = simplesToAdd.map((workerId) =>
+      if (allSimpleWorkerIds.length > 0) {
+        const simpleAssignments = allSimpleWorkerIds.map((workerId) =>
           this.prisma.operation_Worker.create({
             data: {
               id_operation,
@@ -147,7 +123,7 @@ export class AssignWorkerToOperationService {
             timeEnd: group.timeEnd || null,
             id_group: groupId,
             id_task: group.id_task || null,
-            id_subtask: group.id_subtask || null,
+            id_tariff: group.id_tariff || null,
           };
 
           // Crear una promesa de creación para cada trabajador en el grupo
@@ -170,7 +146,7 @@ export class AssignWorkerToOperationService {
 
       // 6. Actualizar estado de los trabajadores asignados
       const allWorkersToUpdate = [
-        ...simplesToAdd,
+        ...allSimpleWorkerIds,
         ...scheduledGroupsToProcess.flatMap((g) => g.workerIds),
       ];
 
@@ -185,7 +161,7 @@ export class AssignWorkerToOperationService {
       return {
         message: `${allWorkersToUpdate.length} workers assigned to operation ${id_operation}`,
         assignedWorkers: {
-          simple: simplesToAdd,
+          simple: allSimpleWorkerIds,
           scheduled: scheduledGroupsToProcess,
         },
       };

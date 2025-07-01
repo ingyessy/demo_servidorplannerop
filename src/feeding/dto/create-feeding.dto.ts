@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiHideProperty, ApiProperty } from '@nestjs/swagger';
 import { FeedingStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
 import { IsEnum, IsNumber, IsOptional, IsString, Matches } from 'class-validator';
@@ -26,4 +26,10 @@ export class CreateFeedingDto {
   @IsEnum(FeedingStatus, {
     message: `status debe ser uno de los siguientes valores: ${Object.values(FeedingStatus).join(', ')}`,})
   type: FeedingStatus;
+
+  @ApiHideProperty()
+  @IsNumber()
+  @Type(() => Number)
+  @IsOptional()
+  id_user?: number;
 }

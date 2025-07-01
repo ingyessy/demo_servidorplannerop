@@ -294,6 +294,9 @@ export class OperationService {
         if (res.updated && (res.updated.status === 404 || res.updated.status === 403 || res.updated.status === 400)) {
           return res.updated;
         }
+        if (res.status !== undefined && res.status !== 200) {
+          return res;
+        }
       }
       // Get updated operation
       const updatedOperation = await this.findOne(id);

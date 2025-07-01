@@ -75,7 +75,6 @@ export class OperationRelationService {
           id_site,
         );
 
-
       if (reponse && (reponse.status === 403 || reponse.status === 400)) {
         return reponse;
       }
@@ -126,17 +125,13 @@ export class OperationRelationService {
       .map((group) => group.id_task)
       .filter((id) => id !== undefined);
 
-    const allSubTaskIds = workersWithSchedule
-      .map((group) => group.id_subtask)
-      .filter((id) => id !== undefined);
-
-    if (allSubTaskIds.length > 0 && allTaskIds.length > 0) {
+    if (allTaskIds.length > 0) {
       // Construir las relaciones task-subtask desde workersWithSchedule
       const taskSubTaskRelations = workersWithSchedule
-        .filter((worker) => worker.id_task && worker.id_subtask)
+        .filter((worker) => worker.id_task && worker.id_tariff)
         .map((worker) => ({
           id_task: worker.id_task!,
-          id_subtask: worker.id_subtask!,
+          id_tariff: worker.id_tariff!,
         }));
 
       if (taskSubTaskRelations.length > 0) {
@@ -174,11 +169,12 @@ export class OperationRelationService {
     id_site?: number | null,
   ) {
     if (!workerIds || !workerIds.length) return null;
-    const validateWorkerIds = await this.validationWaorkerService.validateWorkerIds(
-      workerIds,
-      id_subsite,
-      id_site,
-    );
+    const validateWorkerIds =
+      await this.validationWaorkerService.validateWorkerIds(
+        workerIds,
+        id_subsite,
+        id_site,
+      );
 
     if (validateWorkerIds?.status !== 200) {
       return validateWorkerIds;
@@ -211,9 +207,10 @@ export class OperationRelationService {
    * @param id_clientProgramming - ID de la programación del cliente
    */
   async validateClientProgramming(id_clientProgramming: number | null) {
-    const validate = await this.validationClientProgramming.validateClientProgramming({
-      id_clientProgramming,
-    });
+    const validate =
+      await this.validationClientProgramming.validateClientProgramming({
+        id_clientProgramming,
+      });
 
     if (
       (validate && 'status' in validate && validate.status === 409) ||
@@ -246,11 +243,15 @@ export class OperationRelationService {
         id_site,
         id_subsite,
       );
-
       if (
-        res &&
-        (res.updated.status === 404 || res.updated.status === 400 || res.updated.status === 403)
+        (res.updated !== undefined || res.updated !== null) &&
+        (res.updated?.status === 404 ||
+          res.updated?.status === 400 ||
+          res.updated?.status === 403)
       ) {
+        return res;
+      }
+      if (res.status !== undefined && res.status !== 200) {
         return res;
       }
     }
@@ -287,6 +288,17 @@ export class OperationRelationService {
         );
 
         if (simpleWorkers.length > 0 || scheduledGroups.length > 0) {
+          const validationGroup = await this.validateOperationIds(
+            {
+              workerIds: simpleWorkers,
+              workersWithSchedule: scheduledGroups,
+            },
+            scheduledGroups,
+            id_site,
+          );
+          if (validationGroup && validationGroup.status !== 200) {
+            return validationGroup;
+          }
           results.connected =
             await this.operationWorkerService.assignWorkersToOperation(
               {
@@ -345,6 +357,8 @@ export class OperationRelationService {
           dateEnd: item.dateEnd,
           timeStart: item.timeStart,
           timeEnd: item.timeEnd,
+          id_task: item.id_task,
+          id_tariff: item.id_tariff,
         });
       } else if ('id' in item && typeof item.id === 'number') {
         simpleWorkers.push(item.id);
