@@ -34,6 +34,7 @@ import { SubtaskModule } from './subtask/subtask.module';
 import { CostCenterModule } from './cost-center/cost-center.module';
 import { UnitOfMeasureModule } from './unit-of-measure/unit-of-measure.module';
 import { TariffModule } from './tariff/tariff.module';
+import { ConfigurationModule } from './configuration/configuration.module';
 
 @Module({
   imports: [
@@ -67,6 +68,7 @@ import { TariffModule } from './tariff/tariff.module';
     CostCenterModule,
     UnitOfMeasureModule,
     TariffModule,
+    ConfigurationModule,
   ],
   providers: [
     PrismaService,

@@ -26,9 +26,10 @@ import { FilterClientProgrammingDto } from './dto/filter-client-programming.dto'
 import { SiteInterceptor } from 'src/common/interceptors/site.interceptor';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { Role } from '@prisma/client';
+import { RolesGuard } from 'src/auth/guards/roles.guard';
 
 @Controller('client-programming')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @UseInterceptors(SiteInterceptor)
 @Roles(Role.SUPERADMIN, Role.ADMIN)
 @ApiBearerAuth('access-token')
