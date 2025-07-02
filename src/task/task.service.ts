@@ -73,10 +73,10 @@ export class TaskService {
           SubTask: {
             include: {
               Tariff: {
-                include: {
-                  costCenter: true,
-                  unitOfMeasure: true,
-                },
+                select:{
+                  id:true,
+                  code:true,
+                }
               },
             },
           },
@@ -103,9 +103,9 @@ export class TaskService {
           SubTask: {
             include: {
               Tariff: {
-                include: {
-                  costCenter: true,
-                  unitOfMeasure: true,
+                select: {
+                  id: true,
+                  code: true,
                 },
               },
             },
