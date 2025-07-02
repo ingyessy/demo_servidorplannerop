@@ -35,6 +35,8 @@ model User {
   UnitOfMeasure     UnitOfMeasure[]
   Tariff            Tariff[]
   WorkerFeeding     WorkerFeeding[]
+  Configuration     Configuration[]
+  Bill              Bill[]
 }
 
 model JobArea {
@@ -107,6 +109,7 @@ model Operation {
   id_site              Int                 @default(1)
   id_subsite           Int?
   subSite              SubSite?            @relation(fields: [id_subsite], references: [id])
+  Bill                 Bill[]
 }
 
 model Operation_Worker {
@@ -142,13 +145,13 @@ model Task {
 }
 
 model SubTask {
-  id               Int                @id @default(autoincrement())
-  name             String
-  code             String             @unique
-  status           StatusActivation   @default(ACTIVE)
-  id_task          Int
-  task             Task               @relation(fields: [id_task], references: [id])
-  Tariff           Tariff[]
+  id      Int              @id @default(autoincrement())
+  name    String
+  code    String           @unique
+  status  StatusActivation @default(ACTIVE)
+  id_task Int
+  task    Task             @relation(fields: [id_task], references: [id])
+  Tariff  Tariff[]
 }
 
 model Client {
@@ -298,12 +301,57 @@ model Tariff {
   full_tariff         YES_NO
   compensatory        YES_NO
   hourly_paid_service YES_NO
+  OD                  Decimal            @db.Decimal(4, 2)
+  ON                  Decimal            @db.Decimal(4, 2)
+  ED                  Decimal            @db.Decimal(4, 2)
+  EN                  Decimal            @db.Decimal(4, 2)
+  FOD                 Decimal            @db.Decimal(4, 2)
+  FON                 Decimal            @db.Decimal(4, 2)
+  FED                 Decimal            @db.Decimal(4, 2)
+  FEN                 Decimal            @db.Decimal(4, 2)
   id_user             Int
   user                User               @relation(fields: [id_user], references: [id])
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
   status              StatusActivation   @default(ACTIVE)
   Operation_Worker    Operation_Worker[]
+}
+
+model Configuration {
+  id          Int                    @id @default(autoincrement())
+  name        String
+  description String?
+  typeValue   TypeValueConfiguration
+  value       String
+  status      StatusActivation       @default(ACTIVE)
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+  id_user     Int
+  user        User                   @relation(fields: [id_user], references: [id])
+}
+
+model Bill {
+  id                Int       @id @default(autoincrement())
+  id_operation      Int
+  operation         Operation @relation(fields: [id_operation], references: [id])
+  amount            Int
+  number_of_workers Int
+  total_bill        Int
+  total_paysheet    Int
+  week_number       Int
+  number_of_hours   Int
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  id_user           Int
+  user              User      @relation(fields: [id_user], references: [id])
+}
+
+enum TypeValueConfiguration {
+  INT
+  DECIMAL
+  STRING
+  BOOLEAN
+  DATE
 }
 
 enum YES_NO {

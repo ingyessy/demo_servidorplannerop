@@ -2,8 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { UserService } from 'src/user/user.service';
-import { StatusActivation } from '@prisma/client';
+
 /**
  * Servicio para gestionar tareas
  * @class TaskService
@@ -71,7 +70,16 @@ export class TaskService {
           id_site: id_site,
         },
         include: {
-          SubTask: true,
+          SubTask: {
+            include: {
+              Tariff: {
+                include: {
+                  costCenter: true,
+                  unitOfMeasure: true,
+                },
+              },
+            },
+          },
         },
       });
       return response;
@@ -92,7 +100,16 @@ export class TaskService {
           id_site: id_site,
         },
         include: {
-          SubTask: true,
+          SubTask: {
+            include: {
+              Tariff: {
+                include: {
+                  costCenter: true,
+                  unitOfMeasure: true,
+                },
+              },
+            },
+          },
         },
       });
       if (!response) {
