@@ -51,7 +51,12 @@ async function bootstrap() {
       'access-token',)
     .build();
   const documentFactory = () => SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, documentFactory);
+    SwaggerModule.setup('api', app, documentFactory, {
+    swaggerOptions: {
+      persistAuthorization: true, // Permite que la autorización persista entre recargas
+    },
+  });
+
 
   const docsPath = join(process.cwd(), 'docs');
   app.useStaticAssets(docsPath, {
@@ -62,6 +67,6 @@ async function bootstrap() {
   const publicPath = join(process.cwd(), 'public');
   app.useStaticAssets(publicPath);
 
-  await app.listen(process.env.PORT ?? 3001);
+  await app.listen(process.env.PORT ?? 3000);
 }
 bootstrap();

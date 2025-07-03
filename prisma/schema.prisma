@@ -301,6 +301,7 @@ model Tariff {
   full_tariff         YES_NO
   compensatory        YES_NO
   hourly_paid_service YES_NO
+  agreed_hours        Decimal            @db.Decimal(4, 2)
   OD                  Decimal            @db.Decimal(4, 2)
   ON                  Decimal            @db.Decimal(4, 2)
   ED                  Decimal            @db.Decimal(4, 2)
@@ -340,6 +341,14 @@ model Bill {
   total_paysheet    Int
   week_number       Int
   number_of_hours   Int
+  HOD               Decimal   @db.Decimal(4, 2)
+  HON               Decimal   @db.Decimal(4, 2)
+  HED               Decimal   @db.Decimal(4, 2)
+  HEN               Decimal   @db.Decimal(4, 2)
+  HFOD              Decimal   @db.Decimal(4, 2)
+  HFON              Decimal   @db.Decimal(4, 2)
+  HFED              Decimal   @db.Decimal(4, 2)
+  HFEN              Decimal   @db.Decimal(4, 2)
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
   id_user           Int

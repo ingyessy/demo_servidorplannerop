@@ -4,6 +4,7 @@ import { Prisma, StatusOperation } from '@prisma/client';
 import { OperationTransformerService } from './operation-transformer.service';
 import { OperationFilterDto } from '../dto/fliter-operation.dto';
 import { PaginateOperationService } from 'src/common/services/pagination/operation/paginate-operation.service';
+import { createOperationInclude, OperationIncludeConfig } from '../entities/operation-include.types';
 
 /**
  * Servicio para buscar operaciones
@@ -12,70 +13,7 @@ import { PaginateOperationService } from 'src/common/services/pagination/operati
 export class OperationFinderService {
   // Configuraciones de consulta reutilizables
 
-  private readonly defaultInclude = {
-    client: {
-      select: { name: true },
-    },
-    jobArea: {
-      select: {
-        id: true,
-        name: true,
-      },
-    },
-    task: {
-      select: {
-        id: true,
-        name: true,
-      },
-    },
-    clientProgramming: {
-      select: {
-        service: true,
-      },
-    },
-    Site: {
-      select: {
-        name: true,
-      },
-    },
-    workers: {
-      select: {
-        id: true,
-        id_worker: true,
-        timeStart: true,
-        timeEnd: true,
-        dateStart: true,
-        dateEnd: true,
-        id_group: true,
-        worker: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        task: {
-          // Cambiar 'task' por 'Task' (con T mayúscula)
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        tariff: { include: { subTask: true } },
-      },
-    },
-    inChargeOperation: {
-      select: {
-        id_user: true,
-        id_operation: true,
-        user: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-    },
-  };
+  private readonly defaultInclude: OperationIncludeConfig = createOperationInclude();
 
   constructor(
     private prisma: PrismaService,
@@ -89,9 +27,6 @@ export class OperationFinderService {
    */
   async findAll(id_site?: number, id_subsite?: number) {
     try {
-      console.log(
-        `Getting all operations for Site: ${id_site}, Subsite: ${id_subsite}`,
-      );
       const response = await this.prisma.operation.findMany({
         where: {
           id_site,
