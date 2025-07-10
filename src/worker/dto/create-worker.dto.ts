@@ -15,6 +15,10 @@ export class CreateWorkerDto {
   @IsString()
   code: string;
 
+  @ApiProperty({ example: 'HGT7895' })
+  @IsString()
+  payroll_code: string;
+
   @ApiProperty({ example: '3222###' })
   @IsString()
   phone: string;

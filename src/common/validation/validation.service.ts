@@ -21,6 +21,7 @@ export class ValidationService {
     id_operation,
     id_subsite,
     code_worker,
+    payroll_code_worker,
     dni_worker,
     workerIds,
     allTaskIds,
@@ -38,6 +39,7 @@ export class ValidationService {
     id_operation?: number;
     dni_worker?: string;
     code_worker?: string;
+    payroll_code_worker?: string;
     phone_worker?: string;
     workerIds?: number[];
     allTaskIds?: number[];
@@ -107,6 +109,8 @@ export class ValidationService {
           return { message: 'Code already exists', status: 409 };
         }
       }
+
+
 
       // 6. Validar DNI si se proporciona
       if (dni_worker !== undefined) {
@@ -306,10 +310,28 @@ export class ValidationService {
           response.unitOfMeasure = unitOfMeasure;
         }
       }
+
+      //16. validar el codigo de nomina
+       if (payroll_code_worker!== undefined) {
+        const existingWorkerWithCode = await this.prisma.worker.findUnique({
+          where: { payroll_code: payroll_code_worker },
+        });
+
+        if (existingWorkerWithCode) {
+          console.log(
+            'Found existing worker with payroll code:',
+            existingWorkerWithCode.id,
+          );
+          return { message: 'Payroll code already exists', status: 409 };
+        }
+      }
+
       return response;
     } catch (error) {
       console.error('Error validating IDs:', error);
       throw new Error(`Error validating IDs: ${error.message}`);
     }
   }
+
+
 }

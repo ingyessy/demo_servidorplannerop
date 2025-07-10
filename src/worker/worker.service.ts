@@ -22,12 +22,13 @@ export class WorkerService {
    */
   async create(createWorkerDto: CreateWorkerDto, id_site?: number) {
     try {
-      const { dni, id_area, id_user, phone, code } = createWorkerDto;
+      const { dni, id_area, id_user, phone, code, payroll_code } = createWorkerDto;
       const validation = await this.validationService.validateAllIds({
         id_user: id_user,
         id_area: id_area,
         dni_worker: dni,
         code_worker: code,
+        payroll_code_worker: payroll_code,
         phone_worker: phone,
       });
       if (validation['area'].id_site !== id_site) {

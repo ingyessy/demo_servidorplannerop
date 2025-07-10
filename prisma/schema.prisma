@@ -63,7 +63,8 @@ model Worker {
   createAt         DateTime           @default(now())
   updateAt         DateTime           @updatedAt
   id_user          Int
-  code             String             @unique
+  code             String?             @unique
+  payroll_code     String?             @unique
   dateDisableEnd   DateTime?
   dateDisableStart DateTime?
   dateRetierment   DateTime?
