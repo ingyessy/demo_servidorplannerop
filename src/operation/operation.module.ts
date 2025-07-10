@@ -12,6 +12,7 @@ import { WorkerAnalyticsService } from 'src/operation/services/workerAnalytics.s
 import { PaginationModule } from 'src/common/services/pagination/pagination.module';
 import { AuthModule } from 'src/auth/auth.module';
 import { OperationWorkerModule } from 'src/operation-worker/operation-worker.module';
+import { TariffModule } from 'src/tariff/tariff.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { OperationWorkerModule } from 'src/operation-worker/operation-worker.mod
     PaginationModule,
     AuthModule,
     OperationWorkerModule,
+    TariffModule,
   ],
   controllers: [OperationController],
   providers: [
@@ -31,5 +33,6 @@ import { OperationWorkerModule } from 'src/operation-worker/operation-worker.mod
     OperationRelationService,
     WorkerAnalyticsService,
   ],
+  exports: [OperationFinderService]
 })
 export class OperationModule {}

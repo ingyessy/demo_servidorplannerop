@@ -36,6 +36,16 @@ export class OperationService {
     return await this.finderService.findOne(id, id_site, id_subsite);
   }
   /**
+   * Obtiene una operación con detalles de tarifas
+   * @param operationId - ID de la operación a buscar
+   * @returns Operación con detalles de tarifas o mensaje de error
+   */
+  async getOperationWithDetailedTariffs(operationId: number) {
+    return await this.finderService.getOperationWithDetailedTariffs(
+      operationId,
+    );
+  }
+  /**
    * Encuentra todas las operaciones activas (IN_PROGRESS y PENDING) sin filtros de fecha
    * @returns Lista de operaciones activas o mensaje de error
    */
@@ -119,11 +129,14 @@ export class OperationService {
         this.relationService.extractScheduledWorkerIds(groups);
       const allWorkerIds = [...workerIds, ...scheduledWorkerIds];
 
-      const validateWorkerIds =
-        await this.relationService.validateWorkerIds(allWorkerIds,id_subsite, id_site);
-        if(validateWorkerIds?.status === 403){
-          return validateWorkerIds;
-        }
+      const validateWorkerIds = await this.relationService.validateWorkerIds(
+        allWorkerIds,
+        id_subsite,
+        id_site,
+      );
+      if (validateWorkerIds?.status === 403) {
+        return validateWorkerIds;
+      }
       //validar programacion cliente
       const validateClientProgramming =
         await this.relationService.validateClientProgramming(
@@ -133,13 +146,17 @@ export class OperationService {
       if (validateClientProgramming) return validateClientProgramming;
 
       // Validar todos los IDs
-      const validationResult = await this.relationService.validateOperationIds({
-        id_area: createOperationDto.id_area,
-        id_task: createOperationDto.id_task,
-        id_client: createOperationDto.id_client,
-        workerIds: allWorkerIds,
-        inChargedIds: createOperationDto.inChargedIds,
-      }, groups, id_site);
+      const validationResult = await this.relationService.validateOperationIds(
+        {
+          id_area: createOperationDto.id_area,
+          id_task: createOperationDto.id_task,
+          id_client: createOperationDto.id_client,
+          workerIds: allWorkerIds,
+          inChargedIds: createOperationDto.inChargedIds,
+        },
+        groups,
+        id_site,
+      );
 
       if (
         validationResult &&
@@ -243,7 +260,7 @@ export class OperationService {
       if (validate['status'] === 404) {
         return validate;
       }
-      
+
       // Validate inCharged IDs
       const validationResult =
         await this.relationService.validateInChargedIds(updateOperationDto);
@@ -291,7 +308,12 @@ export class OperationService {
       );
 
       if (res !== undefined) {
-        if (res.updated && (res.updated.status === 404 || res.updated.status === 403 || res.updated.status === 400)) {
+        if (
+          res.updated &&
+          (res.updated.status === 404 ||
+            res.updated.status === 403 ||
+            res.updated.status === 400)
+        ) {
           return res.updated;
         }
         if (res.status !== undefined && res.status !== 200) {

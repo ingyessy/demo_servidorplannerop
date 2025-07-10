@@ -9,11 +9,12 @@ import {
   UseGuards,
   UseInterceptors,
   NotFoundException,
+  Query,
 } from '@nestjs/common';
 import { ConfigurationService } from './configuration.service';
 import { CreateConfigurationDto } from './dto/create-configuration.dto';
 import { UpdateConfigurationDto } from './dto/update-configuration.dto';
-import { ApiBearerAuth } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { SiteInterceptor } from 'src/common/interceptors/site.interceptor';
@@ -51,6 +52,20 @@ export class ConfigurationController {
     return response;
   }
 
+  @Get('by-name')
+  @ApiQuery({
+    name: 'name',
+    required: true,
+    description: 'Nombre de la configuración a buscar',
+  })
+  async findByName(@Query('name') name: string) {
+    const response = await this.configurationService.findByName(name);
+    if (response['status'] === 404) {
+      throw new NotFoundException(response['message']);
+    }
+    return response;
+  }
+
   @Get(':id')
   async findOne(@Param('id', ParseIntPipe) id: number) {
     const response = await this.configurationService.findOne(id);
@@ -65,7 +80,10 @@ export class ConfigurationController {
     @Param('id', ParseIntPipe) id: number,
     @Body() updateConfigurationDto: UpdateConfigurationDto,
   ) {
-    const response = await this.configurationService.update(id, updateConfigurationDto);
+    const response = await this.configurationService.update(
+      id,
+      updateConfigurationDto,
+    );
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
     }

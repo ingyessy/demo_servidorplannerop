@@ -52,6 +52,12 @@ export class CreateTariffDto {
   })
   hourly_paid_service: YES_NO;
 
+  @ApiProperty({ example: '16.56' })
+  @IsNumber()
+  @Type(() => Number)
+  @IsOptional()
+  agreed_hours: number;
+
   @ApiProperty({ example: '1.00' })
   @IsNumber()
   @Type(() => Number)
@@ -91,6 +97,46 @@ export class CreateTariffDto {
   @IsNumber()
   @Type(() => Number)
   FEN: number;
+
+    @ApiProperty({ example: '1.00' })
+  @IsNumber()
+  @Type(() => Number)
+  FAC_OD: number;
+
+  @ApiProperty({ example: '1.35' })
+  @IsNumber()
+  @Type(() => Number)
+  FAC_ON: number;
+
+  @ApiProperty({ example: '1.50' })
+  @IsNumber()
+  @Type(() => Number)
+  FAC_ED: number;
+
+  @ApiProperty({ example: '1.75' })
+  @IsNumber()
+  @Type(() => Number)
+  FAC_EN: number;
+
+  @ApiProperty({ example: '1.75' })
+  @IsNumber()
+  @Type(() => Number)
+  FAC_FOD: number;
+
+  @ApiProperty({ example: '2.10' })
+  @IsNumber()
+  @Type(() => Number)
+  FAC_FON: number;
+
+  @ApiProperty({ example: '2.00' })
+  @IsNumber()
+  @Type(() => Number)
+  FAC_FED: number;
+
+  @ApiProperty({ example: '2.50' })
+  @IsNumber()
+  @Type(() => Number)
+  FAC_FEN: number;
 
   @ApiHideProperty()
   @IsNumber()

@@ -4,7 +4,12 @@ import { Prisma, StatusOperation } from '@prisma/client';
 import { OperationTransformerService } from './operation-transformer.service';
 import { OperationFilterDto } from '../dto/fliter-operation.dto';
 import { PaginateOperationService } from 'src/common/services/pagination/operation/paginate-operation.service';
-import { createOperationInclude, OperationIncludeConfig } from '../entities/operation-include.types';
+import {
+  createOperationInclude,
+  OperationIncludeConfig,
+} from '../entities/operation-include.types';
+import { TariffTransformerService } from 'src/tariff/service/tariff-transformer.service';
+import { createTariffInclude } from '../../tariff/entities/tariff-include.types';
 
 /**
  * Servicio para buscar operaciones
@@ -13,12 +18,14 @@ import { createOperationInclude, OperationIncludeConfig } from '../entities/oper
 export class OperationFinderService {
   // Configuraciones de consulta reutilizables
 
-  private readonly defaultInclude: OperationIncludeConfig = createOperationInclude();
+  private readonly defaultInclude: OperationIncludeConfig =
+    createOperationInclude();
 
   constructor(
     private prisma: PrismaService,
     private transformer: OperationTransformerService,
     private paginationService: PaginateOperationService,
+    private tariffTransformer: TariffTransformerService,
   ) {}
 
   /**
@@ -217,6 +224,59 @@ export class OperationFinderService {
       );
     } catch (error) {
       console.error(`Error finding operations for user ${id_user}:`, error);
+      throw new Error(error.message);
+    }
+  }
+
+  /**
+   * Actualiza la información de la operación para incluir detalles completos de tarifa
+   * @param operationId ID de la operación
+   */
+  async getOperationWithDetailedTariffs(operationId: number) {
+    try {
+      // Obtenemos la operación con sus trabajadores y tarifas
+      const operation = await this.prisma.operation.findUnique({
+        where: { id: operationId },
+        include: {
+          ...this.defaultInclude,
+          workers: {
+            select: {
+              ...this.defaultInclude.workers.select,
+              tariff: {
+                include: createTariffInclude(),
+              },
+            },
+          },
+        },
+      });
+
+      if (!operation) {
+        return { message: 'Operation not found', status: 404 };
+      }
+
+      // Transformar la operación con detalles de tarifa
+      const transformedOperation =
+        this.transformer.transformOperationResponse(operation);
+
+      // Actualizar cada trabajador con detalles completos de tarifa
+      transformedOperation.workerGroups.forEach((group) => {
+        // Encontrar los trabajadores originales para este grupo
+        const originalWorkers = operation.workers.filter(
+          (w) => w.id_group === group.groupId,
+        );
+
+        // Agregar detalles completos de tarifa
+        group.tariffDetails =
+          originalWorkers.length > 0 && originalWorkers[0].tariff
+            ? this.tariffTransformer.transformTariffResponse(
+                originalWorkers[0].tariff,
+              )
+            : null;
+      });
+
+      return transformedOperation;
+    } catch (error) {
+      console.error(`Error finding operation with ID ${operationId}:`, error);
       throw new Error(error.message);
     }
   }

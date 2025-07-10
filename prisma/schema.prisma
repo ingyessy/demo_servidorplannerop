@@ -262,18 +262,19 @@ model SubSite {
 }
 
 model CostCenter {
-  id         Int      @id @default(autoincrement())
-  code       String   @unique
+  id         Int              @id @default(autoincrement())
+  code       String           @unique
   name       String
   id_user    Int
-  user       User     @relation(fields: [id_user], references: [id])
+  user       User             @relation(fields: [id_user], references: [id])
   id_client  Int
-  client     Client   @relation(fields: [id_client], references: [id])
+  client     Client           @relation(fields: [id_client], references: [id])
   id_subsite Int
-  subSite    SubSite  @relation(fields: [id_subsite], references: [id])
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  subSite    SubSite          @relation(fields: [id_subsite], references: [id])
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
   Tariff     Tariff[]
+  status     StatusActivation @default(ACTIVE)
 }
 
 model UnitOfMeasure {
@@ -288,34 +289,44 @@ model UnitOfMeasure {
 }
 
 model Tariff {
-  id                  Int                @id @default(autoincrement())
-  code                String             @unique
-  id_subtask          Int
-  subTask             SubTask            @relation(fields: [id_subtask], references: [id])
-  id_costCenter       Int
-  costCenter          CostCenter         @relation(fields: [id_costCenter], references: [id])
-  id_unidOfMeasure    Int
-  unitOfMeasure       UnitOfMeasure      @relation(fields: [id_unidOfMeasure], references: [id])
-  paysheet_tariff     Decimal            @db.Decimal(10, 2)
-  facturation_tariff  Decimal            @db.Decimal(10, 2)
-  full_tariff         YES_NO
-  compensatory        YES_NO
-  hourly_paid_service YES_NO
-  agreed_hours        Decimal            @db.Decimal(4, 2)
-  OD                  Decimal            @db.Decimal(4, 2)
-  ON                  Decimal            @db.Decimal(4, 2)
-  ED                  Decimal            @db.Decimal(4, 2)
-  EN                  Decimal            @db.Decimal(4, 2)
-  FOD                 Decimal            @db.Decimal(4, 2)
-  FON                 Decimal            @db.Decimal(4, 2)
-  FED                 Decimal            @db.Decimal(4, 2)
-  FEN                 Decimal            @db.Decimal(4, 2)
-  id_user             Int
-  user                User               @relation(fields: [id_user], references: [id])
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
-  status              StatusActivation   @default(ACTIVE)
-  Operation_Worker    Operation_Worker[]
+  id                    Int                @id @default(autoincrement())
+  code                  String             @unique
+  id_subtask            Int
+  subTask               SubTask            @relation(fields: [id_subtask], references: [id])
+  id_costCenter         Int
+  costCenter            CostCenter         @relation(fields: [id_costCenter], references: [id])
+  id_unidOfMeasure      Int
+  unitOfMeasure         UnitOfMeasure      @relation(fields: [id_unidOfMeasure], references: [id])
+  paysheet_tariff       Decimal            @db.Decimal(10, 2)
+  facturation_tariff    Decimal            @db.Decimal(10, 2)
+  full_tariff           YES_NO
+  compensatory          YES_NO
+  hourly_paid_service   YES_NO
+  agreed_hours          Decimal?           @db.Decimal(4, 2)
+  OD                    Decimal            @db.Decimal(4, 2)
+  ON                    Decimal            @db.Decimal(4, 2)
+  ED                    Decimal            @db.Decimal(4, 2)
+  EN                    Decimal            @db.Decimal(4, 2)
+  FOD                   Decimal            @db.Decimal(4, 2)
+  FON                   Decimal            @db.Decimal(4, 2)
+  FED                   Decimal            @db.Decimal(4, 2)
+  FEN                   Decimal            @db.Decimal(4, 2)
+  FAC_OD                Decimal            @db.Decimal(4, 2)
+  FAC_ON                Decimal            @db.Decimal(4, 2)
+  FAC_ED                Decimal            @db.Decimal(4, 2)
+  FAC_EN                Decimal            @db.Decimal(4, 2)
+  FAC_FOD               Decimal            @db.Decimal(4, 2)
+  FAC_FON               Decimal            @db.Decimal(4, 2)
+  FAC_FED               Decimal            @db.Decimal(4, 2)
+  FAC_FEN               Decimal            @db.Decimal(4, 2)
+  UnitOfMesure_Facture  String?
+  UnitOfMesure_Paysheet String?
+  id_user               Int
+  user                  User               @relation(fields: [id_user], references: [id])
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  status                StatusActivation   @default(ACTIVE)
+  Operation_Worker      Operation_Worker[]
 }
 
 model Configuration {
@@ -341,14 +352,22 @@ model Bill {
   total_paysheet    Int
   week_number       Int
   number_of_hours   Int
-  HOD               Decimal   @db.Decimal(4, 2)
-  HON               Decimal   @db.Decimal(4, 2)
-  HED               Decimal   @db.Decimal(4, 2)
-  HEN               Decimal   @db.Decimal(4, 2)
-  HFOD              Decimal   @db.Decimal(4, 2)
-  HFON              Decimal   @db.Decimal(4, 2)
-  HFED              Decimal   @db.Decimal(4, 2)
-  HFEN              Decimal   @db.Decimal(4, 2)
+  HOD               Decimal?  @db.Decimal(4, 2)
+  HON               Decimal?  @db.Decimal(4, 2)
+  HED               Decimal?  @db.Decimal(4, 2)
+  HEN               Decimal?  @db.Decimal(4, 2)
+  HFOD              Decimal?  @db.Decimal(4, 2)
+  HFON              Decimal?  @db.Decimal(4, 2)
+  HFED              Decimal?  @db.Decimal(4, 2)
+  HFEN              Decimal?  @db.Decimal(4, 2)
+  FAC_HOD           Decimal?  @db.Decimal(4, 2)
+  FAC_HON           Decimal?  @db.Decimal(4, 2)
+  FAC_HED           Decimal?  @db.Decimal(4, 2)
+  FAC_HEN           Decimal?  @db.Decimal(4, 2)
+  FAC_HFOD          Decimal?  @db.Decimal(4, 2)
+  FAC_HFON          Decimal?  @db.Decimal(4, 2)
+  FAC_HFED          Decimal?  @db.Decimal(4, 2)
+  FAC_HFEN          Decimal?  @db.Decimal(4, 2)
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
   id_user           Int

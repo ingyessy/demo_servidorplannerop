@@ -31,7 +31,7 @@ import { RolesGuard } from 'src/auth/guards/roles.guard';
 @Controller('client-programming')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @UseInterceptors(SiteInterceptor)
-@Roles(Role.SUPERADMIN, Role.ADMIN)
+@Roles(Role.SUPERADMIN, Role.ADMIN, Role.SUPERVISOR)
 @ApiBearerAuth('access-token')
 export class ClientProgrammingController {
   constructor(

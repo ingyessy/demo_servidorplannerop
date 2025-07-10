@@ -22,12 +22,11 @@ export class OperationTransformerService {
           timeEnd: w.timeEnd || null,
           id_task: w.task ? w.task.id : null,
           task: w.task ? w.task.name : null,
-          id_subtask: w.subTask ? w.subTask.id : null,
-          subtask: w.subTask ? w.subTask.name : null,
-          code_subtask: w.subTask ? w.subTask.code : null,
           id_tariff: w.tariff ? w.tariff.id : null,
           tariff: w.tariff ? w.tariff.subTask.name : null,
           code_tariff: w.tariff ? w.tariff.code : null,
+          id_unit_of_measure: w.tariff ? w.tariff.unitOfMeasure.id : null,
+          unit_of_measure: w.tariff ? w.tariff.unitOfMeasure.name : null,
         },
       })) || [];
 

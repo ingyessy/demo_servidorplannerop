@@ -31,6 +31,7 @@ export class CostCenterService {
           id_subsite: createCostCenterDto.id_subsite,
           id_user: createCostCenterDto.id_user!,
           id_client: createCostCenterDto.id_client,
+          status: createCostCenterDto.status,
         },
       });
       return response;
@@ -86,14 +87,16 @@ export class CostCenterService {
       const validate = await this.validation.validateAllIds({
         id_subsite: updateCostCenterDto.id_subsite,
       });
-      if (
-        validate &&
-        validate?.subsite?.id_site !== updateCostCenterDto.id_site
-      ) {
-        return {
-          message: 'This subsite does not belong to the site',
-          status: 409,
-        };
+      if (updateCostCenterDto.id_site) {
+        if (
+          validate &&
+          validate?.subsite?.id_site !== updateCostCenterDto.id_site
+        ) {
+          return {
+            message: 'This subsite does not belong to the site',
+            status: 409,
+          };
+        }
       }
       const response = await this.prisma.costCenter.update({
         where: { id },

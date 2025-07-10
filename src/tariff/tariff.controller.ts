@@ -63,9 +63,8 @@ export class TariffController {
   @Get(':id')
   async findOne(
     @Param('id', ParseIntPipe) id: number,
-    @CurrentUser('siteId') siteId: number,
   ) {
-    const response = await this.tariffService.findOne(id, siteId);
+    const response = await this.tariffService.findOne(id);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
     }
@@ -80,8 +79,7 @@ export class TariffController {
   ) {
     const response = await this.tariffService.update(
       id,
-      updateTariffDto,
-      siteId,
+      updateTariffDto
     );
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);

@@ -304,6 +304,16 @@ export class OperationController {
     return response;
   }
 
+  @Get('detailsTariff/:id')
+  async getOperationWithDetailedTariffs(@Param('id', ParseIntPipe) id: number) {
+    const response =
+      await this.operationService.getOperationWithDetailedTariffs(id);
+    if (response['status'] === 404) {
+      throw new NotFoundException(response['message']);
+    }
+    return response;
+  }
+
   @Get(':id')
   async findOne(
     @Param('id', ParseIntPipe) id: number,
@@ -347,7 +357,6 @@ export class OperationController {
     @CurrentUser('siteId') siteId: number,
     @CurrentUser('subsiteId') subsiteId: number,
   ) {
-    console.log;
     const response = await this.operationService.remove(
       id,
       isAdmin ? siteId : undefined,

@@ -35,6 +35,7 @@ import { CostCenterModule } from './cost-center/cost-center.module';
 import { UnitOfMeasureModule } from './unit-of-measure/unit-of-measure.module';
 import { TariffModule } from './tariff/tariff.module';
 import { ConfigurationModule } from './configuration/configuration.module';
+import { BillModule } from './bill/bill.module';
 
 @Module({
   imports: [
@@ -69,6 +70,7 @@ import { ConfigurationModule } from './configuration/configuration.module';
     UnitOfMeasureModule,
     TariffModule,
     ConfigurationModule,
+    BillModule,
   ],
   providers: [
     PrismaService,

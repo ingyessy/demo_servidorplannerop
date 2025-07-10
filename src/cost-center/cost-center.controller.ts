@@ -78,6 +78,8 @@ export class CostCenterController {
     );
     if (response['status'] === 404) {
       throw new NotFoundException('Cost center not found');
+    } else if (response['status'] === 409) {
+      throw new ConflictException(response['message']);
     }
     return response;
   }

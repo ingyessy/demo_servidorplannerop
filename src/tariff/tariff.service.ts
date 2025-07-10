@@ -107,6 +107,7 @@ export class TariffService {
       });
       return response;
     } catch (error) {
+      console.error('Error updating tariff:', error);
       throw new Error('Error updating tariff');
     }
   }
@@ -122,6 +123,7 @@ export class TariffService {
       });
       return response;
     } catch (error) {
+      console.error('Error removing tariff:', error);
       throw new Error('Error removing tariff');
     }
   }

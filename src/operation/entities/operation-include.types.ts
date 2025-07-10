@@ -54,7 +54,8 @@ export interface OperationIncludeConfig {
       };
       tariff: { 
         include: { 
-          subTask: boolean 
+          subTask: boolean,
+          unitOfMeasure: boolean, 
         } 
       };
     };
@@ -125,7 +126,7 @@ export function createOperationInclude(): OperationIncludeConfig {
             name: true,
           },
         },
-        tariff: { include: { subTask: true } },
+        tariff: { include: { subTask: true, unitOfMeasure: true } },
       },
     },
     inChargeOperation: {
