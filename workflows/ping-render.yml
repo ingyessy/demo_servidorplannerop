@@ -1,0 +1,29 @@
+name: Keep Render Alive
+
+on:
+  schedule:
+    # Ejecutar cada 15 minutos
+    - cron: '*/15 * * * *'
+  workflow_dispatch:  # Permitir ejecución manual también
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Render App
+        run: |
+          START_DAY=196  # Día juliano desde el cual empieza (ajusta si quieres fecha exacta)
+          MAX_DAYS=20
+          current_day=$(TZ="America/Bogota" date +%j)
+          current_hour=$(TZ="America/Bogota" date +%H)
+
+          if [ "$current_day" -ge "$START_DAY" ] && [ "$current_day" -lt $((START_DAY + MAX_DAYS)) ]; then
+            if [ "$current_hour" -ge 14:23 ] && [ "$current_hour" -lt 22 ]; then
+              curl -s https://demo-servidorplannerop.onrender.com > /dev/null
+              echo "✅ Ping sent to Render"
+            else
+              echo "⏱ Fuera del horario (8am - 10pm) — sin ping"
+            fi
+          else
+            echo "📅 Fuera del rango de 20 días — sin ping"
+          fi
