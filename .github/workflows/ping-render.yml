@@ -19,7 +19,7 @@ jobs:
 
           if [ "$current_day" -ge "$START_DAY" ] && [ "$current_day" -lt $((START_DAY + MAX_DAYS)) ]; then
             if [ "$current_hour" -ge 14:23 ] && [ "$current_hour" -lt 22 ]; then
-              curl -s https://demo-servidorplannerop.onrender.com > /dev/null
+              curl -s https://demo-servidorplannerop.onrender.com/api> /dev/null
               echo "✅ Ping sent to Render"
             else
               echo "⏱ Fuera del horario (8am - 10pm) — sin ping"
