@@ -28,6 +28,8 @@ import { FeedingModule } from './feeding/feeding.module';
 import { InabilityModule } from './inability/inability.module';
 import { PaginationModule } from './common/services/pagination/pagination.module';
 import { ClientProgrammingModule } from './client-programming/client-programming.module';
+import { HealthController } from './health/health.controller'; // Importa aquí
+
 
 @Module({
   imports: [
@@ -54,13 +56,14 @@ import { ClientProgrammingModule } from './client-programming/client-programming
     FeedingModule,
     InabilityModule,
     PaginationModule,
-    ClientProgrammingModule,
+    ClientProgrammingModule
+    
   ],
   providers: [
     PrismaService,
     DocsAuthMiddleware
   ],
-  controllers: [DocsController],
+  controllers: [DocsController, HealthController],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
