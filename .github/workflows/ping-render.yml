@@ -18,11 +18,11 @@ jobs:
           current_hour=$(TZ="America/Bogota" date +%H)
 
           if [ "$current_day" -ge "$START_DAY" ] && [ "$current_day" -lt $((START_DAY + MAX_DAYS)) ]; then
-            if [ "$current_hour" -ge 14:23 ] && [ "$current_hour" -lt 22 ]; then
+            if [ "$current_hour" -ge 8 ] && [ "$current_hour" -lt 18 ]; then
               curl -s https://demo-servidorplannerop.onrender.com/api> /dev/null
               echo "✅ Ping sent to Render"
             else
-              echo "⏱ Fuera del horario (8am - 10pm) — sin ping"
+              echo "⏱ Fuera del horario (8am - 6pm) — sin ping"
             fi
           else
             echo "📅 Fuera del rango de 20 días — sin ping"
