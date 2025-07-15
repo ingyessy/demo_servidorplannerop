@@ -1,0 +1,249 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                Int                 @id @default(autoincrement())
+  dni               String              @unique
+  name              String
+  username          String              @unique
+  password          String
+  phone             String
+  role              Role                @default(ADMIN)
+  occupation        String
+  status            StatusActivation    @default(ACTIVE)
+  calledAttention   CalledAttention[]
+  client            Client[]
+  clientProgramming ClientProgramming[]
+  inChargeOperation InChargeOperation[]
+  inability         Inability[]
+  areas             JobArea[]
+  operation         Operation[]
+  task              Task[]
+  worker            Worker[]
+}
+
+model JobArea {
+  id         Int              @id @default(autoincrement())
+  name       String
+  id_user    Int
+  status     StatusActivation @default(ACTIVE)
+  user       User             @relation(fields: [id_user], references: [id])
+  operations Operation[]
+  workers    Worker[]
+}
+
+model Worker {
+  id               Int                @id @default(autoincrement())
+  dni              String             @unique
+  phone            String?
+  name             String
+  status           Status             @default(AVALIABLE)
+  id_area          Int?
+  createAt         DateTime           @default(now())
+  updateAt         DateTime           @updatedAt
+  id_user          Int
+  code             String             @unique
+  dateDisableEnd   DateTime?
+  dateDisableStart DateTime?
+  dateRetierment   DateTime?
+  hoursWorked      Float              @default(0)
+  failures         Int                @default(0)
+  calledAttention  CalledAttention[]
+  inability        Inability[]
+  operations       Operation_Worker[]
+  jobArea          JobArea?           @relation(fields: [id_area], references: [id])
+  user             User               @relation(fields: [id_user], references: [id])
+  feeding          WorkerFeeding[]
+}
+
+model Operation {
+  id                   Int                 @id @default(autoincrement())
+  status               StatusOperation     @default(PENDING)
+  dateStart            DateTime            @db.Date
+  dateEnd              DateTime?           @db.Date
+  timeStrat            String
+  timeEnd              String?
+  id_user              Int
+  id_area              Int
+  id_task              Int?
+  id_client            Int
+  motorShip            String?
+  zone                 Int
+  createAt             DateTime            @default(now())
+  updateAt             DateTime            @default(now()) @updatedAt
+  id_clientProgramming Int?
+  inChargeOperation    InChargeOperation[]
+  jobArea              JobArea             @relation(fields: [id_area], references: [id])
+  clientProgramming    ClientProgramming?  @relation(fields: [id_clientProgramming], references: [id])
+  client               Client              @relation(fields: [id_client], references: [id])
+  task                 Task?               @relation(fields: [id_task], references: [id])
+  user                 User                @relation(fields: [id_user], references: [id])
+  workers              Operation_Worker[]
+  feeding              WorkerFeeding[]
+}
+
+model Operation_Worker {
+  id           Int       @id @default(autoincrement())
+  id_operation Int
+  id_worker    Int
+  dateEnd      DateTime? @db.Date
+  dateStart    DateTime? @db.Date
+  timeEnd      String?
+  timeStart    String?
+  id_group     String?
+  id_task      Int?
+  operation    Operation @relation(fields: [id_operation], references: [id])
+  task         Task?     @relation(fields: [id_task], references: [id])
+  worker       Worker    @relation(fields: [id_worker], references: [id])
+}
+
+model Task {
+  id               Int                @id @default(autoincrement())
+  name             String             @unique
+  id_user          Int
+  status           StatusActivation   @default(ACTIVE)
+  operations       Operation[]
+  operation_Worker Operation_Worker[]
+  user             User               @relation(fields: [id_user], references: [id])
+}
+
+model Client {
+  id         Int              @id @default(autoincrement())
+  name       String
+  id_user    Int
+  status     StatusActivation @default(ACTIVE)
+  user       User             @relation(fields: [id_user], references: [id])
+  operations Operation[]
+}
+
+model CalledAttention {
+  id          Int       @id @default(autoincrement())
+  description String?
+  id_user     Int
+  id_worker   Int
+  type        Failures?
+  createAt    DateTime  @default(now())
+  user        User      @relation(fields: [id_user], references: [id])
+  worker      Worker    @relation(fields: [id_worker], references: [id])
+}
+
+model InChargeOperation {
+  id           Int       @id @default(autoincrement())
+  id_user      Int
+  id_operation Int
+  operation    Operation @relation(fields: [id_operation], references: [id])
+  user         User      @relation(fields: [id_user], references: [id])
+}
+
+model WorkerFeeding {
+  id           Int           @id @default(autoincrement())
+  id_worker    Int
+  id_operation Int
+  dateFeeding  DateTime      @db.Date
+  type         FeedingStatus
+  createAt     DateTime      @default(now())
+  updateAt     DateTime      @updatedAt
+  operation    Operation     @relation(fields: [id_operation], references: [id])
+  worker       Worker        @relation(fields: [id_worker], references: [id])
+}
+
+model Inability {
+  id               Int             @id @default(autoincrement())
+  dateDisableStart DateTime
+  dateDisableEnd   DateTime
+  type             TypeDisability
+  cause            CauseDisability
+  id_worker        Int
+  createAt         DateTime        @default(now())
+  id_user          Int
+  updateAt         DateTime        @updatedAt
+  user             User            @relation(fields: [id_user], references: [id])
+  worker           Worker          @relation(fields: [id_worker], references: [id])
+}
+
+model ClientProgramming {
+  id              Int            @id @default(autoincrement())
+  service_request String
+  service         String
+  dateStart       DateTime       @db.Date
+  timeStart       String
+  ubication       String
+  client          String
+  status          StatusComplete @default(UNASSIGNED)
+  id_user         Int
+  user            User           @relation(fields: [id_user], references: [id])
+  operations      Operation[]
+}
+
+model Site {
+  id       Int              @id @default(autoincrement())
+  name     String           @unique
+  status   StatusActivation @default(ACTIVE)
+  createAt DateTime         @default(now())
+  updateAt DateTime
+}
+
+enum TypeDisability {
+  INITIAL
+  EXTENSION
+}
+
+enum CauseDisability {
+  LABOR
+  TRANSIT
+  DISEASE
+}
+
+enum FeedingStatus {
+  BREAKFAST
+  LUNCH
+  DINNER
+  SNACK
+}
+
+enum Role {
+  ADMIN
+  SUPERADMIN
+  GH
+  SUPERVISOR
+}
+
+enum Status {
+  AVALIABLE
+  ASSIGNED
+  UNAVALIABLE
+  DEACTIVATED
+  DISABLE
+}
+
+enum StatusOperation {
+  PENDING
+  INPROGRESS
+  COMPLETED
+  CANCELED
+  DEACTIVATED
+}
+
+enum Failures {
+  INASSISTANCE
+  IRRESPECTFUL
+  ABANDONMENT
+}
+
+enum StatusComplete {
+  COMPLETED
+  INCOMPLETE
+  UNASSIGNED
+  ASSIGNED
+}
+
+enum StatusActivation {
+  ACTIVE
+  INACTIVE
+}
