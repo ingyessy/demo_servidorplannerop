@@ -19,13 +19,13 @@ model User {
   status            StatusActivation    @default(ACTIVE)
   calledAttention   CalledAttention[]
   client            Client[]
+  clientProgramming ClientProgramming[]
   inChargeOperation InChargeOperation[]
   inability         Inability[]
   areas             JobArea[]
   operation         Operation[]
   task              Task[]
   worker            Worker[]
-  clientProgramming ClientProgramming[]
 }
 
 model JobArea {
@@ -73,16 +73,16 @@ model Operation {
   id_area              Int
   id_task              Int?
   id_client            Int
-  id_clientProgramming Int?
   motorShip            String?
   zone                 Int
   createAt             DateTime            @default(now())
   updateAt             DateTime            @default(now()) @updatedAt
+  id_clientProgramming Int?
   inChargeOperation    InChargeOperation[]
   jobArea              JobArea             @relation(fields: [id_area], references: [id])
   clientProgramming    ClientProgramming?  @relation(fields: [id_clientProgramming], references: [id])
   client               Client              @relation(fields: [id_client], references: [id])
-  task                 Task?                @relation(fields: [id_task], references: [id])
+  task                 Task?               @relation(fields: [id_task], references: [id])
   user                 User                @relation(fields: [id_user], references: [id])
   workers              Operation_Worker[]
   feeding              WorkerFeeding[]
@@ -98,8 +98,8 @@ model Operation_Worker {
   timeStart    String?
   id_group     String?
   id_task      Int?
-  task         Task?     @relation(fields: [id_task], references: [id])
   operation    Operation @relation(fields: [id_operation], references: [id])
+  task         Task?     @relation(fields: [id_task], references: [id])
   worker       Worker    @relation(fields: [id_worker], references: [id])
 }
 
@@ -109,8 +109,8 @@ model Task {
   id_user          Int
   status           StatusActivation   @default(ACTIVE)
   operations       Operation[]
-  user             User               @relation(fields: [id_user], references: [id])
   operation_Worker Operation_Worker[]
+  user             User               @relation(fields: [id_user], references: [id])
 }
 
 model Client {
@@ -179,6 +179,14 @@ model ClientProgramming {
   id_user         Int
   user            User           @relation(fields: [id_user], references: [id])
   operations      Operation[]
+}
+
+model Site {
+  id       Int              @id @default(autoincrement())
+  name     String           @unique
+  status   StatusActivation @default(ACTIVE)
+  createAt DateTime         @default(now())
+  updateAt DateTime
 }
 
 enum TypeDisability {

@@ -61,6 +61,7 @@ import { ClientProgrammingModule } from './client-programming/client-programming
     DocsAuthMiddleware
   ],
   controllers: [DocsController],
+  exports: [PrismaService],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
