@@ -33,6 +33,7 @@ export class PaginateOperationService {
         transformer
       } = options;
 
+
       return await this.paginationService.paginateEntity<T, OperationFilterDto>({
         prisma,
         entity: 'operation',

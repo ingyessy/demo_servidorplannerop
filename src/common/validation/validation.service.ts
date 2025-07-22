@@ -27,6 +27,7 @@ export class ValidationService {
     allTaskIds,
     inChargedIds,
     phone_worker,
+    code_tariff
   }: {
     id_user?: number;
     id_area?: number;
@@ -34,6 +35,7 @@ export class ValidationService {
     id_client?: number;
     id_subsite?: number;
     id_subtask?: number;
+    code_tariff?: string;
     id_costCenter?: number;
     id_unidOfMeasure?: number;
     id_operation?: number;
@@ -324,6 +326,18 @@ export class ValidationService {
           );
           return { message: 'Payroll code already exists', status: 409 };
         }
+      }
+
+      // 17. Validar código de tarifa si se proporciona
+      if (code_tariff !== undefined) {
+        const existingTarrifCode = await this.prisma.tariff.findUnique({
+          where: { code: code_tariff },
+        });
+
+        if (existingTarrifCode) {
+          return { message: 'Tariff code already exists', status: 409 };
+        }
+        
       }
 
       return response;

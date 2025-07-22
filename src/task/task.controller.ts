@@ -24,6 +24,7 @@ import { SiteInterceptor } from 'src/common/interceptors/site.interceptor';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { Role } from '@prisma/client';
+import { sub } from 'date-fns';
 
 @Controller('task')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -72,15 +73,19 @@ export class TaskController {
 
   @Get()
   @Roles(Role.SUPERVISOR, Role.ADMIN, Role.SUPERADMIN)
-  findAll(@CurrentUser('siteId') siteId: number) {
-    return this.taskService.findAll(siteId);
+  findAll(@CurrentUser('siteId') siteId: number, @CurrentUser('subsiteId') subsiteId: number) {
+    if (!siteId || !subsiteId) {
+      throw new ConflictException('Site ID and Subsite ID are required');
+    }
+    return this.taskService.findAll(siteId, subsiteId);
   }
   @Get('by-name/:name')
   async findByName(
     @Param('name') name: string,
     @CurrentUser('siteId') siteId: number,
+    @CurrentUser('subsiteId') subsiteId: number,
   ) {
-    const response = await this.taskService.findOneTaskName(name, siteId);
+    const response = await this.taskService.findOneTaskName(name, siteId, subsiteId);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
     }

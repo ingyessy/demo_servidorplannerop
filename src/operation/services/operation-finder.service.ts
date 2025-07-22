@@ -8,7 +8,7 @@ import {
   createOperationInclude,
   OperationIncludeConfig,
 } from '../entities/operation-include.types';
-import { TariffTransformerService } from 'src/tariff/service/tariff-transformer.service';
+import { ITransformTariff, TariffTransformerService } from 'src/tariff/service/tariff-transformer.service';
 import { createTariffInclude } from '../../tariff/entities/tariff-include.types';
 
 /**
@@ -269,7 +269,7 @@ export class OperationFinderService {
         group.tariffDetails =
           originalWorkers.length > 0 && originalWorkers[0].tariff
             ? this.tariffTransformer.transformTariffResponse(
-                originalWorkers[0].tariff,
+                originalWorkers[0].tariff as unknown as ITransformTariff,
               )
             : null;
       });

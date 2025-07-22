@@ -44,6 +44,7 @@ export interface OperationIncludeConfig {
         select: {
           id: boolean;
           name: boolean;
+          dni: boolean;
         };
       };
       task: {
@@ -56,6 +57,7 @@ export interface OperationIncludeConfig {
         include: { 
           subTask: boolean,
           unitOfMeasure: boolean, 
+          facturationUnit: boolean
         } 
       };
     };
@@ -118,6 +120,7 @@ export function createOperationInclude(): OperationIncludeConfig {
           select: {
             id: true,
             name: true,
+            dni: true
           },
         },
         task: {
@@ -126,7 +129,7 @@ export function createOperationInclude(): OperationIncludeConfig {
             name: true,
           },
         },
-        tariff: { include: { subTask: true, unitOfMeasure: true } },
+        tariff: { include: { subTask: true, unitOfMeasure: true, facturationUnit: true } },
       },
     },
     inChargeOperation: {

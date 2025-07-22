@@ -33,6 +33,7 @@ export class InabilityService {
         data: { ...createInabilityDto },
       });
 
+
       return response;
     } catch (error) {
       throw new Error(`Error creating inability: ${error}`);

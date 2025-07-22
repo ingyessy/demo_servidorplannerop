@@ -24,6 +24,12 @@ export class CreateTariffDto {
   @Type(() => Number)
   id_unidOfMeasure: number;
 
+  @ApiProperty({ example: '1' })
+  @IsNumber()
+  @Type(() => Number)
+  @IsOptional()
+  id_facturation_unit?: number;
+
   @ApiProperty({ example: '100.00' })
   @IsNumber()
   @Type(() => Number)
@@ -48,9 +54,21 @@ export class CreateTariffDto {
 
   @ApiProperty({ example: `${Object.values(YES_NO).join(', ')}` })
   @IsEnum(YES_NO, {
-    message: `hourly_paid_service debe ser uno de los siguientes valores: ${Object.values(YES_NO).join(', ')}`,
+    message: `alternative_paid_service debe ser uno de los siguientes valores: ${Object.values(YES_NO).join(', ')}`,
   })
-  hourly_paid_service: YES_NO;
+  alternative_paid_service: YES_NO;
+
+  @ApiProperty({ example: `${Object.values(YES_NO).join(', ')}` })
+  @IsEnum(YES_NO, {
+    message: `settle_payment debe ser uno de los siguientes valores: ${Object.values(YES_NO).join(', ')}`,
+  })
+  settle_payment: YES_NO;
+
+  @ApiProperty({ example: `${Object.values(YES_NO).join(', ')}` })
+  @IsEnum(YES_NO, {
+    message: `group_tariff debe ser uno de los siguientes valores: ${Object.values(YES_NO).join(', ')}`,
+  })
+  group_tariff: YES_NO;
 
   @ApiProperty({ example: '16.56' })
   @IsNumber()

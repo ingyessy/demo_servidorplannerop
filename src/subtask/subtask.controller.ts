@@ -51,7 +51,7 @@ export class SubtaskController {
     @CurrentUser('isSuperAdmin') isSuperAdmin: boolean,
   ) {
     const response = await this.subtaskService.findAll(
-      !isSuperAdmin ? siteId : undefined,
+       siteId,
     );
     if (response['status'] === 404) {
       throw new NotFoundException('No subtasks found');

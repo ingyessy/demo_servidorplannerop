@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { CreateSubtaskDto } from './dto/create-subtask.dto';
 import { UpdateSubtaskDto } from './dto/update-subtask.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -45,6 +45,9 @@ export class SubtaskService {
     try {
       const response = await this.prisma.subTask.findMany({
         where: { task: { id_site } },
+        include: {
+          Tariff: true,
+        }
       });
       if (!response || response.length === 0) {
         return { status: 404, message: 'No subtasks found' };
@@ -86,15 +89,43 @@ export class SubtaskService {
           };
         }
       }
+      const foundSubtask = await this.prisma.subTask.findFirst({
+        where: { id, task: { id_site } },
+      });
+
+      if (!foundSubtask) {
+        return { status: 404, message: 'Subtask not found' };
+      }
+
       const response = await this.prisma.subTask.update({
         where: { id },
         data: {
           ...updateSubtaskDto,
         },
       });
+
+
+
+      if (updateSubtaskDto.code) {
+        const validationCode = await this.validation.validateAllIds({
+          code_tariff: updateSubtaskDto.code,
+        });
+
+        if (validationCode.status === 409) {
+          throw new ConflictException(validationCode.message);
+        }
+
+        await this.prisma.tariff.update({
+          where: { code: foundSubtask.code },
+          data: {
+            code: updateSubtaskDto.code,
+          },
+        });
+      }
+
       return response;
     } catch (error) {
-      throw new Error('Error updating subtask');
+      throw error;
     }
   }
 

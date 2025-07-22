@@ -5,10 +5,11 @@ import {
 } from '../entities/worker-group-analysis.types';
 import { getWeekNumber } from 'src/common/utils/dateType';
 import { ConfigurationService } from 'src/configuration/configuration.service';
+import { PrismaService } from 'src/prisma/prisma.service';
 
 @Injectable()
 export class WorkerGroupAnalysisService {
-  constructor(private configurationService: ConfigurationService) {}
+  constructor(private configurationService: ConfigurationService, private prisma: PrismaService) {}
 
   async configurationCompensatory() {
     const configuration =
@@ -33,7 +34,8 @@ export class WorkerGroupAnalysisService {
     }
     const valueCompensatory = await this.configurationCompensatory();
     console.log(valueCompensatory, 'valueCompensatory');
-    return workerGroups.map((group) => ({
+    return workerGroups.map((group) => {
+     return  ({
       groupId: group.groupId,
       site: group.tariffDetails?.costCenter.subSite.site.name || null,
       subSite: group.tariffDetails?.costCenter.subSite.name || null,
@@ -41,6 +43,8 @@ export class WorkerGroupAnalysisService {
       id_unit_of_measure: group.schedule?.id_unit_of_measure || null,
       unit_of_measure: group.schedule?.unit_of_measure || null,
       code_tariff: group.schedule?.code_tariff || null,
+        id_facturation_unit: group.tariffDetails?.facturationUnit?.id ?? null, 
+      facturation_unit: group.tariffDetails?.facturationUnit?.name ?? null,  
       tariff: group.schedule?.tariff || null,
       id_tariff: group.schedule?.id_tariff || null,
       workerCount: group.workers?.length || 0,
@@ -50,7 +54,9 @@ export class WorkerGroupAnalysisService {
       week_number: getWeekNumber(group.schedule?.dateStart) || undefined,
       full_tariff: group.tariffDetails?.full_tariff || false,
       compensatory: group.tariffDetails?.compensatory || false,
-      hourly_paid_service: group.tariffDetails?.hourly_paid_service || false,
+      alternative_paid_service: group.tariffDetails?.alternative_paid_service || false,
+      group_tariff: group.tariffDetails?.group_tariff || false,
+      settle_payment: group.tariffDetails?.settle_payment || false,
       hours: group.tariffDetails?.hours,
       dateRange: {
         start: group.schedule?.dateStart || null,
@@ -60,7 +66,9 @@ export class WorkerGroupAnalysisService {
         start: group.schedule?.timeStart || null,
         end: group.schedule?.timeEnd || null,
       },
-    }));
+      workers: group.workers || [],
+    })
+    });
   }
 
   /**
@@ -103,7 +111,7 @@ export class WorkerGroupAnalysisService {
     criteria: Partial<WorkerGroupSummary>,
   ): Promise<WorkerGroupSummary[]> {
     const groups = await this.summarizeWorkerGroups(workerGroups);
-
+    
     return groups.filter((group) => {
       return Object.entries(criteria).every(([key, value]) => {
         // Manejar propiedades anidadas como dateRange.start

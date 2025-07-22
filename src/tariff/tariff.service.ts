@@ -35,6 +35,7 @@ export class TariffService {
       });
       return response;
     } catch (error) {
+      console.error('Error creating tariff:', error);
       if (error.code === 'P2002') {
         const target = error.meta?.target;
         const fieldName = Array.isArray(target) ? target[0] : target;
@@ -53,7 +54,7 @@ export class TariffService {
     }
   }
 
-  async findAll(id_subsite?: number) {
+  async findAll(id_subsite: number) {
     try {
       const response = await this.prisma.tariff.findMany({
         where: {
@@ -103,7 +104,9 @@ export class TariffService {
       }
       const response = await this.prisma.tariff.update({
         where: { id },
-        data: updateTariffDto,
+        data: {
+          ...updateTariffDto
+        },
       });
       return response;
     } catch (error) {

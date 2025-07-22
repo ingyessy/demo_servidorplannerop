@@ -168,12 +168,13 @@ export class WorkerService {
       const validation = await this.validationService.validateAllIds({
         id_area: updateWorkerDto.id_area,
       });
-      if (validation['area'].id_site !== id_site) {
-        return {
-          message: 'Not authorized to update worker in this area',
-          status: 409,
-        };
-      }
+
+      // if (validation['area'].id_site !== id_site) {
+      //   return {
+      //     message: 'Not authorized to update worker in this site',
+      //     status: 409,
+      //   };
+      // }
       const response = await this.prisma.worker.update({
         where: { id, id_site },
         data: updateWorkerDto,

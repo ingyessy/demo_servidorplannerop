@@ -32,6 +32,26 @@ export class ConfigurationService {
     }
   }
 
+  async findOneByName(name: string): Promise<any> {
+    try {
+      const response = await this.prisma.configuration.findFirst({
+        where: {
+          name: {
+            equals: name,
+            mode: 'insensitive',
+          },
+        },
+      });
+      if (!response) {
+        return { message: 'Configuration not found', status: 404 };
+      }
+      return response;
+    } catch (error) {
+      console.error('Error fetching configuration by name:', error);
+      throw new Error('Error fetching configuration by name');
+    }
+  }
+
   async findOne(id: number) {
     try {
       const response = await this.prisma.configuration.findUnique({

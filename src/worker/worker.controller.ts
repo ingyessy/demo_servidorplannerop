@@ -127,13 +127,13 @@ export class WorkerController {
     @CurrentUser('isSupervisor') isSupervisor: boolean,
   ) {
     const validateId = await this.workerService.findOne(id, siteId);
-    if (validateId['id_site'] !== updateWorkerDto.id_site) {
+    if (validateId['id_site'] !== siteId) {
       throw new ForbiddenException(
         `You can only update workers in your site (${siteId})`,
       );
     }
 
-    if(isSupervisor && validateId['id_subsite'] !== updateWorkerDto.id_subsite) {
+    if(isSupervisor && validateId['id_subsite'] !== subsiteId) {
       throw new ForbiddenException(
         `You can only update workers in your subsite (${subsiteId})`,
       );
@@ -143,9 +143,9 @@ export class WorkerController {
     }
     const response = await this.workerService.update(id, updateWorkerDto, siteId);
 
-    if (response['status'] === 409) {
-      throw new ConflictException(response['message']);
-    }
+    // if (response['status'] === 409) {
+    //   throw new ConflictException(response['message']);
+    // }
 
     return response;
   }

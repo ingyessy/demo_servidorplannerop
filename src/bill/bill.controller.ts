@@ -9,6 +9,7 @@ import {
   UseGuards,
   UseInterceptors,
   NotFoundException,
+  ConflictException,
 } from '@nestjs/common';
 import { BillService } from './bill.service';
 import { CreateBillDto } from './dto/create-bill.dto';
@@ -20,32 +21,43 @@ import { SiteInterceptor } from 'src/common/interceptors/site.interceptor';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { Role } from '@prisma/client';
 import { ParseIntPipe } from 'src/pipes/parse-int/parse-int.pipe';
+import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 
 @Controller('bill')
-@UseGuards(JwtAuthGuard, RolesGuard)
 @UseInterceptors(SiteInterceptor)
-@Roles(Role.SUPERADMIN, Role.ADMIN)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Role.SUPERVISOR, Role.ADMIN, Role.SUPERADMIN)
 @ApiBearerAuth('access-token')
 export class BillController {
   constructor(private readonly billService: BillService) {}
 
   @Post()
-  async create(@Body() createBillDto: CreateBillDto) {
-    const response = await this.billService.create(createBillDto);
+  async create(
+    @CurrentUser('userId') userId: number,
+    @Body() createBillDto: CreateBillDto) {
+    const response = await this.billService.create(createBillDto, userId);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
+    }
+    if (response['status'] === 409) {
+      throw new ConflictException(response['message']);
     }
     return response;
   }
 
   @Get()
-  findAll() {
-    return this.billService.findAll();
+  async findAll() {
+    const bills = await this.billService.findAll();
+    return bills;
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.billService.findOne(id);
+  async findOne(@Param('id', ParseIntPipe) id: number) {
+    const bill = await this.billService.findOne(id);
+    if (!bill) {
+      throw new NotFoundException(`Bill with ID ${id} not found`);
+    }
+    return bill;
   }
 
   @Patch(':id')

@@ -7,6 +7,8 @@ import { OperationModule } from 'src/operation/operation.module';
 import { WorkerGroupAnalysisService } from './services/worker-group-analysis.service';
 import { PayrollCalculationService } from './services/payroll-calculation.service';
 import { ConfigurationModule } from 'src/configuration/configuration.module';
+import { HoursCalculationService } from './services/hours-calculation.service';
+import { BaseCalculationService } from './services/base-calculation.service';
 
 @Module({
   imports: [AuthModule, OperationModule, ConfigurationModule],
@@ -16,6 +18,8 @@ import { ConfigurationModule } from 'src/configuration/configuration.module';
     PrismaService,
     WorkerGroupAnalysisService,
     PayrollCalculationService,
+    HoursCalculationService,
+    BaseCalculationService
   ],
 })
 export class BillModule {}

@@ -67,8 +67,12 @@ export interface AdditionalHours {
 export interface WorkerGroupSummary {
   groupId: string;
   task: string;
+  site: string | null;
+  subSite: string | null;
   id_unit_of_measure: number | null;
   unit_of_measure: string | null;
+  id_facturation_unit: number | null;
+  facturation_unit: string | null;
   code_tariff: string | null;
   tariff: string | null;
   id_tariff: number | null;
@@ -78,6 +82,11 @@ export interface WorkerGroupSummary {
   agreed_hours?: number;
   hours?: any;
   week_number?: number;
+  full_tariff: string | undefined;
+  compensatory: string | undefined;
+  alternative_paid_service: string | undefined;
+  group_tariff: string | undefined;
+  settle_payment: string | undefined;
   dateRange: {
     start: string | null;
     end: string | null;
@@ -86,6 +95,7 @@ export interface WorkerGroupSummary {
     start: string | null;
     end: string | null;
   };
+  workers: any[];
 }
 
 /**

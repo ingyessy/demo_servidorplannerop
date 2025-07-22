@@ -128,6 +128,7 @@ model Operation_Worker {
   task         Task?     @relation(fields: [id_task], references: [id])
   operation    Operation @relation(fields: [id_operation], references: [id])
   worker       Worker    @relation(fields: [id_worker], references: [id])
+  billDetail   BillDetail[]
 }
 
 model Task {
@@ -286,7 +287,8 @@ model UnitOfMeasure {
   user      User             @relation(fields: [id_user], references: [id])
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
-  Tariff    Tariff[]
+  Tariff    Tariff[] @relation("FacturationUnit")
+  paysheetUnit Tariff[] @relation("PaysheetUnit")
 }
 
 model Tariff {
@@ -296,13 +298,18 @@ model Tariff {
   subTask               SubTask            @relation(fields: [id_subtask], references: [id])
   id_costCenter         Int
   costCenter            CostCenter         @relation(fields: [id_costCenter], references: [id])
-  id_unidOfMeasure      Int
-  unitOfMeasure         UnitOfMeasure      @relation(fields: [id_unidOfMeasure], references: [id])
+  id_unidOfMeasure      Int // Si elije facturar por otra unidad de medida esta es por defecto la de nomina
+  unitOfMeasure         UnitOfMeasure      @relation("PaysheetUnit", fields: [id_unidOfMeasure], references: [id])
+  id_facturation_unit   Int?
+  facturationUnit       UnitOfMeasure?     @relation("FacturationUnit", fields: [id_facturation_unit], references: [id])
   paysheet_tariff       Decimal            @db.Decimal(10, 2)
   facturation_tariff    Decimal            @db.Decimal(10, 2)
   full_tariff           YES_NO
   compensatory          YES_NO
-  hourly_paid_service   YES_NO
+  alternative_paid_service   YES_NO
+  group_tariff          YES_NO             @default(NO)
+  settle_payment        YES_NO             @default(NO)
+  pay_units            Decimal?           @db.Decimal(4, 2)
   agreed_hours          Decimal?           @db.Decimal(4, 2)
   OD                    Decimal            @db.Decimal(4, 2)
   ON                    Decimal            @db.Decimal(4, 2)
@@ -320,14 +327,13 @@ model Tariff {
   FAC_FON               Decimal            @db.Decimal(4, 2)
   FAC_FED               Decimal            @db.Decimal(4, 2)
   FAC_FEN               Decimal            @db.Decimal(4, 2)
-  UnitOfMesure_Facture  String?
-  UnitOfMesure_Paysheet String?
   id_user               Int
   user                  User               @relation(fields: [id_user], references: [id])
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @updatedAt
   status                StatusActivation   @default(ACTIVE)
   Operation_Worker      Operation_Worker[]
+  bills                 Bill[]
 }
 
 model Configuration {
@@ -347,12 +353,14 @@ model Bill {
   id                Int       @id @default(autoincrement())
   id_operation      Int
   operation         Operation @relation(fields: [id_operation], references: [id])
+  id_tariff         Int
+  tariff            Tariff    @relation(fields: [id_tariff], references: [id])
   amount            Int
   number_of_workers Int
-  total_bill        Int
-  total_paysheet    Int
+  total_bill        Decimal   @db.Decimal(10, 2)
+  total_paysheet    Decimal   @db.Decimal(10, 2)
   week_number       Int
-  number_of_hours   Int
+  number_of_hours   Decimal?  @db.Decimal(4, 2)
   HOD               Decimal?  @db.Decimal(4, 2)
   HON               Decimal?  @db.Decimal(4, 2)
   HED               Decimal?  @db.Decimal(4, 2)
@@ -366,6 +374,7 @@ model Bill {
   FAC_HED           Decimal?  @db.Decimal(4, 2)
   FAC_HEN           Decimal?  @db.Decimal(4, 2)
   FAC_HFOD          Decimal?  @db.Decimal(4, 2)
+  id_group         String?
   FAC_HFON          Decimal?  @db.Decimal(4, 2)
   FAC_HFED          Decimal?  @db.Decimal(4, 2)
   FAC_HFEN          Decimal?  @db.Decimal(4, 2)
@@ -373,6 +382,23 @@ model Bill {
   updatedAt         DateTime  @updatedAt
   id_user           Int
   user              User      @relation(fields: [id_user], references: [id])
+  billDetails       BillDetail[]
+  group_hours       Int?
+  observation       String?
+}
+
+model BillDetail {
+  id              Int       @id @default(autoincrement())
+  id_bill         Int
+  bill           Bill      @relation(fields: [id_bill], references: [id])
+  id_operation_worker Int
+  operationWorker Operation_Worker @relation(fields: [id_operation_worker], references: [id])
+  pay_unit            Decimal?           @db.Decimal(4, 2)
+  pay_rate           Decimal?           @db.Decimal(4, 2)
+  total_bill        Decimal?           @db.Decimal(10, 2)
+  total_paysheet    Decimal?           @db.Decimal(10, 2)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 }
 
 enum TypeValueConfiguration {

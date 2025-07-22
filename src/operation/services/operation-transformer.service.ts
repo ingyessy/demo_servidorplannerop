@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { id } from 'date-fns/locale';
 
 @Injectable()
 export class OperationTransformerService {
@@ -7,9 +8,11 @@ export class OperationTransformerService {
     const { id_area, id_task, workers, inChargeOperation, ...rest } = operation;
     // Transformar trabajadores incluyendo el groupId
     const workersWithSchedule =
-      workers?.map((w) => ({
+      workers?.map((w) => {
+        return ({
         id: w.id_worker,
         name: w.worker.name,
+        dni: w.worker.dni,
         groupId: w.id_group, // Incluir el ID del grupo
         schedule: {
           dateStart: w.dateStart
@@ -27,8 +30,11 @@ export class OperationTransformerService {
           code_tariff: w.tariff ? w.tariff.code : null,
           id_unit_of_measure: w.tariff ? w.tariff.unitOfMeasure.id : null,
           unit_of_measure: w.tariff ? w.tariff.unitOfMeasure.name : null,
+          // facturation_unit: w.tariff ? w.tariff.facturationUnit.name : null,
+          // id_facturation_unit: w.tariff ? w.tariff.facturationUnit.id : null
         },
-      })) || [];
+      });
+      }) || [];
 
     const inCharge =
       inChargeOperation?.map((ic) => ({
@@ -67,6 +73,7 @@ export class OperationTransformerService {
       groupedByGroupId[groupId].workers.push({
         id: workerData.id,
         name: workerData.name,
+        dni: workerData.dni,
       });
     });
 

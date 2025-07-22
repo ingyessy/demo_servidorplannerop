@@ -79,7 +79,8 @@ export class TariffController {
   ) {
     const response = await this.tariffService.update(
       id,
-      updateTariffDto
+      updateTariffDto,
+      siteId
     );
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);

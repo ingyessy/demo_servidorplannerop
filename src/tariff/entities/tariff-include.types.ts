@@ -18,6 +18,7 @@ export interface TariffIncludeConfig {
     };
   };
   unitOfMeasure: boolean;
+  facturationUnit: boolean;
   user: boolean;
 }
 
@@ -43,6 +44,7 @@ export function createTariffInclude(): TariffIncludeConfig {
       }
     },
     unitOfMeasure: true,
+    facturationUnit: true,
     user: true
   };
 }
