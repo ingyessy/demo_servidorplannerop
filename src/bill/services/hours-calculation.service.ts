@@ -22,6 +22,7 @@ export interface ProcessHoursGroupsResult {
     compensatoryBill: CompensatoryResult;
     compensatoryPayroll: CompensatoryResult;
   };
+  workers: any[]; // Assuming this is an array of worker objects
 }
 
 export interface HoursDistributionResult {
@@ -164,10 +165,11 @@ export class HoursCalculationService {
         compensatoryBill: { hours: compBill, amount: totalCompBill },
         compensatoryPayroll: { hours: compPayroll, amount: totalCompPayroll },
       },
+      workers: combinedGroupData.workers || [],
     };
   }
 
-    public calculateAlternativeService(group: WorkerGroupSummary, groupBill: GroupBillDto) {
+     public async  calculateAlternativeService(group: WorkerGroupSummary, groupBill: GroupBillDto) {
     // Nómina (paysheet)
     let paysheetTotal = 0;
     if (group.unit_of_measure !== 'HORAS' && group.unit_of_measure !== 'JORNAL') {
@@ -201,7 +203,9 @@ export class HoursCalculationService {
   
     return {
       paysheetTotal,
-      billingTotal
+      billingTotal,
+      groupId: group.groupId,
+      workers: group.workers || [],
     };
   }
 }

@@ -6,7 +6,6 @@ import { OperationFinderService } from 'src/operation/services/operation-finder.
 import { WorkerGroupAnalysisService } from './services/worker-group-analysis.service';
 import { PayrollCalculationService } from './services/payroll-calculation.service';
 import { HoursCalculationService } from './services/hours-calculation.service';
-import { group } from 'console';
 
 @Injectable()
 export class BillService {
@@ -148,8 +147,8 @@ export class BillService {
             data: {
               id_bill: billSaved.id,
               id_operation_worker: operationWorker.id,
-              pay_rate: payWorker?.pay || 0,
-              pay_unit: payWorker?.pay || 0,
+              pay_rate: payWorker?.pay || 1,
+              pay_unit: payWorker?.pay || 1,
               total_bill: totalFacturactionWorker,
               total_paysheet: totalPaysheetWorker,
             },
@@ -277,16 +276,41 @@ export class BillService {
             );
           }
 
-          console.log('Calculando total para el trabajador:', group);
+
+
+          const groupDto = createBillDto.groups.find(g => g.id === result.groupId);
+          if (!groupDto) {
+            throw new ConflictException(
+              `No se encontró el grupo con ID: ${result.groupId}`,
+            );
+          }
+
+          const totalPaysheetWorker = this.calculateTotalWorker(
+            result.totalFinalPayroll,
+            groupDto,
+            worker,
+            result.workers,
+          );
+
+          const totalFacturactionWorker = this.calculateTotalWorker(
+            result.totalFinalFacturation,
+            groupDto,
+            worker,
+            result.workers,
+          );
+
+          const payWorker = groupDto.pays.find(
+            (p) => p.id_worker === worker.id,
+          );
 
           await this.prisma.billDetail.create({
             data: {
               id_bill: billSaved.id,
               id_operation_worker: operationWorker.id,
-              pay_rate: 0,
-              pay_unit: 0,
-              total_bill: result.totalFinalFacturation,
-              total_paysheet: result.totalFinalPayroll,
+              pay_rate: payWorker?.pay || 1,
+              pay_unit: payWorker?.pay || 1,
+              total_bill: totalFacturactionWorker,
+              total_paysheet: totalPaysheetWorker,
             },
           });
         }
@@ -348,14 +372,41 @@ export class BillService {
             );
           }
 
+
+
+          const groupDto = createBillDto.groups.find(g => g.id === result.groupId);
+          if (!groupDto) {
+            throw new ConflictException(
+              `No se encontró el grupo con ID: ${result.groupId}`,
+            );
+          }
+
+          const totalPaysheetWorker = this.calculateTotalWorker(
+            result.paysheetTotal,
+            groupDto,
+            worker,
+            result.workers,
+          );
+
+          const totalFacturactionWorker = this.calculateTotalWorker(
+            result.billingTotal,
+            groupDto,
+            worker,
+            result.workers,
+          );
+
+          const payWorker = groupDto.pays.find(
+            (p) => p.id_worker === worker.id,
+          );
+
           await this.prisma.billDetail.create({
             data: {
               id_bill: billSaved.id,
               id_operation_worker: operationWorker.id,
-              pay_rate: result.paysheetTotal || 0,
-              pay_unit: group.amount || 0,
-              total_bill: result.billingTotal || 0,
-              total_paysheet: result.paysheetTotal || 0,
+              pay_rate: payWorker?.pay || 1,
+              pay_unit: payWorker?.pay || 1,
+              total_bill: totalFacturactionWorker,
+              total_paysheet: totalPaysheetWorker,
             },
           });
         }
@@ -402,30 +453,65 @@ export class BillService {
         });
 
         // Guardar detalle para cada trabajador
-        // for (const worker of matchingGroupSummary.workers) {
-        //   const operationWorker = await this.prisma.operation_Worker.findFirst({
-        //     where: {
-        //       id_worker: worker.id,
-        //       id_operation: createBillDto.id_operation,
-        //     },
-        //   });
+        for (const worker of matchingGroupSummary.workers) {
+          const operationWorker = await this.prisma.operation_Worker.findFirst({
+            where: {
+              id_worker: worker.id,
+              id_operation: createBillDto.id_operation,
+            },
+          });
 
-        //   if (!operationWorker) {
-        //     throw new ConflictException(`No se encontró el trabajador con ID: ${worker.id}`);
-        //   }
+          if (!operationWorker) {
+            throw new ConflictException(`No se encontró el trabajador con ID: ${worker.id}`);
+          }
 
-        //   await this.prisma.billDetail.create({
-        //     data: {
-        //       id_bill: billSaved.id,
-        //       id_operation_worker: operationWorker.id,
-        //       observation: '',
-        //       pay_rate: paysheetTariff,
-        //       pay_unit: amount,
-        //       total_bill: totalFacturation,
-        //       total_paysheet: totalPaysheet,
-        //     },
-        //   });
-        // }
+          const groupDto = createBillDto.groups.find(g => g.id === group.id);
+          if (!groupDto) {
+            throw new ConflictException(
+              `No se encontró el grupo con ID: ${group.id}`,
+            );
+          }
+
+          const  totalUnitPays = groupDto.pays.reduce((sum, p) => sum + (p.pay || 0), 0);
+
+          const payWorker = groupDto.pays.find(
+            (p) => p.id_worker === worker.id,
+          );
+
+          if (!payWorker) {
+            throw new ConflictException(
+              `No se encontró el pago para el trabajador con ID: ${worker.id}`,
+            );
+          }
+
+          const payRate = group.amount / totalUnitPays * payWorker.pay;
+
+          const totalWorkerPaysheet = this.calculateTotalWorker(
+            totalPaysheet,
+            groupDto,
+            worker,
+            matchingGroupSummary.workers,
+          );
+
+          const totalWorkerFacturation = this.calculateTotalWorker(
+            totalFacturation,
+            groupDto,
+            worker,
+            matchingGroupSummary.workers,
+          );
+
+
+          await this.prisma.billDetail.create({
+            data: {
+              id_bill: billSaved.id,
+              id_operation_worker: operationWorker.id,
+              pay_rate: payRate,
+              pay_unit: payWorker.pay || 1,
+              total_bill: totalWorkerFacturation,
+              total_paysheet: totalWorkerPaysheet,
+            },
+          });
+        }
       }
     }
 
