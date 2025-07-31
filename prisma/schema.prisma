@@ -333,7 +333,7 @@ model Tariff {
   updatedAt             DateTime           @updatedAt
   status                StatusActivation   @default(ACTIVE)
   Operation_Worker      Operation_Worker[]
-  bills                 Bill[]
+  // bills                 Bill[]
 }
 
 model Configuration {
@@ -353,8 +353,8 @@ model Bill {
   id                Int       @id @default(autoincrement())
   id_operation      Int
   operation         Operation @relation(fields: [id_operation], references: [id])
-  id_tariff         Int
-  tariff            Tariff    @relation(fields: [id_tariff], references: [id])
+  // id_tariff         Int
+  // tariff            Tariff    @relation(fields: [id_tariff], references: [id])
   amount            Int
   number_of_workers Int
   total_bill        Decimal   @db.Decimal(10, 2)
@@ -394,7 +394,7 @@ model BillDetail {
   id_operation_worker Int
   operationWorker Operation_Worker @relation(fields: [id_operation_worker], references: [id])
   pay_unit            Decimal?           @db.Decimal(4, 2)
-  pay_rate           Decimal?           @db.Decimal(4, 2)
+  pay_rate           Decimal?           @db.Decimal(10, 2)
   total_bill        Decimal?           @db.Decimal(10, 2)
   total_paysheet    Decimal?           @db.Decimal(10, 2)
   createdAt      DateTime  @default(now())

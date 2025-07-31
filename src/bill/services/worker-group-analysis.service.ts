@@ -12,15 +12,15 @@ export class WorkerGroupAnalysisService {
   constructor(private configurationService: ConfigurationService, private prisma: PrismaService) {}
 
   async configurationCompensatory() {
-    const configuration =
-      await this.configurationService.findByName('Horas semanales');
-    const hourSemanal =
-      configuration && 'value' in configuration ? configuration.value : null;
-    const hourSemanalInteger = hourSemanal ? parseInt(hourSemanal, 10) : 0;
-    const valueCompensatory =
-      hourSemanalInteger / 6 / 6 / (hourSemanalInteger / 6);
-    return valueCompensatory;
-  }
+  const configuration = await this.configurationService.findByName('HORAS_SEMANALES');
+  const hourSemanal = configuration && 'value' in configuration ? configuration.value : null;
+  const hourSemanalInteger = hourSemanal ? parseInt(hourSemanal, 10) : 0;
+
+  const valueCompensatory = hourSemanalInteger / 6 / 6 / (hourSemanalInteger / 6);
+
+
+  return valueCompensatory;
+}
   /**
    * Analiza los grupos de trabajadores y genera un resumen por grupo
    * @param workerGroups Grupos de trabajadores de una operación
@@ -33,7 +33,7 @@ export class WorkerGroupAnalysisService {
       return [];
     }
     const valueCompensatory = await this.configurationCompensatory();
-    console.log(valueCompensatory, 'valueCompensatory');
+    
     return workerGroups.map((group) => {
      return  ({
       groupId: group.groupId,

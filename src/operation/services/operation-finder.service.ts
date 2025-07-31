@@ -233,6 +233,9 @@ export class OperationFinderService {
    * @param operationId ID de la operación
    */
   async getOperationWithDetailedTariffs(operationId: number) {
+     if (!operationId) {
+    throw new Error('operationId is required and must be a valid number');
+  }
     try {
       // Obtenemos la operación con sus trabajadores y tarifas
       const operation = await this.prisma.operation.findUnique({

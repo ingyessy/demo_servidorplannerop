@@ -63,9 +63,10 @@ export class BillController {
   @Patch(':id')
   update(
     @Param('id', ParseIntPipe) id: number,
+    @CurrentUser('userId') userId: number,
     @Body() updateBillDto: UpdateBillDto,
   ) {
-    return this.billService.update(id, updateBillDto);
+    return this.billService.update(id, updateBillDto, userId);
   }
 
   @Delete(':id')
