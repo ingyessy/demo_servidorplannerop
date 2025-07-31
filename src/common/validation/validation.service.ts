@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { StatusComplete } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 
 @Injectable()
@@ -348,4 +349,209 @@ export class ValidationService {
   }
 
 
+  /**
+   * Validar si ya existe la programacion cliente
+   * @param service_request - Solicitud de servicio
+   * @param service - Servicio
+   * @param dateStart - Fecha de inicio
+   * @param timeStart - Hora de inicio
+   * @param client - Cliente
+   * @param ubication - Ubicación
+   * @param id_operation - ID de la operación
+   *
+   */
+  async validateClientProgramming({
+    id_clientProgramming,
+    // service_request,
+    service,
+    dateStart,
+    timeStart,
+    client,
+    ubication,
+    status,
+  }: {
+    id_clientProgramming?: number | null;
+    service_request?: string;
+    service?: string;
+    dateStart?: string;
+    timeStart?: string;
+    client?: string;
+    ubication?: string;
+    status?: string;
+  }) {
+    try {
+      // Verificar que la programación del cliente no exista
+      if (
+        // service_request &&
+        service &&
+        dateStart &&
+        timeStart &&
+        client &&
+        ubication
+      ) {
+        const existingProgramming =
+          await this.prisma.clientProgramming.findFirst({
+            where: {
+              // service_request,
+              service,
+              dateStart: new Date(dateStart || ''),
+              timeStart,
+              client,
+              ubication,
+            },
+          });
+
+        if (existingProgramming) {
+          return {
+            message: 'Client programming already exists',
+            status: 409,
+          };
+        }
+      }
+
+      // if (service_request) {
+      //   const serviceRequest = await this.prisma.clientProgramming.findFirst({
+      //     where: { service_request },
+      //   });
+      //   if (serviceRequest) {
+      //     return { message: 'Service alredy exists', status: 409 };
+      //   }
+      // }
+
+      // verificar si existe y tiene estado asignado
+      if (id_clientProgramming) {
+        const validateId = await this.prisma.clientProgramming.findUnique({
+          where: { id: id_clientProgramming },
+        });
+        if (!validateId) {
+          return { message: 'Client programming not found', status: 404 };
+        }
+        const programming = await this.prisma.clientProgramming.findFirst({
+          where: {
+            id: id_clientProgramming,
+            status: StatusComplete.ASSIGNED,
+          },
+        });
+        if (programming) {
+          return {
+            message: 'Client programming already exists and is assigned',
+            status: 409,
+          };
+        }
+      }
+
+      // Si no existe, se puede proceder con la creación
+      return { success: true };
+    } catch (error) {
+      console.error('Error validating client programming:', error);
+      throw new Error(`Error validating client programming: ${error.message}`);
+    }
+  }
+
+  /**
+   * Valida que un trabajador esté asignado a una operación
+   * @param operationId - ID de la operación
+   * @param workerId - ID del trabajador
+   * @returns Objeto indicando si la relación existe o mensaje de error
+   */
+  async validateWorkerInOperation(operationId: number, workerId: number) {
+    try {
+      console.log('Validating worker in operation:', { operationId, workerId });
+
+      // Verificar que la operación existe
+      const operation = await this.prisma.operation.findUnique({
+        where: { id: operationId },
+      });
+
+      if (!operation) {
+        console.log('Operation not found:', operationId);
+        return { message: 'Operation not found', status: 404 };
+      }
+
+      // Verificar que el trabajador existe
+      const worker = await this.prisma.worker.findUnique({
+        where: { id: workerId },
+      });
+
+      if (!worker) {
+        console.log('Worker not found:', workerId);
+        return { message: 'Worker not found', status: 404 };
+      }
+
+      // Verificar la relación entre trabajador y operación
+      const relation = await this.prisma.operation_Worker.findFirst({
+        where: {
+          id_operation: operationId,
+          id_worker: workerId,
+        },
+      });
+
+      if (!relation) {
+        console.log('Relation not found between operation and worker');
+        return {
+          message: `Worker ${workerId} is not assigned to operation ${operationId}`,
+          status: 404,
+        };
+      }
+
+      console.log('Worker is assigned to operation');
+      return { success: true };
+    } catch (error) {
+      console.error('Error validating worker in operation:', error);
+      throw new Error(
+        `Error validating worker-operation relation: ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Verifica si un código de trabajador ya existe
+   * @param code - Código a verificar
+   * @returns true si ya existe, false si no
+   */
+  async workerCodeExists(code: string): Promise<boolean> {
+    try {
+      const existingWorker = await this.prisma.worker.findUnique({
+        where: { code },
+      });
+      return !!existingWorker;
+    } catch (error) {
+      console.error('Error checking if worker code exists:', error);
+      throw new Error(`Error checking worker code: ${error.message}`);
+    }
+  }
+
+  /**
+   * Verifica si un DNI de trabajador ya existe
+   * @param dni - DNI a verificar
+   * @returns true si ya existe, false si no
+   */
+  async workerDniExists(dni: string): Promise<boolean> {
+    try {
+      const existingWorker = await this.prisma.worker.findUnique({
+        where: { dni },
+      });
+      return !!existingWorker;
+    } catch (error) {
+      console.error('Error checking if worker DNI exists:', error);
+      throw new Error(`Error checking worker DNI: ${error.message}`);
+    }
+  }
+
+  /**
+   * Verifica si un teléfono de trabajador ya existe
+   * @param phone - Teléfono a verificar
+   * @returns true si ya existe, false si no
+   */
+  async workerPhoneExists(phone: string): Promise<boolean> {
+    try {
+      const existingWorker = await this.prisma.worker.findFirst({
+        where: { phone },
+      });
+      return !!existingWorker;
+    } catch (error) {
+      console.error('Error checking if worker phone exists:', error);
+      throw new Error(`Error checking worker phone: ${error.message}`);
+    }
+  }
 }

@@ -77,6 +77,7 @@ import { BillModule } from './bill/bill.module';
     DocsAuthMiddleware
   ],
   controllers: [DocsController],
+  exports: [PrismaService],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

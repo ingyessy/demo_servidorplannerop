@@ -14,8 +14,9 @@ export class ClientProgrammingService {
   async create(createClientProgrammingDto: CreateClientProgrammingDto) {
     try {
       const validationProgramming =
+
         await this.validationClientProgramming.validateClientProgramming({
-          service_request: createClientProgrammingDto.service_request,
+          // service_request: createClientProgrammingDto.service_request,
           service: createClientProgrammingDto.service,
           client: createClientProgrammingDto.client,
           ubication: createClientProgrammingDto.ubication,
@@ -28,6 +29,9 @@ export class ClientProgrammingService {
           validationProgramming.status === 409) ||
         (validationProgramming && validationProgramming.status === 404)
       ) {
+      console.log('Creating client programming with data:', createClientProgrammingDto);
+        console.error('Validation failed:', validationProgramming);
+
         return validationProgramming;
       }
 

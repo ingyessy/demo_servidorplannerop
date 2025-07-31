@@ -19,6 +19,7 @@ model User {
   status            StatusActivation    @default(ACTIVE)
   calledAttention   CalledAttention[]
   client            Client[]
+  clientProgramming ClientProgramming[]
   inChargeOperation InChargeOperation[]
   inability         Inability[]
   areas             JobArea[]
@@ -93,15 +94,16 @@ model Operation {
   id_area              Int
   id_task              Int?
   id_client            Int
-  id_clientProgramming Int?
   motorShip            String?
   zone                 Int
   createAt             DateTime            @default(now())
   updateAt             DateTime            @default(now()) @updatedAt
+  id_clientProgramming Int?
   inChargeOperation    InChargeOperation[]
   jobArea              JobArea             @relation(fields: [id_area], references: [id])
   clientProgramming    ClientProgramming?  @relation(fields: [id_clientProgramming], references: [id])
   client               Client              @relation(fields: [id_client], references: [id])
+  task                 Task?               @relation(fields: [id_task], references: [id])
   task                 Task?               @relation(fields: [id_task], references: [id])
   user                 User                @relation(fields: [id_user], references: [id])
   workers              Operation_Worker[]
@@ -127,6 +129,7 @@ model Operation_Worker {
   tariff       Tariff?   @relation(fields: [id_tariff], references: [id])
   task         Task?     @relation(fields: [id_task], references: [id])
   operation    Operation @relation(fields: [id_operation], references: [id])
+  task         Task?     @relation(fields: [id_task], references: [id])
   worker       Worker    @relation(fields: [id_worker], references: [id])
   billDetail   BillDetail[]
 }
@@ -137,6 +140,7 @@ model Task {
   id_user          Int
   status           StatusActivation   @default(ACTIVE)
   operations       Operation[]
+  operation_Worker Operation_Worker[]
   user             User               @relation(fields: [id_user], references: [id])
   operation_Worker Operation_Worker[]
   Site             Site               @relation(fields: [id_site], references: [id])
