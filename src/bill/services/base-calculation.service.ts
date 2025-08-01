@@ -47,7 +47,6 @@ export class BaseCalculationService {
       }
     }
 
-    console.log("HoursDetails---------: ", hoursDetail);
 
     return {
       totalHours,

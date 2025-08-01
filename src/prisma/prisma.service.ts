@@ -14,7 +14,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
           url: process.env.DATABASE_URL,
         },
       },
-      log: ['error', 'warn'],
+      log: ['error', 'warn',],
       // ⚠️ Límite de conexiones en el pool
     });
   }
@@ -26,4 +26,5 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   async onModuleDestroy() {
     await this.$disconnect();
   }
+  
 }

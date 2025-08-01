@@ -30,8 +30,8 @@ export class OperationTransformerService {
           code_tariff: w.tariff ? w.tariff.code : null,
           id_unit_of_measure: w.tariff ? w.tariff.unitOfMeasure.id : null,
           unit_of_measure: w.tariff ? w.tariff.unitOfMeasure.name : null,
-          // facturation_unit: w.tariff ? w.tariff.facturationUnit.name : null,
-          // id_facturation_unit: w.tariff ? w.tariff.facturationUnit.id : null
+          facturation_unit: w.tariff ? w.tariff.facturationUnit?.name : null,
+          id_facturation_unit: w.tariff ? w.tariff.facturationUnit?.id : null
         },
       });
       }) || [];

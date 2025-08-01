@@ -32,6 +32,7 @@ export class PayrollCalculationService {
       const billData = groupsData.find((g) => g.id === group.groupId);
       const paysheetData = groupsData.find((g) => g.id === group.groupId);
 
+
       if (group.settle_payment && group.settle_payment === 'YES') {
         if (billData?.pays.length != group.workerCount) {
           throw new ConflictException(
