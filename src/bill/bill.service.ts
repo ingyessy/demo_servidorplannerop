@@ -243,7 +243,6 @@ async create(createBillDto: CreateBillDto, userId: number) {
 
   // Calcular totales para servicio alternativo
   private async calculateAlternativeServiceTotals(matchingGroupSummary: any, group: GroupBillDto) {
-    console.log("Matching Group Summary:", JSON.stringify(matchingGroupSummary, null, 2));
 
     const facturationUnit =matchingGroupSummary.facturation_unit || matchingGroupSummary.schedule.facturation_unit || matchingGroupSummary.schedule.unit_of_measure;
     const facturationTariff = matchingGroupSummary.facturation_tariff || matchingGroupSummary.tariffDetails.facturation_tariff || 0;
@@ -841,7 +840,7 @@ async create(createBillDto: CreateBillDto, userId: number) {
       await this.updateBillDetailsOnly(id, updateBillDto, validateOperationID, existingBill, billDb.id_operation);
     }
   
-    return { message: 'Factura actualizada correctamente' };
+    const billDB = await this.findOne(id);
   }
   
   private validateUpdateGroups(groups: GroupBillDto[]) {
@@ -866,51 +865,86 @@ async create(createBillDto: CreateBillDto, userId: number) {
     );
   }
   
-  private async updateBillFields(
-    id: number,
-    groups: GroupBillDto[],
-    existingBill: any,
-    userId: number,
-  ) {
-    for (const group of groups) {
-      const updateData: any = {
-        updatedAt: new Date(),
-        id_user: userId,
-      };
-  
-      if (group.billHoursDistribution) {
-        Object.assign(updateData, {
-          HOD: group.billHoursDistribution.HOD ?? existingBill.HOD,
-          HON: group.billHoursDistribution.HON ?? existingBill.HON,
-          HED: group.billHoursDistribution.HED ?? existingBill.HED,
-          HEN: group.billHoursDistribution.HEN ?? existingBill.HEN,
-          HFOD: group.billHoursDistribution.HFOD ?? existingBill.HFOD,
-          HFON: group.billHoursDistribution.HFON ?? existingBill.HFON,
-          HFED: group.billHoursDistribution.HFED ?? existingBill.HFED,
-          HFEN: group.billHoursDistribution.HFEN ?? existingBill.HFEN,
+       private async updateBillFields(
+      id: number,
+      groups: GroupBillDto[],
+      existingBill: any,
+      userId: number,
+    ) {
+      for (const group of groups) {
+        const updateData: any = {
+          updatedAt: new Date(),
+          id_user: userId,
+        };
+    
+        let finalNumberOfHours: number | undefined = undefined;
+    
+        // Procesar billHoursDistribution (FACTURACIÓN)
+        if (group.billHoursDistribution) {
+          
+          // Calcular el total de horas de facturación
+          const billTotalHours = Object.values(group.billHoursDistribution).reduce(
+            (acc: number, hours: number) => acc + (hours || 0), 
+            0
+          );
+    
+    
+          Object.assign(updateData, {
+            // billHoursDistribution va a las columnas CON prefijo FAC_ (FACTURACIÓN)
+            FAC_HOD: group.billHoursDistribution.HOD ?? existingBill.FAC_HOD,
+            FAC_HON: group.billHoursDistribution.HON ?? existingBill.FAC_HON,
+            FAC_HED: group.billHoursDistribution.HED ?? existingBill.FAC_HED,
+            FAC_HEN: group.billHoursDistribution.HEN ?? existingBill.FAC_HEN,
+            FAC_HFOD: group.billHoursDistribution.HFOD ?? existingBill.FAC_HFOD,
+            FAC_HFON: group.billHoursDistribution.HFON ?? existingBill.FAC_HFON,
+            FAC_HFED: group.billHoursDistribution.HFED ?? existingBill.FAC_HFED,
+            FAC_HFEN: group.billHoursDistribution.HFEN ?? existingBill.FAC_HFEN,
+          });
+    
+          // Establecer las horas de facturación como prioritarias
+          finalNumberOfHours = billTotalHours;
+        }
+    
+        // Procesar paysheetHoursDistribution (NÓMINA)
+        if (group.paysheetHoursDistribution) {
+          
+          Object.assign(updateData, {
+            // paysheetHoursDistribution va a las columnas SIN prefijo FAC_ (NÓMINA)
+            HOD: group.paysheetHoursDistribution.HOD ?? existingBill.HOD,
+            HON: group.paysheetHoursDistribution.HON ?? existingBill.HON,
+            HED: group.paysheetHoursDistribution.HED ?? existingBill.HED,
+            HEN: group.paysheetHoursDistribution.HEN ?? existingBill.HEN,
+            HFOD: group.paysheetHoursDistribution.HFOD ?? existingBill.HFOD,
+            HFON: group.paysheetHoursDistribution.HFON ?? existingBill.HFON,
+            HFED: group.paysheetHoursDistribution.HFED ?? existingBill.HFED,
+            HFEN: group.paysheetHoursDistribution.HFEN ?? existingBill.HFEN,
+          });
+    
+          // Solo usar las horas de paysheet si NO hay horas de facturación
+          if (finalNumberOfHours === undefined) {
+            const paysheetTotalHours = Object.values(group.paysheetHoursDistribution).reduce(
+              (acc: number, hours: number) => acc + (hours || 0), 
+              0
+            );
+            finalNumberOfHours = paysheetTotalHours || finalNumberOfHours;
+          }
+        }
+    
+    
+        // Aplicar el número de horas final
+        if (finalNumberOfHours !== undefined) {
+          updateData.number_of_hours = finalNumberOfHours;
+        }
+    
+        console.log("Final number of hours:", finalNumberOfHours);
+        console.log("Update data for bill:", updateData);
+    
+        await this.prisma.bill.update({
+          where: { id },
+          data: updateData,
         });
       }
-  
-      if (group.paysheetHoursDistribution) {
-        Object.assign(updateData, {
-          FAC_HOD: group.paysheetHoursDistribution.HOD ?? existingBill.FAC_HOD,
-          FAC_HON: group.paysheetHoursDistribution.HON ?? existingBill.FAC_HON,
-          FAC_HED: group.paysheetHoursDistribution.HFED ?? existingBill.FAC_HED,
-          FAC_HEN: group.paysheetHoursDistribution.HFEN ?? existingBill.FAC_HEN,
-          FAC_HFOD: group.paysheetHoursDistribution.HFOD ?? existingBill.FAC_HFOD,
-          FAC_HFON: group.paysheetHoursDistribution.HFON ?? existingBill.FAC_HFON,
-          FAC_HFED: group.paysheetHoursDistribution.HFED ?? existingBill.FAC_HFED,
-          FAC_HFEN: group.paysheetHoursDistribution.HFEN ?? existingBill.FAC_HFEN,
-        });
-      }
-  
-      await this.prisma.bill.update({
-        where: { id },
-        data: updateData,
-      });
     }
-  }
-  
   private async recalculateBillTotals(
     id: number,
     group: UpdateBillDto,

@@ -1,48 +1,31 @@
-{
-  "groupId": "22141ed0-628f-4bd0-bdb3-2fdaf2b3baf3",
-  "site": "Uraba",
-  "subSite": "UNIBAN ZUNGO",
-  "dateRange": { "start": "2025-07-18", "end": null },
-  "timeRange": { "start": "08:21", "end": null },
-  "week_number": 29,
-  "task": "INSPECCION",
-  "code_tariff": "222",
-  "tariff": " cantidad",
-  "unit_of_measure": "JORNAL",
-  "workerCount": 4,
-  "payroll": {
-    "baseAmount": 20000,
-    "additionalHoursAmount": 5203.125,
-    "holidayAmount": 0,
-    "totalAmount": 25203.125,
-    "details": {
-      "workerCount": 4,
-      "tariff": 5000,
-      "isHolidayOrSunday": false,
-      "holidayMultiplier": 0,
-      "additionalHoursDetail": {
-        "HOD": { "hours": 3, "multiplier": 1, "amount": 1875 },
-        "HON": { "hours": 2, "multiplier": 1.35, "amount": 1687.5 },
-        "HED": { "hours": 1.5, "multiplier": 1.75, "amount": 1640.625 }
-      }
-    }
+ {
+  "id": "9c1f4bbc-2ba0-48db-8772-a89e9fd0166f",
+  "amount": 200,
+  "group_hours": null,
+  "observation": null,
+  "billHoursDistribution": {
+    "HOD": 0,
+    "HON": 0,
+    "HED": 0,
+    "HEN": 0,
+    "HODF": 0,
+    "HONF": 0,
+    "HEDF": 0,
+    "HENF": 0
   },
-  "billing": {
-    "baseAmount": 24000,
-    "additionalHoursAmount": 6243.75,
-    "holidayAmount": 0,
-    "totalAmount": 30243.75,
-    "details": {
-      "workerCount": 4,
-      "tariff": 6000,
-      "isHolidayOrSunday": false,
-      "holidayMultiplier": 0,
-      "additionalHoursDetail": {
-        "HOD": { "hours": 3, "multiplier": 1, "amount": 2250 },
-        "HON": { "hours": 2, "multiplier": 1.35, "amount": 2025.0000000000002 },
-        "HED": { "hours": 1.5, "multiplier": 1.75, "amount": 1968.75 }
-      }
-    }
+  "paysheetHoursDistribution": {
+    "HOD": 0,
+    "HON": 0,
+    "HED": 0,
+    "HEN": 0,
+    "HODF": 0,
+    "HONF": 0,
+    "HEDF": 0,
+    "HENF": 0
   },
-  "observation": "Alguna description"
+  "pays": [
+    [],
+    [],
+    []
+  ]
 }

@@ -239,7 +239,7 @@ model Site {
   status            StatusActivation    @default(ACTIVE)
   createAt          DateTime            @default(now())
   updateAt          DateTime            @updatedAt
-  id_user           Int                 @default(38)
+  id_user           Int                 @default(36)
   user              User                @relation("SiteCreator", fields: [id_user], references: [id])
   users             User[]
   workers           Worker[]

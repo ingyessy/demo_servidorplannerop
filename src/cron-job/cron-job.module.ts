@@ -4,6 +4,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { UpdateOperationService } from './services/update-operation.service';
 import { UpdateWorkerService } from './services/update-worker.service';
 import { UpdateOperationWorkerService } from './services/update-operation-worker.service';
+import { BillService } from 'src/bill/bill.service';
 
 @Module({
   providers: [
@@ -11,7 +12,8 @@ import { UpdateOperationWorkerService } from './services/update-operation-worker
     PrismaService,
     UpdateOperationService,
     UpdateWorkerService,
-    UpdateOperationWorkerService
+    UpdateOperationWorkerService,
+    BillService
   ],
   exports: [OperationsCronService, PrismaService],
 })
