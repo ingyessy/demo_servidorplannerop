@@ -60,6 +60,7 @@ export class PayrollCalculationService {
           paysheetData.paysheetHoursDistribution,
           operationDate,
         );
+
         totalPayroll += payrollResult.totalAmount;
 
         const billingResult = this.calculateJornalBilling(
@@ -67,6 +68,7 @@ export class PayrollCalculationService {
           billData.billHoursDistribution,
           operationDate,
         );
+        
         totalBilling += billingResult.totalAmount;
 
         groupResults.push({

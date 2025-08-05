@@ -41,10 +41,10 @@ export class SubtaskService {
     }
   }
 
-  async findAll(id_site?: number) {
+  async findAll(id_site?: number, subsiteId?: number) {
     try {
       const response = await this.prisma.subTask.findMany({
-        where: { task: { id_site } },
+        where: { task: { id_site, id_subsite: subsiteId } },
         include: {
           Tariff: true,
         }

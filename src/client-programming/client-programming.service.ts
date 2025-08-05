@@ -29,7 +29,7 @@ export class ClientProgrammingService {
           validationProgramming.status === 409) ||
         (validationProgramming && validationProgramming.status === 404)
       ) {
-      console.log('Creating client programming with data:', createClientProgrammingDto);
+
         console.error('Validation failed:', validationProgramming);
 
         return validationProgramming;

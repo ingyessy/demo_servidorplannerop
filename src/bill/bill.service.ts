@@ -28,7 +28,7 @@ async create(createBillDto: CreateBillDto, userId: number) {
     await this.processJornalGroups(createBillDto, userId, validateOperationID);
     await this.processSimpleHoursGroups(createBillDto, userId, validateOperationID);
     await this.processAlternativeServiceGroups(createBillDto, userId, validateOperationID);
-    await this.processQuantityGroups(createBillDto, userId, validateOperationID);
+    await this.processQuantityGroups(createBillDto, userId, validateOperationID, 0);
 
     return {
       message: 'Cálculos y guardado de facturación realizados con éxito',
@@ -48,7 +48,7 @@ async create(createBillDto: CreateBillDto, userId: number) {
   ) {
     const jornalGroups = await this.workerGroupAnalysisService.findGroupsByCriteria(
       validateOperationID.workerGroups,
-      { unit_of_measure: 'JORNAL' },
+      { unit_of_measure: 'JORNAL', alternative_paid_service: 'NO' },
     );
 
     const jornalGroupsFiltered = jornalGroups.filter((jg) =>
@@ -104,11 +104,14 @@ async create(createBillDto: CreateBillDto, userId: number) {
       const result = await this.hoursCalculationService.processHoursGroups(
         matchingGroupSummary,
         group,
-        operationDate,
       );
 
       const billData = this.prepareHoursBillData(result, createBillDto.id_operation, userId);
-      const billSaved = await this.prisma.bill.create({ data: billData });
+       const billSaved = await this.prisma.bill.create({ 
+      data: {
+        ...billData
+      }
+    });
 
       await this.processHoursBillDetails(
         matchingGroupSummary.workers,
@@ -137,6 +140,7 @@ async create(createBillDto: CreateBillDto, userId: number) {
 
     if (twoUnitsGroupsFiltered.length === 0) return;
 
+
     for (const matchingGroupSummary of twoUnitsGroupsFiltered) {
       const group = createBillDto.groups.find(
         (g) => String(g.id).trim() === String(matchingGroupSummary.groupId).trim(),
@@ -157,7 +161,7 @@ async create(createBillDto: CreateBillDto, userId: number) {
         userId,
       );
 
-      const billSaved = await this.prisma.bill.create({ data: billData });
+      const billSaved = await this.prisma.bill.create({ data: {...billData, group_hours: group.group_hours} });
 
       await this.processAlternativeServiceBillDetails(
         matchingGroupSummary.workers,
@@ -171,36 +175,49 @@ async create(createBillDto: CreateBillDto, userId: number) {
     }
   }
 
-  // Procesar grupos por cantidad
-  private async processQuantityGroups(
+    private async processQuantityGroups(
     createBillDto: CreateBillDto,
     userId: number,
     validateOperationID: any,
+    amountDb: number
   ) {
-    const quantityGroups = validateOperationID.workerGroups.filter(
+    // Si validateOperationID es un array de grupos, úsalo directamente
+    const groupsSource = Array.isArray(validateOperationID.workerGroups)
+      ? validateOperationID.workerGroups
+      : validateOperationID;
+  
+    const quantityGroups = groupsSource.filter(
       (group) =>
         group.schedule.unit_of_measure !== 'HORAS' &&
         group.schedule.unit_of_measure !== 'JORNAL' &&
-        group.schedule.id_facturation_unit === null,
+        (
+          // Acepta null o undefined en cualquiera de los dos campos
+          (group.schedule.id_facturation_unit === null || group.schedule.id_facturation_unit === undefined) &&
+          (
+            !group.tariffDetails?.facturationUnit ||
+            group.tariffDetails?.facturationUnit === null
+          )
+        )
     );
-
+  
     const quantityGroupsFiltered = quantityGroups.filter((qg) =>
       createBillDto.groups.some((g) => String(g.id) === String(qg.groupId)),
     );
-
+  
     if (quantityGroupsFiltered.length === 0) return;
-
+  
     for (const group of createBillDto.groups) {
       const matchingGroupSummary = quantityGroupsFiltered.find(
         (summary) => summary.groupId === group.id,
       );
       if (!matchingGroupSummary) continue;
-
+  
       const { totalPaysheet, totalFacturation } = this.calculateQuantityTotals(
         matchingGroupSummary,
         group,
+           amountDb
       );
-
+  
       const billData = this.prepareQuantityBillData(
         matchingGroupSummary,
         group,
@@ -209,9 +226,9 @@ async create(createBillDto: CreateBillDto, userId: number) {
         createBillDto.id_operation,
         userId,
       );
-
+  
       const billSaved = await this.prisma.bill.create({ data: billData });
-
+  
       await this.processQuantityBillDetails(
         matchingGroupSummary.workers,
         billSaved.id,
@@ -226,21 +243,28 @@ async create(createBillDto: CreateBillDto, userId: number) {
 
   // Calcular totales para servicio alternativo
   private async calculateAlternativeServiceTotals(matchingGroupSummary: any, group: GroupBillDto) {
-    const facturationUnit = matchingGroupSummary.facturation_unit || matchingGroupSummary.unit_of_measure;
-    const facturationTariff = matchingGroupSummary.facturation_tariff || 0;
-    const paysheetUnit = matchingGroupSummary.unit_of_measure;
-    const paysheetTariff = matchingGroupSummary.paysheet_tariff || 0;
+    console.log("Matching Group Summary:", JSON.stringify(matchingGroupSummary, null, 2));
+
+    const facturationUnit =matchingGroupSummary.facturation_unit || matchingGroupSummary.schedule.facturation_unit || matchingGroupSummary.schedule.unit_of_measure;
+    const facturationTariff = matchingGroupSummary.facturation_tariff || matchingGroupSummary.tariffDetails.facturation_tariff || 0;
+    const paysheetUnit =  matchingGroupSummary.unit_of_measure || matchingGroupSummary.schedule.unit_of_measure;
+    const paysheetTariff = matchingGroupSummary.paysheet_tariff || matchingGroupSummary.tariffDetails.paysheet_tariff || 0;
+
 
     let totalFacturation = 0;
     let totalPaysheet = 0;
 
     // Calcular facturación
     if (facturationUnit === 'HORAS' || facturationUnit === 'JORNAL') {
-      if (facturationUnit === 'HORAS') {
+
+      if(matchingGroupSummary.group_tariff  === 'YES') {
+        const factResult = group.group_hours * (matchingGroupSummary.facturation_tariff || 0);
+        totalFacturation = factResult;
+      }
+      else if (facturationUnit === 'HORAS') {
         const factResult = await this.hoursCalculationService.processHoursGroups(
           matchingGroupSummary,
           group,
-          matchingGroupSummary.dateRange.start,
         );
         totalFacturation = factResult.totalFinalFacturation;
       } else {
@@ -261,9 +285,9 @@ async create(createBillDto: CreateBillDto, userId: number) {
       const paysheetResult = await this.hoursCalculationService.processHoursGroups(
         matchingGroupSummary,
         group,
-        matchingGroupSummary.dateRange.start,
       );
       totalPaysheet = paysheetResult.totalFinalPayroll;
+
     } else if (paysheetUnit === 'JORNAL') {
       const paysheetResult = this.payrollCalculationService.processJornalGroups(
         [matchingGroupSummary],
@@ -274,17 +298,17 @@ async create(createBillDto: CreateBillDto, userId: number) {
     } else {
       const amount = group.amount || 0;
       totalPaysheet = amount * paysheetTariff;
+      console.log("Amount:", amount, "Paysheet Tariff:", paysheetTariff);
     }
 
     return { totalFacturation, totalPaysheet };
   }
 
   // Calcular totales para grupos por cantidad
-  private calculateQuantityTotals(matchingGroupSummary: any, group: GroupBillDto) {
-    const paysheetTariff = matchingGroupSummary.schedule?.paysheet_tariff || 0;
-    const facturationTariff = matchingGroupSummary.schedule?.facturation_tariff || 0;
-    const amount = group.amount || 0;
-
+  private calculateQuantityTotals(matchingGroupSummary: any, group: GroupBillDto, amountDb: number) {
+    const paysheetTariff = matchingGroupSummary.tariffDetails?.paysheet_tariff || 0;
+    const facturationTariff = matchingGroupSummary.tariffDetails?.facturation_tariff || 0;
+    const amount = group.amount || amountDb || 0;
     return {
       totalPaysheet: amount * paysheetTariff,
       totalFacturation: amount * facturationTariff,
@@ -306,8 +330,8 @@ async create(createBillDto: CreateBillDto, userId: number) {
       groupDto.paysheetHoursDistribution.HED || 0,
       0, 0,
       groupDto.paysheetHoursDistribution.HEN || 0,
-      groupDto.paysheetHoursDistribution.HEDF || 0,
-      groupDto.paysheetHoursDistribution.HENF || 0,
+      groupDto.paysheetHoursDistribution.HFED || 0,
+      groupDto.paysheetHoursDistribution.HFEN || 0,
       0, 0,
     ];
 
@@ -333,8 +357,8 @@ async create(createBillDto: CreateBillDto, userId: number) {
       FAC_HON: 0,
       FAC_HOD: 0,
       FAC_HEN: groupDto.billHoursDistribution.HEN || 0,
-      FAC_HFED: groupDto.billHoursDistribution.HEDF || 0,
-      FAC_HFEN: groupDto.billHoursDistribution.HENF || 0,
+      FAC_HFED: groupDto.billHoursDistribution.HFED || 0,
+      FAC_HFEN: groupDto.billHoursDistribution.HFEN || 0,
       FAC_HFOD: 0,
       FAC_HFON: 0,
       observation: result?.observation || '',
@@ -391,10 +415,10 @@ async create(createBillDto: CreateBillDto, userId: number) {
 
     const paysheetTotalHours = group.paysheetHoursDistribution
       ? Object.values(group.paysheetHoursDistribution).reduce((acc: number, hours: number) => acc + hours, 0)
-      : group.group_hours || 0;
+      :  0;
     const billTotalHours = group.billHoursDistribution
       ? Object.values(group.billHoursDistribution).reduce((acc: number, hours: number) => acc + hours, 0)
-      : group.group_hours || 0;
+      :  0;
 
     const numberHours = paysheetTotalHours || billTotalHours || 0;
 
@@ -408,22 +432,22 @@ async create(createBillDto: CreateBillDto, userId: number) {
       total_paysheet: totalPaysheet,
       number_of_hours: numberHours,
       createdAt: new Date(),
-      HED: paysheetUnit === 'HORAS' || paysheetUnit === 'JORNAL' ? (group.paysheetHoursDistribution?.HED || 0) : 0,
-      HON: paysheetUnit === 'HORAS' || paysheetUnit === 'JORNAL' ? (group.paysheetHoursDistribution?.HON || 0) : 0,
-      HOD: paysheetUnit === 'HORAS' || paysheetUnit === 'JORNAL' ? (group.paysheetHoursDistribution?.HOD || 0) : 0,
-      HEN: paysheetUnit === 'HORAS' || paysheetUnit === 'JORNAL' ? (group.paysheetHoursDistribution?.HEN || 0) : 0,
-      HFED: paysheetUnit === 'HORAS' || paysheetUnit === 'JORNAL' ? (group.paysheetHoursDistribution?.HEDF || 0) : 0,
-      HFEN: paysheetUnit === 'HORAS' || paysheetUnit === 'JORNAL' ? (group.paysheetHoursDistribution?.HENF || 0) : 0,
-      HFOD: paysheetUnit === 'HORAS' || paysheetUnit === 'JORNAL' ? (group.paysheetHoursDistribution?.HODF || 0) : 0,
-      HFON: paysheetUnit === 'HORAS' || paysheetUnit === 'JORNAL' ? (group.paysheetHoursDistribution?.HONF || 0) : 0,
-      FAC_HED: facturationUnit === 'HORAS' || facturationUnit === 'JORNAL' ? (group.billHoursDistribution?.HED || 0) : 0,
-      FAC_HON: facturationUnit === 'HORAS' || facturationUnit === 'JORNAL' ? (group.billHoursDistribution?.HON || 0) : 0,
-      FAC_HOD: facturationUnit === 'HORAS' || facturationUnit === 'JORNAL' ? (group.billHoursDistribution?.HOD || 0) : 0,
-      FAC_HEN: facturationUnit === 'HORAS' || facturationUnit === 'JORNAL' ? (group.billHoursDistribution?.HEN || 0) : 0,
-      FAC_HFED: facturationUnit === 'HORAS' || facturationUnit === 'JORNAL' ? (group.billHoursDistribution?.HEDF || 0) : 0,
-      FAC_HFEN: facturationUnit === 'HORAS' || facturationUnit === 'JORNAL' ? (group.billHoursDistribution?.HENF || 0) : 0,
-      FAC_HFOD: facturationUnit === 'HORAS' || facturationUnit === 'JORNAL' ? (group.billHoursDistribution?.HODF || 0) : 0,
-      FAC_HFON: facturationUnit === 'HORAS' || facturationUnit === 'JORNAL' ? (group.billHoursDistribution?.HONF || 0) : 0,
+      HED: group.paysheetHoursDistribution?.HED || 0,
+      HON: group.paysheetHoursDistribution?.HON || 0,
+      HOD: group.paysheetHoursDistribution?.HOD || 0,
+      HEN: group.paysheetHoursDistribution?.HEN || 0,
+      HFED: group.paysheetHoursDistribution?.HFED || 0,
+      HFEN: group.paysheetHoursDistribution?.HFEN || 0,
+      HFOD: group.paysheetHoursDistribution?.HFOD || 0,
+      HFON: group.paysheetHoursDistribution?.HFON || 0,
+      FAC_HED: group.billHoursDistribution?.HED || 0,
+      FAC_HON: group.billHoursDistribution?.HON || 0,
+      FAC_HOD: group.billHoursDistribution?.HOD || 0,
+      FAC_HEN: group.billHoursDistribution?.HEN || 0,
+      FAC_HFED: group.billHoursDistribution?.HFED || 0,
+      FAC_HFEN: group.billHoursDistribution?.HFEN || 0,
+      FAC_HFOD: group.billHoursDistribution?.HFOD || 0,
+      FAC_HFON: group.billHoursDistribution?.HFON || 0,
       id_group: matchingGroupSummary.groupId,
     };
   }
@@ -727,6 +751,7 @@ async create(createBillDto: CreateBillDto, userId: number) {
               include: {
                 worker: {
                   select: {
+                    id: true,
                     name: true,
                     dni: true,
                   },
@@ -773,36 +798,47 @@ async create(createBillDto: CreateBillDto, userId: number) {
         HFED: billDB.FAC_HFED,
         HFEN: billDB.FAC_HFEN,
       },
+      pays: billDB.billDetails.map(detail => ({
+        id_worker: detail.operationWorker.worker.id,
+        pay: detail.pay_unit,
+        pay_rate: detail.pay_rate,
+      })),
     };
   }
 
    async update(id: number, updateBillDto: UpdateBillDto, userId: number) {
+    console.log("Update Bill DTO:", JSON.stringify(updateBillDto, null, 2));
     const existingBill = await this.prisma.bill.findUnique({ where: { id } });
     if (!existingBill) {
       throw new ConflictException(`No se encontró la factura con ID: ${id}`);
     }
+
+    const billDb = await this.prisma.bill.findUnique({
+      where: { id },
+    });
+
+    if (!billDb) {
+      throw new ConflictException(`No se encontró la factura con ID: ${id}`);
+    }
   
-    const operationId = updateBillDto.id_operation ?? existingBill.id_operation;
-    const validateOperationID = await this.validateOperation(operationId);
+    const validateOperationID = await this.validateOperation(billDb.id_operation);
   
     if (validateOperationID['status'] === 404) {
-      throw new ConflictException(`No se encontró la operación con ID: ${operationId}`);
-    }
+      throw new ConflictException(`No se encontró la operación con ID: ${billDb.id_operation}`);
+    } 
 
-    if(!updateBillDto.groups){
-      throw new ConflictException('No se proporcionaron datos para actualizar la factura.');
-    }
   
-    this.validateUpdateGroups(updateBillDto.groups);
   
-    const recalcularTotales = this.shouldRecalculateTotals(updateBillDto.groups);
+    this.validateUpdateGroups([updateBillDto]);
   
-    await this.updateBillFields(id, updateBillDto.groups, existingBill, userId);
+    const recalcularTotales = this.shouldRecalculateTotals([updateBillDto]);
+  
+    await this.updateBillFields(id, [updateBillDto], existingBill, userId);
   
     if (recalcularTotales) {
-      await this.recalculateBillTotals(id, updateBillDto, validateOperationID, userId);
+      await this.recalculateBillTotals(id, updateBillDto, validateOperationID, userId, billDb.id_operation, billDb.amount);
     } else {
-      await this.updateBillDetailsOnly(id, updateBillDto, validateOperationID, existingBill);
+      await this.updateBillDetailsOnly(id, updateBillDto, validateOperationID, existingBill, billDb.id_operation);
     }
   
     return { message: 'Factura actualizada correctamente' };
@@ -815,7 +851,7 @@ async create(createBillDto: CreateBillDto, userId: number) {
     for (const group of groups) {
       if (!group.pays || group.pays.length === 0) {
         throw new ConflictException(
-          `El grupo con ID ${group.id} no tiene asignados pagos para los trabajadores.`,
+          `El grupo con ID ${group} no tiene asignados pagos para los trabajadores.`,
         );
       }
     }
@@ -848,10 +884,10 @@ async create(createBillDto: CreateBillDto, userId: number) {
           HON: group.billHoursDistribution.HON ?? existingBill.HON,
           HED: group.billHoursDistribution.HED ?? existingBill.HED,
           HEN: group.billHoursDistribution.HEN ?? existingBill.HEN,
-          HFOD: group.billHoursDistribution.HODF ?? existingBill.HFOD,
-          HFON: group.billHoursDistribution.HONF ?? existingBill.HFON,
-          HFED: group.billHoursDistribution.HEDF ?? existingBill.HFED,
-          HFEN: group.billHoursDistribution.HENF ?? existingBill.HFEN,
+          HFOD: group.billHoursDistribution.HFOD ?? existingBill.HFOD,
+          HFON: group.billHoursDistribution.HFON ?? existingBill.HFON,
+          HFED: group.billHoursDistribution.HFED ?? existingBill.HFED,
+          HFEN: group.billHoursDistribution.HFEN ?? existingBill.HFEN,
         });
       }
   
@@ -859,12 +895,12 @@ async create(createBillDto: CreateBillDto, userId: number) {
         Object.assign(updateData, {
           FAC_HOD: group.paysheetHoursDistribution.HOD ?? existingBill.FAC_HOD,
           FAC_HON: group.paysheetHoursDistribution.HON ?? existingBill.FAC_HON,
-          FAC_HED: group.paysheetHoursDistribution.HED ?? existingBill.FAC_HED,
-          FAC_HEN: group.paysheetHoursDistribution.HEN ?? existingBill.FAC_HEN,
-          FAC_HFOD: group.paysheetHoursDistribution.HODF ?? existingBill.FAC_HFOD,
-          FAC_HFON: group.paysheetHoursDistribution.HONF ?? existingBill.FAC_HFON,
-          FAC_HFED: group.paysheetHoursDistribution.HEDF ?? existingBill.FAC_HFED,
-          FAC_HFEN: group.paysheetHoursDistribution.HENF ?? existingBill.FAC_HFEN,
+          FAC_HED: group.paysheetHoursDistribution.HFED ?? existingBill.FAC_HED,
+          FAC_HEN: group.paysheetHoursDistribution.HFEN ?? existingBill.FAC_HEN,
+          FAC_HFOD: group.paysheetHoursDistribution.HFOD ?? existingBill.FAC_HFOD,
+          FAC_HFON: group.paysheetHoursDistribution.HFON ?? existingBill.FAC_HFON,
+          FAC_HFED: group.paysheetHoursDistribution.HFED ?? existingBill.FAC_HFED,
+          FAC_HFEN: group.paysheetHoursDistribution.HFEN ?? existingBill.FAC_HFEN,
         });
       }
   
@@ -877,35 +913,38 @@ async create(createBillDto: CreateBillDto, userId: number) {
   
   private async recalculateBillTotals(
     id: number,
-    updateBillDto: UpdateBillDto,
+    group: UpdateBillDto,
     validateOperationID: any,
     userId: number,
+    id_operation: number,
+    amountDb: number
   ) {
     let totalAmount = 0;
     let totalPaysheet = 0;
     let numberOfWorkers = 0;
 
-    if(!updateBillDto.groups){
+    if(!group){
       throw new ConflictException('No se proporcionaron grupos para actualizar la factura.');
     }
   
-    for (const group of updateBillDto.groups) {
       const matchingGroupSummary = validateOperationID.workerGroups.find(
         (summary) => summary.groupId === group.id,
       );
-      if (!matchingGroupSummary) continue;
+      if (!matchingGroupSummary) {
+        throw new ConflictException(`No se encontró el grupo con ID: ${group.id} en la operación.`);
+      }
   
       const { totalPaysheetGroup, totalFacturationGroup } = await this.calculateGroupTotalsForUpdate(
         matchingGroupSummary,
         group,
+        amountDb
       );
   
       totalAmount += totalFacturationGroup;
       totalPaysheet += totalPaysheetGroup;
       numberOfWorkers += matchingGroupSummary.workers?.length || group.pays.length;
   
-      await this.updateWorkerDetails(id, group, matchingGroupSummary, totalPaysheetGroup, totalFacturationGroup, updateBillDto.id_operation);
-    }
+      await this.updateWorkerDetails(id, group, matchingGroupSummary, totalPaysheetGroup, totalFacturationGroup, id_operation);
   
     await this.prisma.bill.update({
       where: { id },
@@ -919,11 +958,11 @@ async create(createBillDto: CreateBillDto, userId: number) {
     });
   }
   
-  private async calculateGroupTotalsForUpdate(matchingGroupSummary: any, group: GroupBillDto) {
+  private async calculateGroupTotalsForUpdate(matchingGroupSummary: any, group: GroupBillDto, amountDb: number) {
     let totalPaysheetGroup = 0;
     let totalFacturationGroup = 0;
   
-    if (matchingGroupSummary.unit_of_measure === 'JORNAL') {
+    if (matchingGroupSummary.schedule.unit_of_measure === 'JORNAL') {
       const result = this.payrollCalculationService.processJornalGroups(
         [matchingGroupSummary],
         [group],
@@ -932,17 +971,16 @@ async create(createBillDto: CreateBillDto, userId: number) {
       totalPaysheetGroup = result.payroll.totalAmount;
       totalFacturationGroup = result.billing.totalAmount;
     } else if (
-      matchingGroupSummary.unit_of_measure === 'HORAS' &&
-      matchingGroupSummary.alternative_paid_service !== 'YES'
+      matchingGroupSummary.schedule.unit_of_measure === 'HORAS' &&
+      matchingGroupSummary.tariffDetails.alternative_paid_service !== 'YES'
     ) {
       const result = await this.hoursCalculationService.processHoursGroups(
         matchingGroupSummary,
         group,
-        matchingGroupSummary.dateRange.start,
       );
       totalPaysheetGroup = result.totalFinalPayroll;
       totalFacturationGroup = result.totalFinalFacturation;
-    } else if (matchingGroupSummary.alternative_paid_service === 'YES') {
+    } else if (matchingGroupSummary.tariffDetails.alternative_paid_service === 'YES') {
       const { totalFacturation, totalPaysheet } = await this.calculateAlternativeServiceTotals(
         matchingGroupSummary,
         group,
@@ -953,6 +991,7 @@ async create(createBillDto: CreateBillDto, userId: number) {
       const { totalPaysheet, totalFacturation } = this.calculateQuantityTotals(
         matchingGroupSummary,
         group,
+        amountDb,
       );
       totalPaysheetGroup = totalPaysheet;
       totalFacturationGroup = totalFacturation;
@@ -963,7 +1002,7 @@ async create(createBillDto: CreateBillDto, userId: number) {
   
   private async updateWorkerDetails(
     billId: number,
-    group: GroupBillDto,
+    group: GroupBillDto | UpdateBillDto,
     matchingGroupSummary: any,
     totalPaysheetGroup: number,
     totalFacturationGroup: number,
@@ -999,23 +1038,21 @@ async create(createBillDto: CreateBillDto, userId: number) {
         matchingGroupSummary.workers,
       );
   
-      // Calcular pay_rate según el tipo de grupo (similar al create)
-      let payRate = pay.pay || billDetail.pay_rate;
-      
-      if (matchingGroupSummary.alternative_paid_service === 'YES') {
-        const facturationUnit = matchingGroupSummary.facturation_unit || matchingGroupSummary.unit_of_measure;
-        if (facturationUnit !== 'HORAS' && facturationUnit !== 'JORNAL') {
-          const totalUnitPays = group.pays?.reduce((sum, p) => sum + (p.pay || 0), 0) || 1;
-          payRate = (group.amount / totalUnitPays) * (pay.pay || 1);
-        }
-      } else if (
-        matchingGroupSummary.unit_of_measure !== 'HORAS' &&
-        matchingGroupSummary.unit_of_measure !== 'JORNAL'
-      ) {
-        // Para grupos por cantidad
-        const totalUnitPays = group.pays.reduce((sum, p) => sum + (p.pay || 0), 0);
-        payRate = (group.amount / totalUnitPays) * pay.pay;
-      }
+      // Construir groupPay para el cálculo del pay_rate
+      const groupPay = group.pays.map(p => ({
+        id_worker: p.id_worker,
+        pay: p.pay
+      }));
+  
+      // USAR la función calculatePayRateForWorker en lugar de lógica manual
+      const payRate = this.calculatePayRateForWorker(
+        matchingGroupSummary,
+        group,
+        groupPay,
+        Number(pay.pay),
+        { amount: group.amount || 0 }, // existingBill simulado
+      );
+  
   
       await this.prisma.billDetail.update({
         where: { id: billDetail.id },
@@ -1034,32 +1071,59 @@ async create(createBillDto: CreateBillDto, userId: number) {
     updateBillDto: UpdateBillDto,
     validateOperationID: any,
     existingBill: any,
+    id_operation: number,
   ) {
-    if (!updateBillDto.groups || updateBillDto.groups.length === 0) {
+    if (!updateBillDto) {
       throw new ConflictException('No se proporcionaron grupos para actualizar la factura.');
     }
-    for (const group of updateBillDto.groups) {
+    for (const group of [updateBillDto]) {
       const matchingGroupSummary = validateOperationID.workerGroups.find(
         (summary) => summary.groupId === group.id,
       );
       if (!matchingGroupSummary) continue;
+
+      
   
       const operationWorkers = await this.prisma.operation_Worker.findMany({
         where: {
-          id_operation: updateBillDto.id_operation ?? existingBill.id_operation,
+          id_operation: id_operation ?? existingBill.id_operation,
           id_group: group.id,
         },
       });
+
+      const billDetails = await this.prisma.billDetail.findMany({
+        where: {
+          id_bill: id,
+          id_operation_worker: {
+            in: operationWorkers.map((ow) => ow.id),
+          },
+        },
+        include: {
+          operationWorker: {
+            include: {
+              worker: {
+                select: {
+                  id: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+
   
       // Determinar el tipo de grupo y calcular totales
       const { totalPaysheetGroup, totalFacturationGroup } = await this.getExistingOrCalculateGroupTotals(
         matchingGroupSummary,
         group,
         existingBill,
+        existingBill.amount
       );
+
   
       // Construir pays actualizado para todos los trabajadores del grupo
-      const groupPay = this.buildGroupPayArray(operationWorkers, group);
+      const groupPay = this.buildGroupPayArray(billDetails, group);
   
       // Actualizar detalles de cada trabajador
       await this.updateWorkersInGroup(
@@ -1079,6 +1143,7 @@ async create(createBillDto: CreateBillDto, userId: number) {
     matchingGroupSummary: any,
     group: GroupBillDto,
     existingBill: any,
+    amountDb: number
   ) {
     let totalPaysheetGroup = 0;
     let totalFacturationGroup = 0;
@@ -1088,6 +1153,7 @@ async create(createBillDto: CreateBillDto, userId: number) {
       matchingGroupSummary.schedule?.unit_of_measure === 'HORAS' ||
       matchingGroupSummary.schedule?.facturation_unit === 'JORNAL' ||
       matchingGroupSummary.schedule?.facturation_unit === 'HORAS';
+
   
     if (isHoursOrJornal) {
       // Usar totales existentes para grupos de horas/jornal sin recalcular
@@ -1106,6 +1172,7 @@ async create(createBillDto: CreateBillDto, userId: number) {
       const { totalPaysheet, totalFacturation } = this.calculateQuantityTotals(
         matchingGroupSummary,
         group,
+        amountDb
       );
       totalPaysheetGroup = totalPaysheet;
       totalFacturationGroup = totalFacturation;
@@ -1113,15 +1180,15 @@ async create(createBillDto: CreateBillDto, userId: number) {
   
     return { totalPaysheetGroup, totalFacturationGroup };
   }
-  
-  private buildGroupPayArray(operationWorkers: any[], group: GroupBillDto) {
-    return operationWorkers.map((ow) => {
-      const payDto = group.pays.find((x) => x.id_worker === ow.id_worker);
-      let payValueWorker = payDto?.pay ?? 1;
+
+  private buildGroupPayArray(billDetails: any[], group: GroupBillDto) {
+    return billDetails.map((bd) => {
+      const payDto = group.pays.find((x) => x.id_worker === bd.operationWorker.worker.id);
+      let payValueWorker = payDto?.pay ?? (bd.pay_unit || 1); // Valor por defecto si no se encuentra el pago
       if (payValueWorker === null || payValueWorker === undefined) {
         payValueWorker = 1;
       }
-      return { id_worker: ow.id_worker, pay: Number(payValueWorker) };
+      return { id_worker: bd.operationWorker.worker.id, pay: Number(payValueWorker) };
     });
   }
   
@@ -1176,6 +1243,7 @@ async create(createBillDto: CreateBillDto, userId: number) {
         Number(payValue),
         existingBill,
       );
+
   
       await this.prisma.billDetail.update({
         where: { id: billDetail.id },
@@ -1189,39 +1257,72 @@ async create(createBillDto: CreateBillDto, userId: number) {
     }
   }
   
-  private calculatePayRateForWorker(
+   private calculatePayRateForWorker(
     matchingGroupSummary: any,
-    group: GroupBillDto,
+    group: GroupBillDto | UpdateBillDto,
     groupPay: any[],
     payValue: number,
     existingBill: any,
   ): number {
-    const isAlternativeService = matchingGroupSummary.alternative_paid_service === 'YES';
+    // Obtener datos del tariff
+    const tariffDetails = matchingGroupSummary.tariffDetails;
+    const scheduleUnitOfMeasure = matchingGroupSummary.schedule?.unit_of_measure;
+    
+    // Detectar servicio alternativo
+    const isAlternativeService = tariffDetails?.alternative_paid_service === 'YES';
+    
+    // Detectar grupo de cantidad (no HORAS, no JORNAL, sin servicio alternativo)
     const isQuantityGroup = 
-      matchingGroupSummary.unit_of_measure !== 'HORAS' &&
-      matchingGroupSummary.unit_of_measure !== 'JORNAL' &&
+      scheduleUnitOfMeasure !== 'HORAS' &&
+      scheduleUnitOfMeasure !== 'JORNAL' &&
+      !isAlternativeService &&
+      !tariffDetails?.facturationUnit;
+    
+    // Detectar grupo de horas simples (HORAS sin servicio alternativo)
+    const isSimpleHoursGroup = 
+      scheduleUnitOfMeasure === 'HORAS' && 
+      !isAlternativeService;
+    
+    // Detectar grupo jornal (JORNAL sin servicio alternativo)
+    const isJornalGroup = 
+      scheduleUnitOfMeasure === 'JORNAL' && 
       !isAlternativeService;
   
+ 
+  
     if (isAlternativeService) {
-      const facturationUnit = matchingGroupSummary.facturation_unit || matchingGroupSummary.unit_of_measure;
+      const facturationUnit = tariffDetails?.facturationUnit?.name || 
+                            matchingGroupSummary.facturation_unit || 
+                            scheduleUnitOfMeasure;
+      
       if (facturationUnit !== 'HORAS' && facturationUnit !== 'JORNAL') {
         const totalUnitPays = groupPay.reduce((sum, p) => sum + (p.pay || 0), 0);
         const safeAmount = Number(group.amount) || existingBill.amount || 0;
         const safeTotalUnidades = Number(totalUnitPays) || 1;
         const safePayValue = payValue !== null && payValue !== undefined ? Number(payValue) : 1;
-        return (safeAmount / safeTotalUnidades) * safePayValue;
+        const result = (safeAmount / safeTotalUnidades) * safePayValue;
+ 
+        return result;
+      } else {
+        // Para servicios alternativos con HORAS/JORNAL, usar payValue directamente
+   
+        return payValue;
       }
     } else if (isQuantityGroup) {
       const totalUnidades = groupPay.reduce((sum, p) => sum + (p.pay || 0), 0);
       const safeAmount = Number(group.amount) || existingBill.amount || 0;
       const safeTotalUnidades = Number(totalUnidades) || 1;
       const safePayValue = payValue !== null && payValue !== undefined ? Number(payValue) : 1;
-      return (safeAmount / safeTotalUnidades) * safePayValue;
+      const result = (safeAmount / safeTotalUnidades) * safePayValue;
+      return result;
+    } else if (isSimpleHoursGroup || isJornalGroup) {
+      // Para grupos de HORAS y JORNAL simples, pay_rate = payValue
+      return payValue;
     }
   
+    // Fallback: retornar payValue
     return payValue;
   }
-
   async remove(id: number) {
     return await this.prisma.bill.delete({
       where: { id },

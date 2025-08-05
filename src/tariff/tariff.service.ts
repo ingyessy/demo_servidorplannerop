@@ -102,10 +102,15 @@ export class TariffService {
       if (validateId['status'] === 404) {
         return validateId;
       }
+      const dataToUpdate: any = {...updateTariffDto };
+      if(updateTariffDto.alternative_paid_service === 'NO'){
+        dataToUpdate.id_facturation_unit = null;
+      }
+      
       const response = await this.prisma.tariff.update({
         where: { id },
         data: {
-          ...updateTariffDto
+          ...dataToUpdate
         },
       });
       return response;

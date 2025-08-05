@@ -48,10 +48,10 @@ export class CostCenterService {
     }
   }
 
-  async findAll(id_site: number) {
+  async findAll(id_site: number, subsiteId: number) {
     try {
       const response = await this.prisma.costCenter.findMany({
-        where: { subSite: { id_site } },
+        where: { subSite: { id_site, id: subsiteId } },
       });
       if (!response || response.length === 0) {
         return { status: 404, message: 'No cost centers found' };

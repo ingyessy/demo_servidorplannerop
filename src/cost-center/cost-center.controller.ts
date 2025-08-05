@@ -47,8 +47,8 @@ export class CostCenterController {
   }
 
   @Get()
-  async findAll(@CurrentUser('siteId') id_site: number) {
-    const response = await this.costCenterService.findAll(id_site);
+  async findAll(@CurrentUser('siteId') id_site: number,  @CurrentUser('subsiteId') subsiteId: number) {
+    const response = await this.costCenterService.findAll(id_site, subsiteId);
     if (response['status'] === 404) {
       throw new NotFoundException('No cost centers found');
     }

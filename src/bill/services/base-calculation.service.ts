@@ -15,39 +15,62 @@ export class BaseCalculationService {
     if (!tariff) {
       throw new Error(`El grupo ${group.groupId} no tiene tarifa definida`);
     }
-
+  
     if (!group.hours) {
       throw new Error(`El grupo ${group.groupId} no tiene recargos definidos`);
     }
-
+  
     let totalHours = 0;
     let totalAmount = 0;
     const hoursDetail = {};
-
+  
+    // Mapeo correcto de tipos de horas a claves de multiplicadores
+    const hourTypeMapping = {
+      'HOD': 'OD',
+      'HON': 'ON', 
+      'HED': 'ED',
+      'HEN': 'EN',
+      'HFOD': 'FOD',  // Mapear HFOD -> FOD
+      'HFON': 'FON',  // Mapear HFON   -> FON
+      'HFED': 'FED',  // Mapear HFED -> FED
+      'HFEN': 'FEN'   // Mapear HFEN -> FEN
+    };
+  
     for (const [hourType, hours] of Object.entries(hoursDistribution)) {
-      const normalizedHourType = hourType.startsWith('H')
-        ? hourType.substring(1)
-        : hourType;
-
-      // Usar multiplicadores de facturación (FAC_) o nómina según el parámetro
-      const multiplierKey = useFacturationMultipliers 
-        ? `FAC_${normalizedHourType}` 
-        : normalizedHourType;
-
-      if (hours && hours > 0 && group.hours[multiplierKey]) {
-        const hourAmount = hours * group.workerCount * tariff * group.hours[multiplierKey];
-        totalHours += hours;
-        totalAmount += hourAmount;
-
-        hoursDetail[hourType] = {
-          hours,
-          multiplier: group.hours[multiplierKey],
-          amount: hourAmount,
-        };
+      if (hours && hours > 0) {
+        // Usar el mapeo correcto para obtener la clave del multiplicador
+        const mappedHourType = hourTypeMapping[hourType];
+        
+        if (!mappedHourType) {
+          console.warn(`Tipo de hora no reconocido: ${hourType}`);
+          continue;
+        }
+  
+        // Usar multiplicadores de facturación (FAC_) o nómina según el parámetro
+        const multiplierKey = useFacturationMultipliers 
+          ? `FAC_${mappedHourType}` 
+          : mappedHourType;
+  
+  
+        if (group.hours[multiplierKey]) {
+          const hourAmount = hours * (group.workerCount || group.workers.length)* tariff * group.hours[multiplierKey];
+          totalHours += hours;
+          totalAmount += hourAmount;
+  
+          hoursDetail[hourType] = {
+            hours,
+            multiplier: group.hours[multiplierKey],
+            amount: hourAmount,
+          };
+  
+        } else {
+          console.warn(`No se encontró multiplicador para ${multiplierKey}`);
+        }
       }
     }
-
-
+  
+    console.log("Total calculado:", { totalHours, totalAmount });
+  
     return {
       totalHours,
       totalAmount,
@@ -58,7 +81,6 @@ export class BaseCalculationService {
       },
     };
   }
-
   /**
    * Calcula el monto base (trabajadores * tarifa)
    */

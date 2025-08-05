@@ -25,16 +25,16 @@ export class HoursDistribution {
   HEN: number;
   @IsNumber()
   @ApiProperty({ example: '0' })
-  HODF: number;
+  HFOD: number;
   @IsNumber()
   @ApiProperty({ example: '0' })
-  HONF: number;
+  HFON: number;
   @IsNumber()
   @ApiProperty({ example: '0' })
-  HEDF: number;
+  HFED: number;
   @IsNumber()
   @ApiProperty({ example: '0' })
-  HENF: number;
+  HFEN: number;
 }
 
 export class GroupBillDto {
@@ -72,10 +72,10 @@ export class GroupBillDto {
 
   @IsOptional()
   @ValidateNested({ each: true })
-  pays: workerPay[];
+  pays: WorkerPay[];
 }
 
-class workerPay {
+export class WorkerPay {
   @ApiProperty({ example: '1' })
   @IsNumber()
   @Min(1)

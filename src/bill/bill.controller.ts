@@ -13,7 +13,6 @@ import {
 } from '@nestjs/common';
 import { BillService } from './bill.service';
 import { CreateBillDto } from './dto/create-bill.dto';
-import { UpdateBillDto } from './dto/update-bill.dto';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
@@ -22,6 +21,7 @@ import { Roles } from 'src/auth/decorators/roles.decorator';
 import { Role } from '@prisma/client';
 import { ParseIntPipe } from 'src/pipes/parse-int/parse-int.pipe';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
+import { UpdateBillDto } from './dto/update-bill.dto';
 
 @Controller('bill')
 @UseInterceptors(SiteInterceptor)

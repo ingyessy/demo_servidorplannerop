@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateCalledAttentionDto } from './dto/create-called-attention.dto';
 import { UpdateCalledAttentionDto } from './dto/update-called-attention.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -106,10 +106,7 @@ export class CalledAttentionService {
       });
 
       if (response.length === 0) {
-        return {
-          message: 'No active called attentions found in the last 3 months',
-          status: 404,
-        };
+        throw new NotFoundException('No called attentions found for active workers in the last 3 months');
       }
 
       return response;

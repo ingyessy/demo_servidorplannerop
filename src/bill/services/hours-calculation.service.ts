@@ -55,12 +55,15 @@ export class HoursCalculationService {
   ) {}
 
   async calculateCompensatoryHours(hours: number): Promise<number> {
-    const weekHoursConfig = await this.configurationService.findOneByName('HORAS_SEMANALES');
+    const weekHoursConfig =
+      await this.configurationService.findOneByName('HORAS_SEMANALES');
     if (!weekHoursConfig) {
       throw new ConflictException('No configurations found');
     }
 
-    const weekHours = weekHoursConfig.value ? parseInt(weekHoursConfig.value, 10) : 44;
+    const weekHours = weekHoursConfig.value
+      ? parseInt(weekHoursConfig.value, 10)
+      : 44;
     const dayHours = weekHours / 6;
 
     if (hours > dayHours) {
@@ -77,79 +80,92 @@ export class HoursCalculationService {
   async processHoursGroups(
     groupSummary: WorkerGroupSummary,
     group: GroupBillDto,
-    operationDate: Date | string | null,
-  ) : Promise< ProcessHoursGroupsResult > {
+  ): Promise<ProcessHoursGroupsResult> {
+    const gfmt = groupSummary as any;
+    const combinedGroupData = {
+      ...groupSummary,
+      billHoursDistribution: group.billHoursDistribution,
+      paysheetHoursDistribution: group.paysheetHoursDistribution,
+      amount: group.amount,
+      pays: group.pays,
+      hours: groupSummary.hours || gfmt.tariffDetails.hours,
+      facturation_tariff: groupSummary.facturation_tariff || gfmt.tariffDetails.facturation_tariff,
+      paysheet_tariff: groupSummary.paysheet_tariff || gfmt.tariffDetails.paysheet_tariff,
+    };
 
-      const combinedGroupData = {
-        ...groupSummary,
-        billHoursDistribution: group.billHoursDistribution,
-        paysheetHoursDistribution: group.paysheetHoursDistribution,
-        amount: group.amount,
-        pays: group.pays,
-      };
-
-
-      const result = await this.calculateHoursGroupResult(combinedGroupData);
-  
+    const result = await this.calculateHoursGroupResult(combinedGroupData);
 
     return result;
   }
 
   private async calculateHoursGroupResult(combinedGroupData: any) {
     // Calcular horas totales
-    const totalBillHours = combinedGroupData.billHoursDistribution.HOD + 
-                          combinedGroupData.billHoursDistribution.HON;
-    const totalPaysheetHours = combinedGroupData.paysheetHoursDistribution.HOD + 
-                              combinedGroupData.paysheetHoursDistribution.HON;
+    const totalBillHours =
+      combinedGroupData.billHoursDistribution.HOD +
+      combinedGroupData.billHoursDistribution.HON;
+    const totalPaysheetHours =
+      combinedGroupData.paysheetHoursDistribution.HOD +
+      combinedGroupData.paysheetHoursDistribution.HON;
 
     // Calcular horas compensatorias
     const compBill = await this.calculateCompensatoryHours(totalBillHours);
-    const compPayroll = await this.calculateCompensatoryHours(totalPaysheetHours);
+    const compPayroll =
+      await this.calculateCompensatoryHours(totalPaysheetHours);
 
 
     // Calcular montos de distribución de horas
-    const factHoursDistributionTotal = this.baseCalculationService.calculateHoursByDistribution(
-      combinedGroupData,
-      combinedGroupData.billHoursDistribution,
-      combinedGroupData.facturation_tariff,
-      true // usar multiplicadores FAC_
-    );
+    const factHoursDistributionTotal =
+      this.baseCalculationService.calculateHoursByDistribution(
+        combinedGroupData,
+        combinedGroupData.billHoursDistribution,
+        combinedGroupData.facturation_tariff || combinedGroupData.tariffDetails.facturation_tariff,
+        true, // usar multiplicadores FAC_
+      );
+
+      console.log("Fact Hours Distribution Total--------------:", JSON.stringify(factHoursDistributionTotal, null, 2));
 
 
-    const paysheetHoursDistributionTotal = this.baseCalculationService.calculateHoursByDistribution(
-      combinedGroupData,
-      combinedGroupData.paysheetHoursDistribution,
-      combinedGroupData.paysheet_tariff,
-      false // usar multiplicadores normales
-    );
+
+    const paysheetHoursDistributionTotal =
+      this.baseCalculationService.calculateHoursByDistribution(
+        combinedGroupData,
+        combinedGroupData.paysheetHoursDistribution,
+        combinedGroupData.paysheet_tariff  || combinedGroupData.tariffDetails.paysheet_tariff,
+        false, // usar multiplicadores normales
+      );
 
     // Calcular montos compensatorios
-    const totalCompBill = this.baseCalculationService.calculateCompensatoryAmount(
-      compBill,
-      combinedGroupData.workerCount,
-      combinedGroupData.facturation_tariff,
-      totalBillHours
-    );
+    const totalCompBill =
+      this.baseCalculationService.calculateCompensatoryAmount(
+        compBill,
+        combinedGroupData.workerCount,
+        combinedGroupData.facturation_tariff,
+        totalBillHours,
+      );
 
-
-    const totalCompPayroll = this.baseCalculationService.calculateCompensatoryAmount(
-      compPayroll,
-      combinedGroupData.workerCount,
-      combinedGroupData.paysheet_tariff,
-      totalPaysheetHours
-    );
-
+    const totalCompPayroll =
+      this.baseCalculationService.calculateCompensatoryAmount(
+        compPayroll,
+        combinedGroupData.workerCount,
+        combinedGroupData.paysheet_tariff,
+        totalPaysheetHours,
+      );
 
     // Totales finales
     let totalFinalFacturation = factHoursDistributionTotal.totalAmount;
-      let totalFinalPayroll = paysheetHoursDistributionTotal.totalAmount;
-    if (combinedGroupData.compensatory === "YES") {
+    let totalFinalPayroll = paysheetHoursDistributionTotal.totalAmount;
+    if (combinedGroupData.compensatory === 'YES') {
       totalFinalFacturation += totalCompBill;
       totalFinalPayroll += totalCompPayroll;
     }
-    if(combinedGroupData.full_tariff === "YES") {
-      const sumHours =  (Object.values(combinedGroupData.billHoursDistribution) as number[]).reduce((a: number, b: number) => a + b, 0);
-      totalFinalFacturation = combinedGroupData.facturation_tariff * sumHours * combinedGroupData.workerCount;
+    if (combinedGroupData.full_tariff === 'YES') {
+      const sumHours = (
+        Object.values(combinedGroupData.billHoursDistribution) as number[]
+      ).reduce((a: number, b: number) => a + b, 0);
+      totalFinalFacturation =
+        combinedGroupData.facturation_tariff *
+        sumHours *
+        combinedGroupData.workerCount;
     }
 
     return {
@@ -173,10 +189,17 @@ export class HoursCalculationService {
     };
   }
 
-     public async  calculateAlternativeService(group: WorkerGroupSummary, groupBill: GroupBillDto) {
+  public async calculateAlternativeService(
+    group: WorkerGroupSummary,
+    groupBill: GroupBillDto,
+  ) {
+ 
     // Nómina (paysheet)
     let paysheetTotal = 0;
-    if (group.unit_of_measure !== 'HORAS' && group.unit_of_measure !== 'JORNAL') {
+    if (
+      group.unit_of_measure !== 'HORAS' &&
+      group.unit_of_measure !== 'JORNAL'
+    ) {
       // Por cantidad (ej: cajas, toneladas)
       paysheetTotal = (groupBill.amount || 0) * (group.paysheet_tariff || 0);
     } else {
@@ -185,26 +208,28 @@ export class HoursCalculationService {
         group,
         groupBill.paysheetHoursDistribution,
         group.paysheet_tariff || 0,
-        false
+        false,
       ).totalAmount;
     }
 
-  
     // Facturación
     let billingTotal = 0;
-    if(group.group_tariff === "YES"){
+    if (group.group_tariff === 'YES') {
       billingTotal = groupBill.group_hours * (group.facturation_tariff || 0);
-    } else if (group.facturation_unit !== 'HORAS' && group.facturation_unit !== 'JORNAL') {
+    } else if (
+      group.facturation_unit !== 'HORAS' &&
+      group.facturation_unit !== 'JORNAL'
+    ) {
       billingTotal = (groupBill.amount || 0) * (group.facturation_tariff || 0);
     } else {
       billingTotal = this.baseCalculationService.calculateHoursByDistribution(
         group,
         groupBill.billHoursDistribution,
         group.facturation_tariff || 0,
-        true
+        true,
       ).totalAmount;
     }
-  
+
     return {
       paysheetTotal,
       billingTotal,
