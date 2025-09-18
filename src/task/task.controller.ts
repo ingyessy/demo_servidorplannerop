@@ -34,29 +34,52 @@ import { sub } from 'date-fns';
 export class TaskController {
   constructor(private readonly taskService: TaskService) {}
 
-  @Post()
-  @UsePipes(new ToLowerCasePipe())
-  async create(
-    @Body() createTaskDto: CreateTaskDto,
-    @CurrentUser('userId') userId: number,
-    @CurrentUser('siteId') siteId: number,
-    @CurrentUser('subsiteId') subsiteId: number,
-  ) {
-    if (!createTaskDto.id_site || !createTaskDto.id_subsite) {
-      createTaskDto.id_site = siteId;
-      createTaskDto.id_subsite = subsiteId;
-    }
-    createTaskDto.id_user = userId;
-    const response = await this.taskService.create(createTaskDto);
-    if (response['status'] === 404) {
-      throw new NotFoundException(response['message']);
-    }
-    if (response['status'] === 409) {
-      throw new ConflictException(response['message']);
-    }
+  // @Post()
+  // // @UsePipes(new ToLowerCasePipe())
+  // async create(
+  //   @Body() createTaskDto: CreateTaskDto,
+  //   @CurrentUser('userId') userId: number,
+  //   @CurrentUser('siteId') siteId: number,
+  //   @CurrentUser('subsiteId') subsiteId: number,
+  // ) {
+  //   if (!createTaskDto.id_site || !createTaskDto.id_subsite) {
+  //     createTaskDto.id_site = siteId;
+  //     createTaskDto.id_subsite = subsiteId;
+  //   }
+  //   createTaskDto.id_user = userId;
+  //   const response = await this.taskService.create(createTaskDto);
+  //   if (response['status'] === 404) {
+  //     throw new NotFoundException(response['message']);
+  //   }
+  //   if (response['status'] === 409) {
+  //     throw new ConflictException(response['message']);
+  //   }
 
-    return response;
+  //   return response;
+  // }
+
+  @Post()
+async create(
+  @Body() createTaskDto: CreateTaskDto,
+  @CurrentUser('userId') userId: number,
+  @CurrentUser('siteId') siteId: number,
+  @CurrentUser('subsiteId') subsiteId: number,
+) {
+  // Siempre asigna el siteId del usuario
+  createTaskDto.id_site = siteId;
+  // Fuerza la subsede a null SIEMPRE
+  createTaskDto.id_subsite = null;
+  createTaskDto.id_user = userId;
+
+  const response = await this.taskService.create(createTaskDto);
+  if (response['status'] === 404) {
+    throw new NotFoundException(response['message']);
   }
+  if (response['status'] === 409) {
+    throw new ConflictException(response['message']);
+  }
+  return response;
+}
 
   @Get(':id')
   @Roles(Role.SUPERVISOR, Role.ADMIN, Role.SUPERADMIN)
@@ -71,14 +94,30 @@ export class TaskController {
     return response;
   }
 
-  @Get()
+   @Get()
   @Roles(Role.SUPERVISOR, Role.ADMIN, Role.SUPERADMIN)
-  findAll(@CurrentUser('siteId') siteId: number, @CurrentUser('subsiteId') subsiteId: number) {
-    if (!siteId || !subsiteId) {
-      throw new ConflictException('Site ID and Subsite ID are required');
+  async findAll(
+    @CurrentUser('siteId') siteId: number,
+    @CurrentUser('subsiteId') subsiteId?: number, // Hacer opcional con ?
+  ) {
+    // Quitar esta validación que hace obligatorio el subsiteId
+    // if (!siteId || !subsiteId) {
+    //   throw new ConflictException('Site ID and Subsite ID are required');
+    // }
+
+    // Solo validar que siteId sea requerido
+    if (!siteId) {
+      throw new ConflictException('Site ID is required');
     }
-    return this.taskService.findAll(siteId, subsiteId);
+
+    const response = await this.taskService.findAll(siteId, subsiteId);
+    if (response['status'] === 404) {
+      throw new NotFoundException(response['message']);
+    }
+    return response;
   }
+
+  
   @Get('by-name/:name')
   async findByName(
     @Param('name') name: string,
@@ -92,28 +131,20 @@ export class TaskController {
     return response;
   }
 
-  @Patch(':id')
-  async update(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() updateTaskDto: UpdateTaskDto,
-    @CurrentUser('userId') userId: number,
-    @CurrentUser('siteId') siteId: number,
-  ) {
-    if (!updateTaskDto.id_site) {
-      if (updateTaskDto.id_site != siteId) {
-        throw new ConflictException(
-          'You cannot update a task from another site',
-        );
-      }
-    }
-    updateTaskDto.id_user = userId;
-    const response = await this.taskService.update(id, updateTaskDto);
-    if (response['status'] === 404) {
-      throw new NotFoundException(response['message']);
-    }
-
-    return response;
+ @Patch(':id')
+async update(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() updateTaskDto: UpdateTaskDto,
+  @CurrentUser('siteId') siteId: number, // Obtener el siteId del usuario
+) {
+  const response = await this.taskService.update(id, updateTaskDto, siteId);
+  if (response['status'] === 404) {
+    throw new NotFoundException(response['message']);
+  } else if (response['status'] === 409) {
+    throw new ConflictException(response['message']);
   }
+  return response;
+}
 
   @Delete(':id')
   async remove(@Param('id', ParseIntPipe) id: number) {

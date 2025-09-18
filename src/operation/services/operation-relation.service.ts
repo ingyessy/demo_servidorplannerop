@@ -235,6 +235,13 @@ export class OperationRelationService {
     id_site?: number | null,
     id_subsite?: number | null,
   ) {
+    //   console.log('processRelationUpdates:', {
+    //   operationId,
+    //   workers,
+    //   inCharged,
+    //   id_site,
+    //   id_subsite,
+    // });
     // Procesar actualizaciones de trabajadores
     if (workers) {
       const res = await this.processWorkerUpdates(
@@ -269,76 +276,91 @@ export class OperationRelationService {
    * @returns Resultado de las operaciones
    */
   private async processWorkerUpdates(
-    operationId: number,
-    workers: any,
-    id_site?: number | null,
-    id_subsite?: number | null,
-  ): Promise<any> {
-    const results = {
-      connected: null as any,
-      disconnected: null as any,
-      updated: null as any,
-    };
+  operationId: number,
+  workers: any,
+  id_site?: number | null,
+  id_subsite?: number | null,
+): Promise<any> {
+  const results = {
+    connected: null as any,
+    disconnected: null as any,
+    updated: null as any,
+  };
 
-    try {
-      // Conectar nuevos trabajadores
-      if (workers.connect?.length) {
-        const { simpleWorkers, scheduledGroups } = this.separateWorkerTypes(
-          workers.connect,
-        );
-
-        if (simpleWorkers.length > 0 || scheduledGroups.length > 0) {
-          const validationGroup = await this.validateOperationIds(
-            {
-              workerIds: simpleWorkers,
-              workersWithSchedule: scheduledGroups,
-            },
-            scheduledGroups,
-            id_site,
-          );
-          if (validationGroup && validationGroup.status !== 200) {
-            return validationGroup;
-          }
-          results.connected =
-            await this.operationWorkerService.assignWorkersToOperation(
-              {
-                id_operation: operationId,
-                workerIds: simpleWorkers,
-                workersWithSchedule: scheduledGroups,
-              },
-              id_subsite,
-              id_site,
-            );
-        }
-      }
-
-      // Desconectar trabajadores (MODIFICADO)
-      if (workers.disconnect?.length) {
-        results.disconnected =
-          await this.operationWorkerService.removeWorkersFromOperation({
-            id_operation: operationId,
-            workersToRemove: workers.disconnect, // ← CAMBIO: Pasar array completo con id_group opcional
-          });
-      }
-
-      // Actualizar programación de trabajadores
-      if (workers.update?.length) {
-        results.updated =
-          await this.operationWorkerService.updateWorkersSchedule(
-            operationId,
-            workers.update,
-            id_site,
-          );
-      }
-      return results;
-    } catch (error) {
-      console.error('Error processing worker updates:', error);
+  try {
+    const currentWorkers = await this.operationWorkerService.getWorkersFromOperation(operationId);
+console.log('Trabajadores actuales en BD:', currentWorkers);
+    let currentWorkerIds: number[] = [];
+    if (Array.isArray(currentWorkers)) {
+      currentWorkerIds = currentWorkers.map(w => w.id);
+    } else {
+      console.error('Error al obtener trabajadores de la operación:', currentWorkers);
       return {
-        error: error.message,
-        status: 500,
+        error: currentWorkers.message || 'Error al obtener trabajadores',
+        status: currentWorkers.status || 500,
       };
     }
+
+    const { simpleWorkers, scheduledGroups } = this.separateWorkerTypes(workers.connect || []);
+    const scheduledWorkerIds = scheduledGroups.flatMap(g => g.workerIds);
+    const newWorkerIds = [...simpleWorkers, ...scheduledWorkerIds];
+
+    // LOGS PARA DEPURAR
+    console.log('Trabajadores actuales:', currentWorkerIds);
+    console.log('Nuevos trabajadores:', newWorkerIds);
+
+    const toRemove = currentWorkerIds.filter(id => !newWorkerIds.includes(id));
+    const toAdd = newWorkerIds.filter(id => !currentWorkerIds.includes(id));
+
+    console.log('A eliminar:', toRemove);
+    console.log('A agregar:', toAdd);
+
+    if (toRemove.length > 0) {
+      results.disconnected = await this.operationWorkerService.removeWorkersFromOperation({
+        id_operation: operationId,
+        workersToRemove: toRemove,
+      });
+    }
+
+    if (toAdd.length > 0) {
+      const addSimple = toAdd.filter(id => simpleWorkers.includes(id));
+      const addScheduled = scheduledGroups
+        .map(group => ({
+          ...group,
+          workerIds: group.workerIds.filter(id => toAdd.includes(id)),
+        }))
+        .filter(group => group.workerIds.length > 0);
+
+      if (addSimple.length > 0 || addScheduled.length > 0) {
+        results.connected = await this.operationWorkerService.assignWorkersToOperation(
+          {
+            id_operation: operationId,
+            workerIds: addSimple,
+            workersWithSchedule: addScheduled,
+          },
+          id_subsite,
+          id_site,
+        );
+      }
+    }
+
+    if (workers.update?.length) {
+      results.updated = await this.operationWorkerService.updateWorkersSchedule(
+        operationId,
+        workers.update,
+        id_site,
+      );
+    }
+
+    return results;
+  } catch (error) {
+    console.error('Error processing worker updates:', error);
+    return {
+      error: error.message,
+      status: 500,
+    };
   }
+}
 
   /**
    * Separa trabajadores en simples y programados

@@ -22,6 +22,7 @@ model User {
   clientProgramming ClientProgramming[]
   inChargeOperation InChargeOperation[]
   inability         Inability[]
+  permissions       Permission[]
   areas             JobArea[]
   operation         Operation[]
   task              Task[]
@@ -72,6 +73,7 @@ model Worker {
   failures         Int                @default(0)
   calledAttention  CalledAttention[]
   inability        Inability[]
+  permissions      Permission[]
   operations       Operation_Worker[]
   jobArea          JobArea?           @relation(fields: [id_area], references: [id])
   user             User               @relation(fields: [id_user], references: [id])
@@ -145,7 +147,7 @@ model Task {
   id_site          Int                @default(1)
   id_subsite       Int?
   subSite          SubSite?           @relation(fields: [id_subsite], references: [id])
-  SubTask          SubTask[]
+  SubTask          SubTask[]        
 }
 
 model SubTask {
@@ -156,6 +158,8 @@ model SubTask {
   id_task Int
   task    Task             @relation(fields: [id_task], references: [id])
   Tariff  Tariff[]
+  id_subsite       Int     
+  subSite          SubSite           @relation(fields: [id_subsite], references: [id])
 }
 
 model Client {
@@ -203,8 +207,8 @@ model WorkerFeeding {
 
 model Inability {
   id               Int             @id @default(autoincrement())
-  dateDisableStart DateTime
-  dateDisableEnd   DateTime
+  dateDisableStart DateTime         @db.Date
+  dateDisableEnd   DateTime         @db.Date
   type             TypeDisability
   cause            CauseDisability
   id_worker        Int
@@ -213,6 +217,22 @@ model Inability {
   updateAt         DateTime        @updatedAt
   user             User            @relation(fields: [id_user], references: [id])
   worker           Worker          @relation(fields: [id_worker], references: [id])
+}
+
+model Permission{
+  id              Int               @id @default(autoincrement())
+  dateDisableStart DateTime         @db.Date
+  dateDisableEnd   DateTime         @db.Date
+  timeStart        String
+  timeEnd          String
+  // status           PermissionStatus  @default(INACTIVE)
+  id_worker        Int
+  id_user          Int
+  observation      String?
+  createAt         DateTime         @default(now())
+  updateAt         DateTime         @updatedAt
+  user             User             @relation(fields: [id_user], references: [id])
+  worker           Worker           @relation(fields: [id_worker], references: [id])
 }
 
 model ClientProgramming {
@@ -263,6 +283,7 @@ model SubSite {
   Task              Task[]
   ClientProgramming ClientProgramming[]
   CostCenter        CostCenter[]
+  SubTask           SubTask[]
 }
 
 model CostCenter {
@@ -362,6 +383,7 @@ model Bill {
   total_bill        Decimal   @db.Decimal(10, 2)
   total_paysheet    Decimal   @db.Decimal(10, 2)
   week_number       Int
+  status            BillStatus @default(ACTIVE)
   number_of_hours   Decimal?  @db.Decimal(4, 2)
   HOD               Decimal?  @db.Decimal(4, 2)
   HON               Decimal?  @db.Decimal(4, 2)
@@ -447,6 +469,7 @@ enum Status {
   UNAVALIABLE
   DEACTIVATED
   DISABLE
+  PERMISSION
 }
 
 enum StatusOperation {
@@ -473,4 +496,9 @@ enum StatusComplete {
 enum StatusActivation {
   ACTIVE
   INACTIVE
+}
+
+enum BillStatus {
+  ACTIVE
+  COMPLETED
 }

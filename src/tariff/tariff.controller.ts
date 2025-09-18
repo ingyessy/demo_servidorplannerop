@@ -50,16 +50,17 @@ export class TariffController {
   }
 
   @Get()
-  async findAll(
-    @CurrentUser('subsiteId') subsiteId: number,
-  ) {
-    const response = await this.tariffService.findAll(subsiteId);
-    if (response['status'] === 404) {
-      throw new NotFoundException(response['message']);
-    }
-    return response;
+async findAll(
+  @CurrentUser('siteId') siteId: number,
+  @CurrentUser('subsiteId') subsiteId: number | null,
+) {
+  const response = await this.tariffService.findAll(siteId, subsiteId);
+  if (response['status'] === 404) {
+    throw new NotFoundException(response['message']);
   }
-
+  return response;
+}
+  
   @Get(':id')
   async findOne(
     @Param('id', ParseIntPipe) id: number,

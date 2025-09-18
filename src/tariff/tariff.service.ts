@@ -54,29 +54,80 @@ export class TariffService {
     }
   }
 
-  async findAll(id_subsite: number) {
-    try {
-      const response = await this.prisma.tariff.findMany({
-        where: {
+ async findAll(id_site?: number, id_subsite?: number | null) {
+  try {
+    let whereClause: any = {};
+
+    if (id_site) {
+      if (typeof id_subsite === 'number') {
+        // Filtrar por sede y subsede específica
+        whereClause = {
           costCenter: {
-            id_subsite,
+            id_subsite: id_subsite,
+            subSite: {
+              id_site: id_site,
+            },
+          },
+        };
+      } else {
+        // Filtrar solo por sede (todas las subsedes)
+        whereClause = {
+          costCenter: {
+            subSite: {
+              id_site: id_site,
+            },
+          },
+        };
+      }
+    }
+
+    const response = await this.prisma.tariff.findMany({
+      where: whereClause,
+      include: {
+        subTask: {
+          include: {
+            task: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
           },
         },
-        include: {
-          subTask: true,
-          costCenter: true,
-          unitOfMeasure: true,
+        costCenter: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+          },
         },
-      });
-      if (!response || response.length === 0) {
-        return { status: 404, message: 'No tariffs found' };
-      }
-      return response;
-    } catch (error) {
-      throw new Error('Error fetching tariffs');
-    }
-  }
+        unitOfMeasure: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        facturationUnit: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+      orderBy: {
+        id: 'asc',
+      },
+    });
 
+    if (!response || response.length === 0) {
+      return { status: 404, message: 'No tariffs found' };
+    }
+    return response;
+  } catch (error) {
+    throw new Error('Error fetching tariffs');
+  }
+}
+  
   async findOne(id: number, id_site?: number) {
     try {
       const response = await this.prisma.tariff.findUnique({
@@ -102,17 +153,61 @@ export class TariffService {
       if (validateId['status'] === 404) {
         return validateId;
       }
-      const dataToUpdate: any = {...updateTariffDto };
-      if(updateTariffDto.alternative_paid_service === 'NO'){
+      
+      const dataToUpdate: any = { ...updateTariffDto };
+      
+      if (updateTariffDto.alternative_paid_service === 'NO') {
         dataToUpdate.id_facturation_unit = null;
       }
-      
+
+      // Filtrar campos que no se pueden actualizar
+      const allowedFields = [
+        'code',
+        'id_subtask',
+        'id_costCenter',
+        'id_unidOfMeasure',
+        'id_facturation_unit',
+        'paysheet_tariff',
+        'facturation_tariff',
+        'full_tariff',
+        'compensatory',
+        'alternative_paid_service',
+        'group_tariff',
+        'settle_payment',
+        'agreed_hours',
+        'OD',
+        'ON',
+        'ED',
+        'EN',
+        'FOD',
+        'FON',
+        'FED',
+        'FEN',
+        'FAC_OD',
+        'FAC_ON',
+        'FAC_ED',
+        'FAC_EN',
+        'FAC_FOD',
+        'FAC_FON',
+        'FAC_FED',
+        'FAC_FEN',
+        'id_user',
+        'status'
+      ];
+
+      // Filtrar solo los campos permitidos
+      const filteredData = Object.keys(dataToUpdate)
+        .filter(key => allowedFields.includes(key))
+        .reduce((obj, key) => {
+          obj[key] = dataToUpdate[key];
+          return obj;
+        }, {});
+
       const response = await this.prisma.tariff.update({
         where: { id },
-        data: {
-          ...dataToUpdate
-        },
+        data: filteredData,
       });
+      
       return response;
     } catch (error) {
       console.error('Error updating tariff:', error);

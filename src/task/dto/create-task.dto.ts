@@ -23,5 +23,5 @@ export class CreateTaskDto {
   @Type(() => Number)
   @IsNumber()
   @IsOptional()
-  id_subsite?: number;
+  id_subsite?: number | null;
 }

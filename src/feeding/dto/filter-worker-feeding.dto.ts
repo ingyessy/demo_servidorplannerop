@@ -57,4 +57,11 @@ export class FilterWorkerFeedingDto {
   @IsNumber()
   @Type(() => Number)
   id_site?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
+  id_subsite?: number;
+
+  
 }

@@ -123,67 +123,67 @@ export class ValidationTaskAndSubtaskService {
         }
       }
 
-      // 3. VALIDAR QUE TODAS LAS TASKS SON DEL MISMO SUBSITE
-      const taskSubSites = existingTasks.map((task) => task.id_subsite);
+      // // 3. VALIDAR QUE TODAS LAS TASKS SON DEL MISMO SUBSITE
+      // const taskSubSites = existingTasks.map((task) => task.id_subsite);
       
-      const uniqueSubSites = [...new Set(taskSubSites)];
-      if (uniqueSubSites.length > 1) {
-        const taskDetails = existingTasks.map((task) => ({
-          taskId: task.id,
-          subSite: task.id_subsite,
-        }));
+      // const uniqueSubSites = [...new Set(taskSubSites)];
+      // if (uniqueSubSites.length > 1) {
+      //   const taskDetails = existingTasks.map((task) => ({
+      //     taskId: task.id,
+      //     subSite: task.id_subsite,
+      //   }));
 
-        return {
-          message: 'All tasks in an operation must belong to the same SubSite',
-          status: 400,
-          details: `Found tasks from ${uniqueSubSites.length} different SubSites: ${uniqueSubSites.join(', ')}`,
-          taskSubSiteConflict: {
-            foundSubSites: uniqueSubSites,
-            taskDetails: taskDetails,
-          },
-        };
-      }
+      //   return {
+      //     message: 'All tasks in an operation must belong to the same SubSite',
+      //     status: 400,
+      //     details: `Found tasks from ${uniqueSubSites.length} different SubSites: ${uniqueSubSites.join(', ')}`,
+      //     taskSubSiteConflict: {
+      //       foundSubSites: uniqueSubSites,
+      //       taskDetails: taskDetails,
+      //     },
+      //   };
+      // }
 
-      // 4. VALIDAR QUE TODAS LAS TARIFAS SON DEL MISMO SUBSITE
-      const tariffSubSites = existingTariffs.map(
-        (tariff) => tariff.costCenter?.id_subsite,
-      );
-      const uniqueTariffSubSites = [...new Set(tariffSubSites.filter(Boolean))];
+      // // 4. VALIDAR QUE TODAS LAS TARIFAS SON DEL MISMO SUBSITE
+      // const tariffSubSites = existingTariffs.map(
+      //   (tariff) => tariff.costCenter?.id_subsite,
+      // );
+      // const uniqueTariffSubSites = [...new Set(tariffSubSites.filter(Boolean))];
 
-      if (uniqueTariffSubSites.length > 1) {
-        const tariffDetails = existingTariffs.map((tariff) => ({
-          tariffId: tariff.id,
-          subSite: tariff.costCenter?.id_subsite,
-        }));
+      // if (uniqueTariffSubSites.length > 1) {
+      //   const tariffDetails = existingTariffs.map((tariff) => ({
+      //     tariffId: tariff.id,
+      //     subSite: tariff.costCenter?.id_subsite,
+      //   }));
 
-        return {
-          message:
-            'All tariffs in an operation must belong to the same SubSite',
-          status: 400,
-          details: `Found tariffs from ${uniqueTariffSubSites.length} different SubSites: ${uniqueTariffSubSites.join(', ')}`,
-          tariffSubSiteConflict: {
-            foundSubSites: uniqueTariffSubSites,
-            tariffDetails: tariffDetails,
-          },
-        };
-      }
+      //   return {
+      //     message:
+      //       'All tariffs in an operation must belong to the same SubSite',
+      //     status: 400,
+      //     details: `Found tariffs from ${uniqueTariffSubSites.length} different SubSites: ${uniqueTariffSubSites.join(', ')}`,
+      //     tariffSubSiteConflict: {
+      //       foundSubSites: uniqueTariffSubSites,
+      //       tariffDetails: tariffDetails,
+      //     },
+      //   };
+      // }
 
-      // 5. VALIDAR QUE EL SUBSITE DE LAS TAREAS Y TARIFAS SEA EL MISMO
-      if (
-        uniqueSubSites.length > 0 &&
-        uniqueTariffSubSites.length > 0 &&
-        uniqueSubSites[0] !== uniqueTariffSubSites[0]
-      ) {
-        return {
-          message: 'Tasks and tariffs must belong to the same SubSite',
-          status: 400,
-          details: `Tasks are from SubSite ${uniqueSubSites[0]} but tariffs are from SubSite ${uniqueTariffSubSites[0]}`,
-          mixedSubSiteConflict: {
-            taskSubSite: uniqueSubSites[0],
-            tariffSubSite: uniqueTariffSubSites[0],
-          },
-        };
-      }
+      // // 5. VALIDAR QUE EL SUBSITE DE LAS TAREAS Y TARIFAS SEA EL MISMO
+      // if (
+      //   uniqueSubSites.length > 0 &&
+      //   uniqueTariffSubSites.length > 0 &&
+      //   uniqueSubSites[0] !== uniqueTariffSubSites[0]
+      // ) {
+      //   return {
+      //     message: 'Tasks and tariffs must belong to the same SubSite',
+      //     status: 400,
+      //     details: `Tasks are from SubSite ${uniqueSubSites[0]} but tariffs are from SubSite ${uniqueTariffSubSites[0]}`,
+      //     mixedSubSiteConflict: {
+      //       taskSubSite: uniqueSubSites[0],
+      //       tariffSubSite: uniqueTariffSubSites[0],
+      //     },
+      //   };
+      // }
 
       // 6. VALIDAR QUE LAS TARIFAS PERTENECEN A LA TAREA INDICADA
       // Crear un mapa de task -> subtasks para validación rápida
@@ -239,7 +239,7 @@ export class ValidationTaskAndSubtaskService {
         success: true,
         validatedRelations: taskSubTaskRelations,
         taskSubTaskMap: Object.fromEntries(taskSubTaskMap),
-        validatedSubSite: uniqueSubSites[0],
+        // validatedSubSite: uniqueSubSites[0],
       };
     } catch (error) {
       console.error('Error validating Task-Tariff relations:', error);

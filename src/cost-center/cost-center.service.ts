@@ -48,20 +48,51 @@ export class CostCenterService {
     }
   }
 
+  // async findAll(id_site: number, subsiteId: number) {
+  //   try {
+  //     const response = await this.prisma.costCenter.findMany({
+  //       where: { subSite: { id_site, id: subsiteId } },
+  //     });
+  //     if (!response || response.length === 0) {
+  //       return { status: 404, message: 'No cost centers found' };
+  //     }
+  //     return response;
+  //   } catch (error) {
+  //     console.error('Error fetching cost centers:', error);
+  //     throw new Error('Error fetching cost centers');
+  //   }
+  // }
+
   async findAll(id_site: number, subsiteId: number) {
-    try {
-      const response = await this.prisma.costCenter.findMany({
-        where: { subSite: { id_site, id: subsiteId } },
+  try {
+    let whereClause: any = {};
+
+    // Si se pasa un subsiteId válido, filtra por ese subsite
+    if (subsiteId) {
+      whereClause.id_subsite = subsiteId;
+    } else if (id_site) {
+      // Si solo se pasa id_site, busca todos los id_subsite de ese sitio
+      const subsites = await this.prisma.subSite.findMany({
+        where: { id_site },
+        select: { id: true },
       });
-      if (!response || response.length === 0) {
-        return { status: 404, message: 'No cost centers found' };
-      }
-      return response;
-    } catch (error) {
-      console.error('Error fetching cost centers:', error);
-      throw new Error('Error fetching cost centers');
+      const subsiteIds = subsites.map(s => s.id);
+      whereClause.id_subsite = { in: subsiteIds };
     }
+
+    const response = await this.prisma.costCenter.findMany({
+      where: whereClause,
+    });
+
+    if (!response || response.length === 0) {
+      return { status: 404, message: 'No cost centers found' };
+    }
+    return response;
+  } catch (error) {
+    console.error('Error fetching cost centers:', error);
+    throw new Error('Error fetching cost centers');
   }
+}
 
   async findOne(id: number, id_site?: number) {
     try {

@@ -10,6 +10,8 @@ import {
 import { Transform, Type } from 'class-transformer';
 
 export class OperationFilterDto {
+
+  
   @IsOptional()
   @IsArray()
   @IsEnum(StatusOperation, { each: true })

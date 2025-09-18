@@ -36,6 +36,7 @@ import { UnitOfMeasureModule } from './unit-of-measure/unit-of-measure.module';
 import { TariffModule } from './tariff/tariff.module';
 import { ConfigurationModule } from './configuration/configuration.module';
 import { BillModule } from './bill/bill.module';
+import { PermissionModule } from './permission/permission.module';
 
 @Module({
   imports: [
@@ -71,6 +72,7 @@ import { BillModule } from './bill/bill.module';
     TariffModule,
     ConfigurationModule,
     BillModule,
+    PermissionModule,
   ],
   providers: [
     PrismaService,

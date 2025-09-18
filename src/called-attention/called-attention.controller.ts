@@ -157,7 +157,7 @@ export class CalledAttentionController {
       id_site,
     );
 
-    console.log("Response from findAll:", response);
+   
 
     // Si no hay datos o hay un error, devolver la respuesta original
     if (!Array.isArray(response)) {

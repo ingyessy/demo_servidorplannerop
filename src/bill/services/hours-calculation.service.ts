@@ -4,6 +4,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { WorkerGroupSummary } from '../entities/worker-group-analysis.types';
 import { GroupBillDto, HoursDistribution } from '../dto/create-bill.dto';
 import { BaseCalculationService } from './base-calculation.service';
+import { getDayNamesInRange, hasSundayInRange } from 'src/common/utils/dateType';
 
 export interface ProcessHoursGroupsResult {
   groupId: string;
@@ -54,20 +55,49 @@ export class HoursCalculationService {
     private baseCalculationService: BaseCalculationService,
   ) {}
 
-  async calculateCompensatoryHours(hours: number): Promise<number> {
-    const weekHoursConfig =
-      await this.configurationService.findOneByName('HORAS_SEMANALES');
-    if (!weekHoursConfig) {
-      throw new ConflictException('No configurations found');
+  /**
+   * Determina las horas semanales límite basado en si hay domingo en el rango de fechas
+   */
+  private async getWeeklyHoursLimit(startDate: Date, endDate: Date): Promise<number> {
+    const hasSunday = hasSundayInRange(startDate, endDate);
+    
+    if (hasSunday) {
+      const sundayHoursConfig = await this.configurationService.findOneByName('HORAS_SEMANALES_DOMINGO');
+      if (sundayHoursConfig?.value) {
+        return parseInt(sundayHoursConfig.value, 10);
+      }
+      return 48; // Valor por defecto para domingos
+    } else {
+      const weekHoursConfig = await this.configurationService.findOneByName('HORAS_SEMANALES');
+      if (weekHoursConfig?.value) {
+        return parseInt(weekHoursConfig.value, 10);
+      }
+      return 44; // Valor por defecto para días normales
+    }
+  }
+
+  /**
+   * Determina si se debe calcular compensatorio basado en la fecha
+   */
+  private shouldCalculateCompensatory(startDate: Date, endDate: Date): boolean {
+    return !hasSundayInRange(startDate, endDate);
+  }
+
+  async calculateCompensatoryHours(hours: number, startDate?: Date, endDate?: Date): Promise<number> {
+    // Si se proporcionan fechas, verificar si hay domingo
+    if (startDate && endDate && !this.shouldCalculateCompensatory(startDate, endDate)) {
+      console.log('No se calcula compensatorio para operaciones con domingo');
+      return 0;
     }
 
-    const weekHours = weekHoursConfig.value
-      ? parseInt(weekHoursConfig.value, 10)
-      : 44;
+    const weekHours = startDate && endDate 
+      ? await this.getWeeklyHoursLimit(startDate, endDate)
+      : 44; // Fallback a valor por defecto
+
     const dayHours = weekHours / 6;
 
     if (hours > dayHours) {
-      throw new ConflictException('HOD + HON exceed daily hours limit');
+      throw new ConflictException(`Las horas (${hours}) exceden el límite diario de ${dayHours} horas`);
     }
 
     const compensatoryHours = dayHours / 6 / (weekHours / 6);
@@ -92,13 +122,35 @@ export class HoursCalculationService {
       facturation_tariff: groupSummary.facturation_tariff || gfmt.tariffDetails.facturation_tariff,
       paysheet_tariff: groupSummary.paysheet_tariff || gfmt.tariffDetails.paysheet_tariff,
     };
+   
+    // Obtener fechas para validaciones
+    let startDate: Date | null = null;
+    let endDate: Date | null = null;
+    
+    if (groupSummary.dateRange?.start && groupSummary.dateRange?.end) {
+      startDate = toLocalDate(groupSummary.dateRange.start);
+      endDate = toLocalDate(groupSummary.dateRange.end);
 
-    const result = await this.calculateHoursGroupResult(combinedGroupData);
+      console.log('=== ANÁLISIS DE FECHAS ===');
+      console.log('startDate:', startDate.toISOString(), 'Día:', startDate.getDay());
+      console.log('endDate:', endDate.toISOString(), 'Día:', endDate.getDay());
 
+      const diasSemana = getDayNamesInRange(startDate, endDate);
+      const tieneDomingo = hasSundayInRange(startDate, endDate);
+      const horasLimite = await this.getWeeklyHoursLimit(startDate, endDate);
+      
+      console.log('Días de la semana en la operación:', diasSemana);
+      console.log('¿Tiene domingo?', tieneDomingo);
+      console.log('Horas límite semanales:', horasLimite);
+      console.log('¿Calcular compensatorio?', this.shouldCalculateCompensatory(startDate, endDate));
+      console.log('=== FIN ANÁLISIS FECHAS ===');
+    }
+
+    const result = await this.calculateHoursGroupResult(combinedGroupData, startDate, endDate);
     return result;
   }
 
-  private async calculateHoursGroupResult(combinedGroupData: any) {
+  private async calculateHoursGroupResult(combinedGroupData: any, startDate?: Date | null, endDate?: Date | null) {
     // Calcular horas totales
     const totalBillHours =
       combinedGroupData.billHoursDistribution.HOD +
@@ -107,31 +159,39 @@ export class HoursCalculationService {
       combinedGroupData.paysheetHoursDistribution.HOD +
       combinedGroupData.paysheetHoursDistribution.HON;
 
-    // Calcular horas compensatorias
-    const compBill = await this.calculateCompensatoryHours(totalBillHours);
-    const compPayroll =
-      await this.calculateCompensatoryHours(totalPaysheetHours);
+    // Calcular horas compensatorias (pasando las fechas)
+    const compBill = await this.calculateCompensatoryHours(
+      totalBillHours, 
+      startDate || undefined, 
+      endDate || undefined
+    );
+    const compPayroll = await this.calculateCompensatoryHours(
+      totalPaysheetHours, 
+      startDate || undefined, 
+      endDate || undefined
+    );
 
-
-    // Calcular montos de distribución de horas
+    // Calcular montos de distribución de horas - PASANDO LAS FECHAS
     const factHoursDistributionTotal =
       this.baseCalculationService.calculateHoursByDistribution(
         combinedGroupData,
         combinedGroupData.billHoursDistribution,
         combinedGroupData.facturation_tariff || combinedGroupData.tariffDetails.facturation_tariff,
         true, // usar multiplicadores FAC_
+        startDate || undefined,
+        endDate || undefined
       );
 
-      console.log("Fact Hours Distribution Total--------------:", JSON.stringify(factHoursDistributionTotal, null, 2));
-
-
+    console.log("Fact Hours Distribution Total--------------:", JSON.stringify(factHoursDistributionTotal, null, 2));
 
     const paysheetHoursDistributionTotal =
       this.baseCalculationService.calculateHoursByDistribution(
         combinedGroupData,
         combinedGroupData.paysheetHoursDistribution,
         combinedGroupData.paysheet_tariff  || combinedGroupData.tariffDetails.paysheet_tariff,
-        false, // usar multiplicadores normales
+        false, // usar multiplicadores normales - AQUÍ SE APLICARÁ LA LÓGICA DE DOMINGO
+        startDate || undefined,
+        endDate || undefined
       );
 
     // Calcular montos compensatorios
@@ -154,10 +214,17 @@ export class HoursCalculationService {
     // Totales finales
     let totalFinalFacturation = factHoursDistributionTotal.totalAmount;
     let totalFinalPayroll = paysheetHoursDistributionTotal.totalAmount;
-    if (combinedGroupData.compensatory === 'YES') {
+    
+    // Solo agregar compensatorio si no hay domingo
+    const shouldCalculateComp = startDate && endDate 
+      ? this.shouldCalculateCompensatory(startDate, endDate)
+      : true; // Por defecto calcular si no hay fechas
+
+    if (combinedGroupData.compensatory === 'YES' && shouldCalculateComp) {
       totalFinalFacturation += totalCompBill;
       totalFinalPayroll += totalCompPayroll;
     }
+
     if (combinedGroupData.full_tariff === 'YES') {
       const sumHours = (
         Object.values(combinedGroupData.billHoursDistribution) as number[]
@@ -237,4 +304,16 @@ export class HoursCalculationService {
       workers: group.workers || [],
     };
   }
+}
+
+// Utilidad para convertir string 'YYYY-MM-DD' a fecha local
+function toLocalDate(date: string | Date): Date {
+  if (typeof date === 'string') {
+    return new Date(
+      Number(date.slice(0, 4)),
+      Number(date.slice(5, 7)) - 1,
+      Number(date.slice(8, 10))
+    );
+  }
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }

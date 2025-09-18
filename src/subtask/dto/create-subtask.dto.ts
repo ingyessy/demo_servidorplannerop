@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { StatusActivation } from '@prisma/client';
 import { Type } from 'class-transformer';
-import { IsEnum, IsNumber, IsString } from 'class-validator';
+import { IsEnum, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class CreateSubtaskDto {
   @ApiProperty({ example: 'Subtask Name' })
@@ -24,4 +24,9 @@ export class CreateSubtaskDto {
   @ApiProperty({ example: '007' })
   @IsString()
   code: string;
+
+   @ApiProperty({ example: '1' })
+  @Type(() => Number)
+  @IsNumber()
+  id_subsite: number;
 }

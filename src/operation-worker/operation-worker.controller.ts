@@ -49,4 +49,5 @@ export class OperationWorkerController {
   getWorkers(@Param('id_operation', ParseIntPipe) id_operation: number) {
     return this.operationWorkerService.getWorkersFromOperation(id_operation);
   }
+  
 }

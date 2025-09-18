@@ -218,20 +218,31 @@ export class PayrollCalculationService {
   }
 
   private validateGroup(group: any, tariffField: string) {
-    if (!group[tariffField]) {
-      throw new Error(
-        `El grupo ${group.groupId} no tiene ${tariffField} definida`,
-      );
-    }
-    if (!group.agreed_hours) {
-      throw new Error(
-        `El grupo ${group.groupId} no tiene horas pactadas definidas`,
-      );
-    }
-    if (!group.hours) {
-      throw new Error(`El grupo ${group.groupId} no tiene recargos definidos`);
+  const value = Number(group[tariffField]);
+  if (
+    isNaN(value) ||
+    value <= 0
+  ) {
+    throw new Error(
+      `El grupo ${group.groupId} no tiene ${tariffField} definida o válida`,
+    );
+  }
+  if (!group.agreed_hours) {
+    throw new Error(
+      `El grupo ${group.groupId} no tiene horas pactadas definidas`,
+    );
+  }
+  if (!group.hours) {
+    throw new Error(`El grupo ${group.groupId} no tiene recargos definidos`);
+  }
+  // Solo valida los recargos que existen en el objeto
+  const requiredKeys = Object.keys(group.hours);
+  for (const key of requiredKeys) {
+    if (typeof group.hours[key] === 'undefined') {
+      throw new Error(`El grupo ${group.groupId} no tiene el recargo '${key}' definido`);
     }
   }
+}
 
   private calculateAdditionalHours(
     group: any,

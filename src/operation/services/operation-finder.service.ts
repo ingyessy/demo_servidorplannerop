@@ -8,7 +8,10 @@ import {
   createOperationInclude,
   OperationIncludeConfig,
 } from '../entities/operation-include.types';
-import { ITransformTariff, TariffTransformerService } from 'src/tariff/service/tariff-transformer.service';
+import {
+  ITransformTariff,
+  TariffTransformerService,
+} from 'src/tariff/service/tariff-transformer.service';
 import { createTariffInclude } from '../../tariff/entities/tariff-include.types';
 
 /**
@@ -32,24 +35,25 @@ export class OperationFinderService {
    * Obtiene todas las operaciones con información detallada
    * @returns Lista de operaciones con relaciones incluidas
    */
-  async findAll(id_site?: number, id_subsite?: number) {
-    try {
-      const response = await this.prisma.operation.findMany({
-        where: {
-          id_site,
-          id_subsite,
-        },
-        include: this.defaultInclude,
-      });
+ async findAll(id_site?: number, id_subsite?: number) {
+  try {
+    const where: any = {};
+    if (typeof id_site === 'number') where.id_site = id_site;
+    if (typeof id_subsite === 'number') where.id_subsite = id_subsite;
 
-      return response.map((op) =>
-        this.transformer.transformOperationResponse(op),
-      );
-    } catch (error) {
-      console.error('Error getting all operations:', error);
-      throw new Error(error.message);
-    }
+    const response = await this.prisma.operation.findMany({
+      where,
+      include: this.defaultInclude,
+    });
+
+    return response.map((op) =>
+      this.transformer.transformOperationResponse(op),
+    );
+  } catch (error) {
+    console.error('Error getting all operations:', error);
+    throw new Error(error.message);
   }
+}
 
   /**
    * Busca una operación por su ID
@@ -57,22 +61,26 @@ export class OperationFinderService {
    * @returns Operación encontrada o mensaje de error
    */
   async findOne(id: number, id_site?: number, id_subsite?: number) {
-    try {
-      const response = await this.prisma.operation.findUnique({
-        where: { id, id_site, id_subsite },
-        include: this.defaultInclude,
-      });
+  try {
+    const where: any = { id };
+    if (typeof id_site === 'number') where.id_site = id_site;
+    if (typeof id_subsite === 'number') where.id_subsite = id_subsite;
 
-      if (!response) {
-        return { message: 'Operation not found', status: 404 };
-      }
+    const response = await this.prisma.operation.findFirst({
+      where,
+      include: this.defaultInclude,
+    });
 
-      return this.transformer.transformOperationResponse(response);
-    } catch (error) {
-      console.error(`Error finding operation with ID ${id}:`, error);
-      throw new Error(error.message);
+    if (!response) {
+      return { message: 'Operation not found', status: 404 };
     }
+
+    return this.transformer.transformOperationResponse(response);
+  } catch (error) {
+    console.error(`Error finding operation with ID ${id}:`, error);
+    throw new Error(error.message);
   }
+}
 
   /**
    * Encuentra todas las operaciones con los estados especificados
@@ -80,55 +88,49 @@ export class OperationFinderService {
    * @returns Lista de operaciones filtradas o mensaje de error
    */
   async findByStatuses(
-    statuses: StatusOperation[],
-    id_site?: number,
-    id_subsite?: number,
-  ) {
-    try {
-      // Verificar si los estados son válidos y si es en estado completadas
-      const isCompletedOnly =
-        statuses.length === 1 && statuses[0] === StatusOperation.COMPLETED;
+  statuses: StatusOperation[],
+  id_site?: number,
+  id_subsite?: number,
+) {
+  try {
+    const isCompletedOnly =
+      statuses.length === 1 && statuses[0] === StatusOperation.COMPLETED;
 
-      // Si solo se busca COMPLETED, no se permiten otros estados
-      const queryConfig = {
-        where: {
-          status: {
-            in: statuses,
-          },
-          id_site: id_site,
-          id_subsite: id_subsite,
-        },
-        include: this.defaultInclude,
-        orderBy: isCompletedOnly
-          ? { dateStart: Prisma.SortOrder.desc } // Most recent first for COMPLETED
-          : { dateStart: Prisma.SortOrder.asc }, // Keep original order for other statuses
-      };
+    const where: any = {
+      status: { in: statuses },
+    };
+    if (typeof id_site === 'number') where.id_site = id_site;
+    if (typeof id_subsite === 'number') where.id_subsite = id_subsite;
 
-      // Limitar a 30 resultados si solo se busca COMPLETED
-      if (isCompletedOnly) {
-        queryConfig['take'] = 30;
-      }
+    const queryConfig: any = {
+      where,
+      include: this.defaultInclude,
+      orderBy: isCompletedOnly
+        ? { dateStart: Prisma.SortOrder.desc }
+        : { dateStart: Prisma.SortOrder.asc },
+    };
 
-      const response = await this.prisma.operation.findMany(queryConfig);
-
-      if (response.length === 0) {
-        return {
-          message: `No operations found with statuses: ${statuses.join(', ')}`,
-          status: 404,
-        };
-      }
-
-      // Transformar la respuesta
-      const transformedResponse = response.map((operation) =>
-        this.transformer.transformOperationResponse(operation),
-      );
-
-      return transformedResponse;
-    } catch (error) {
-      console.error('Error finding operations by status:', error);
-      throw new Error(`Error finding operations by status: ${error.message}`);
+    if (isCompletedOnly) {
+      queryConfig['take'] = 30;
     }
+
+    const response = await this.prisma.operation.findMany(queryConfig);
+
+    if (response.length === 0) {
+      return {
+        message: `No operations found with statuses: ${statuses.join(', ')}`,
+        status: 404,
+      };
+    }
+
+    return response.map((operation) =>
+      this.transformer.transformOperationResponse(operation),
+    );
+  } catch (error) {
+    console.error('Error finding operations by status:', error);
+    throw new Error(`Error finding operations by status: ${error.message}`);
   }
+}
   /**
    * Busca operaciones por rango de fechas
    * @param start Fecha de inicio
@@ -136,43 +138,36 @@ export class OperationFinderService {
    * @returns Resultado de la búsqueda
    */
   async findByDateRange(
-    start: Date,
-    end: Date,
-    id_site?: number,
-    id_subsite?: number,
-  ) {
-    try {
-      const response = await this.prisma.operation.findMany({
-        where: {
-          AND: [
-            {
-              dateStart: {
-                gte: start,
-              },
-            },
-            {
-              dateEnd: {
-                lte: end,
-              },
-            },
-            { id_site: id_site, id_subsite: id_subsite },
-          ],
-        },
-        include: this.defaultInclude,
-      });
+  start: Date,
+  end: Date,
+  id_site?: number,
+  id_subsite?: number,
+) {
+  try {
+    const where: any = {
+      dateStart: { gte: start },
+      dateEnd: { lte: end },
+    };
+    if (typeof id_site === 'number') where.id_site = id_site;
+    if (typeof id_subsite === 'number') where.id_subsite = id_subsite;
 
-      if (response.length === 0) {
-        return { message: 'No operations found in this range', status: 404 };
-      }
+    const response = await this.prisma.operation.findMany({
+      where,
+      include: this.defaultInclude,
+    });
 
-      return response.map((op) =>
-        this.transformer.transformOperationResponse(op),
-      );
-    } catch (error) {
-      console.error('Error finding operations by date range:', error);
-      throw new Error(error.message);
+    if (response.length === 0) {
+      return { message: 'No operations found in this range', status: 404 };
     }
+
+    return response.map((op) =>
+      this.transformer.transformOperationResponse(op),
+    );
+  } catch (error) {
+    console.error('Error finding operations by date range:', error);
+    throw new Error(error.message);
   }
+}
   /**
    * Obtiene operaciones con paginación y filtros opcionales
    * @param page Número de página (por defecto: 1)
@@ -209,33 +204,37 @@ export class OperationFinderService {
    * @returns Lista de operaciones asociadas al usuario o mensaje de error
    */
   async findByUser(id_user: number, id_site?: number, id_subsite?: number) {
-    try {
-      const response = await this.prisma.operation.findMany({
-        where: { id_user, id_site, id_subsite },
-        include: this.defaultInclude,
-      });
+  try {
+    const where: any = { id_user };
+    if (typeof id_site === 'number') where.id_site = id_site;
+    if (typeof id_subsite === 'number') where.id_subsite = id_subsite;
 
-      if (response.length === 0) {
-        return { message: 'No operations found for this user', status: 404 };
-      }
+    const response = await this.prisma.operation.findMany({
+      where,
+      include: this.defaultInclude,
+    });
 
-      return response.map((op) =>
-        this.transformer.transformOperationResponse(op),
-      );
-    } catch (error) {
-      console.error(`Error finding operations for user ${id_user}:`, error);
-      throw new Error(error.message);
+    if (response.length === 0) {
+      return { message: 'No operations found for this user', status: 404 };
     }
+
+    return response.map((op) =>
+      this.transformer.transformOperationResponse(op),
+    );
+  } catch (error) {
+    console.error(`Error finding operations for user ${id_user}:`, error);
+    throw new Error(error.message);
   }
+}
 
   /**
    * Actualiza la información de la operación para incluir detalles completos de tarifa
    * @param operationId ID de la operación
    */
   async getOperationWithDetailedTariffs(operationId: number) {
-     if (!operationId) {
-    throw new Error('operationId is required and must be a valid number');
-  }
+    if (!operationId) {
+      throw new Error('operationId is required and must be a valid number');
+    }
     try {
       // Obtenemos la operación con sus trabajadores y tarifas
       const operation = await this.prisma.operation.findUnique({
@@ -263,18 +262,30 @@ export class OperationFinderService {
 
       // Actualizar cada trabajador con detalles completos de tarifa
       transformedOperation.workerGroups.forEach((group) => {
-        // Encontrar los trabajadores originales para este grupo
         const originalWorkers = operation.workers.filter(
           (w) => w.id_group === group.groupId,
         );
 
-        // Agregar detalles completos de tarifa
         group.tariffDetails =
           originalWorkers.length > 0 && originalWorkers[0].tariff
-            ? this.tariffTransformer.transformTariffResponse(
-                originalWorkers[0].tariff as unknown as ITransformTariff,
-              )
-            : null;
+            ? {
+                ...this.tariffTransformer.transformTariffResponse(
+                  originalWorkers[0].tariff as unknown as ITransformTariff,
+                ),
+                paysheet_tariff: Number(
+                  (originalWorkers[0].tariff as any).paysheet_tariff ?? 0,
+                ),
+                facturation_tariff: Number(
+                  (originalWorkers[0].tariff as any).facturation_tariff ?? 0,
+                ),
+              }
+            : { paysheet_tariff: 0, facturation_tariff: 0 };
+
+        // Agrega este log para depurar
+        console.log(
+          `Grupo ${group.groupId} - paysheet_tariff:`,
+          group.tariffDetails.paysheet_tariff,
+        );
       });
 
       return transformedOperation;

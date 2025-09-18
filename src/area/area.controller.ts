@@ -36,13 +36,22 @@ export class AreaController {
     @Body() createAreaDto: CreateAreaDto,
     @CurrentUser('siteId') siteId: number,
     @CurrentUser('subsiteId') subsiteId: number,
+
     @CurrentUser('userId') userId: number,
   ) {
     createAreaDto.id_user = userId;
-    if (!createAreaDto.id_site || !createAreaDto.id_subsite) {
-      createAreaDto.id_site = siteId;
-      createAreaDto.id_subsite = subsiteId;
-    }
+    // createAreaDto.id_subsite = AreaService.subSite;
+    // if (!createAreaDto.id_site || !createAreaDto.id_subsite) {
+    //   createAreaDto.id_site = siteId;
+    //   createAreaDto.id_subsite = subsiteId;
+    // }
+
+    if (typeof createAreaDto.id_site === 'undefined' || createAreaDto.id_site === null) {
+  createAreaDto.id_site = siteId;
+}
+if (typeof createAreaDto.id_subsite === 'undefined' || createAreaDto.id_subsite === null) {
+  createAreaDto.id_subsite = subsiteId;
+}
 
     const response = await this.areaService.create(createAreaDto);
     if (response['status'] === 404) {
@@ -53,8 +62,11 @@ export class AreaController {
 
   @Get()
   @Roles(Role.SUPERADMIN, Role.SUPERVISOR, Role.ADMIN, Role.GH)
-  async findAll(@CurrentUser('siteId') siteId: number) {
-    const response = await this.areaService.findAll(siteId);
+  async findAll(
+    @CurrentUser('siteId') siteId: number,
+    @CurrentUser('subsiteId') subsiteId: number,
+  ) {
+    const response = await this.areaService.findAll(siteId, subsiteId);
     return response;
   }
 
@@ -62,6 +74,7 @@ export class AreaController {
   async findOne(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser('siteId') siteId: number,
+    
   ) {
     const response = await this.areaService.findOne(id, siteId);
     if (response['status'] === 404) {
@@ -79,7 +92,9 @@ export class AreaController {
   ) {
     updateAreaDto.id_user = userId;
     if (updateAreaDto.id_site && updateAreaDto.id_site !== siteId) {
-      throw new ForbiddenException('You cannot update an area from another site');
+      throw new ForbiddenException(
+        'You cannot update an area from another site',
+      );
     }
     const response = await this.areaService.update(id, updateAreaDto);
     if (response['status'] === 404) {
@@ -95,10 +110,7 @@ export class AreaController {
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser('siteId') siteId: number,
   ) {
-    const response = await this.areaService.remove(
-      id,
-      siteId,
-    );
+    const response = await this.areaService.remove(id, siteId);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
     } else if (response['status'] === 403) {

@@ -23,6 +23,6 @@ export class CreateAreaDto {
   @ApiProperty({ example: '1' })
   @Type(() => Number)
   @IsNumber()
-  @IsOptional()
-  id_subsite?: number;
+  // @IsOptional()
+  id_subsite: number;
 }

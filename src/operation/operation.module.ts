@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { OperationService } from './operation.service';
 import { OperationController } from './operation.controller';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -13,6 +13,7 @@ import { PaginationModule } from 'src/common/services/pagination/pagination.modu
 import { AuthModule } from 'src/auth/auth.module';
 import { OperationWorkerModule } from 'src/operation-worker/operation-worker.module';
 import { TariffModule } from 'src/tariff/tariff.module';
+import { WorkerModule } from 'src/worker/worker.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { TariffModule } from 'src/tariff/tariff.module';
     AuthModule,
     OperationWorkerModule,
     TariffModule,
+    forwardRef(() => WorkerModule),
   ],
   controllers: [OperationController],
   providers: [

@@ -68,53 +68,97 @@ export class CalledAttentionService {
    * Obtener todas las atenciones llamadas de trabajadores activos de los últimos 3 meses
    * @returns respuesta de la busqueda de todas las atenciones llamadas activas recientes
    */
+  // async findAll(id_site?: number) {
+  //   try {
+  //     // Calcular la fecha de hace 3 meses
+  //     const threeMonthsAgo = new Date();
+  //     threeMonthsAgo.setDate(threeMonthsAgo.getDate() - 40);
+
+  //     const maxDate = new Date();
+  //     maxDate.setDate(maxDate.getDate() + 1);
+  //     const response = await this.prisma.calledAttention.findMany({
+  //       where: {
+  //         // Filtrar por estado del trabajador
+  //         worker: {
+  //           status: {
+  //             notIn: ['UNAVALIABLE'],
+  //           },
+  //           id_site: id_site,
+  //         },
+  //         // Filtrar por fecha (mes actual)
+  //         createAt: {
+  //           gte: threeMonthsAgo,
+  //           lte: maxDate,
+  //         },
+  //       },
+  //       include: {
+  //         worker: {
+  //           select: {
+  //             dni: true,
+  //             name: true,
+  //             id_site: true,
+  //           },
+  //         },
+  //       },
+  //       orderBy: {
+  //         createAt: 'desc', // Ordenar por fecha de creación descendente (más reciente primero)
+  //       },
+  //     });
+
+  //     if (response.length === 0) {
+  //       throw new NotFoundException('No called attentions found for active workers in the last 3 months');
+  //     }
+
+  //     return response;
+  //   } catch (error) {
+  //     console.error('Error finding called attentions:', error);
+  //     throw new Error(error.message);
+  //   }
+  // }
+
   async findAll(id_site?: number) {
-    try {
-      // Calcular la fecha de hace 3 meses
-      const threeMonthsAgo = new Date();
-      threeMonthsAgo.setDate(threeMonthsAgo.getDate() - 40);
+  try {
+    // Calcular la fecha de hace 3 meses
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setDate(threeMonthsAgo.getDate() - 40);
 
-      const maxDate = new Date();
-      maxDate.setDate(maxDate.getDate() + 1);
-      const response = await this.prisma.calledAttention.findMany({
-        where: {
-          // Filtrar por estado del trabajador
-          worker: {
-            status: {
-              notIn: ['UNAVALIABLE'],
-            },
-            id_site: id_site,
+    const maxDate = new Date();
+    maxDate.setDate(maxDate.getDate() + 1);
+
+    const response = await this.prisma.calledAttention.findMany({
+      where: {
+        worker: {
+          status: {
+            notIn: ['UNAVALIABLE'],
           },
-          // Filtrar por fecha (mes actual)
-          createAt: {
-            gte: threeMonthsAgo,
-            lte: maxDate,
-          },
+          id_site: id_site,
         },
-        include: {
-          worker: {
-            select: {
-              dni: true,
-              name: true,
-              id_site: true,
-            },
+        createAt: {
+          gte: threeMonthsAgo,
+          lte: maxDate,
+        },
+      },
+      include: {
+        worker: {
+          select: {
+            dni: true,
+            name: true,
+            id_site: true,
           },
         },
-        orderBy: {
-          createAt: 'desc', // Ordenar por fecha de creación descendente (más reciente primero)
-        },
-      });
+      },
+      orderBy: {
+        createAt: 'desc',
+      },
+    });
 
-      if (response.length === 0) {
-        throw new NotFoundException('No called attentions found for active workers in the last 3 months');
-      }
-
-      return response;
-    } catch (error) {
-      console.error('Error finding called attentions:', error);
-      throw new Error(error.message);
-    }
+    // En vez de lanzar excepción, devuelve array vacío
+    return response;
+  } catch (error) {
+    console.error('Error finding called attentions:', error);
+    throw new Error(error.message);
   }
+}
 
   /**
    * Obtener una atencion llamada por ID

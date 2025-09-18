@@ -135,8 +135,12 @@ export class OperationWorkerService {
         },
       });
 
-      const workers = operationWorkers.map((ow) => ow.worker);
-
+     // Filtrar solo trabajadores con status AVALIABLE o ASSIGNED
+    const workers = operationWorkers
+      .map((ow) => ow.worker)
+      .filter((worker) => 
+        worker.status === 'AVALIABLE' || worker.status === 'ASSIGNED'
+      );
       return workers;
     } catch (error) {
       console.error('Error getting workers from operation:', error);
@@ -160,4 +164,5 @@ export class OperationWorkerService {
       id_site,
     );
   }
+
 }

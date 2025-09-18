@@ -9,5 +9,6 @@ import { AuthModule } from 'src/auth/auth.module';
   imports: [forwardRef (()=> ValidationModule), AuthModule ],
   controllers: [WorkerController],
   providers: [WorkerService, PrismaService],
+  exports: [WorkerService],
 })
 export class WorkerModule {}

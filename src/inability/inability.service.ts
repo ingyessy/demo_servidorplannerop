@@ -29,10 +29,22 @@ export class InabilityService {
           };
         }
       }
-      const response = await this.prisma.inability.create({
-        data: { ...createInabilityDto },
-      });
 
+       // Crear la incapacidad
+    const response = await this.prisma.inability.create({
+      data: { 
+        ...createInabilityDto,
+        // Asegurar que las fechas se guarden solo con la fecha (sin hora)
+        // dateDisableStart: new Date(createInabilityDto.dateDisableStart).toISOString().split('T')[0],
+        // dateDisableEnd: new Date(createInabilityDto.dateDisableEnd).toISOString().split('T')[0],
+      },
+    });
+
+    // Actualizar el estado del trabajador a DISABLE
+    await this.prisma.worker.update({
+      where: { id: createInabilityDto.id_worker },
+      data: { status: 'DISABLE' },
+    });
 
       return response;
     } catch (error) {
@@ -45,6 +57,18 @@ export class InabilityService {
       const response = await this.prisma.inability.findMany({
         where: {
           worker:{id_site}
+        },
+        include:{
+          worker: {
+            select: {
+              name: true,
+            },
+          },
+          user: {
+            select: {
+              name: true,
+            },
+          },
         }
       });
       if (!response || response.length === 0) {
@@ -60,6 +84,18 @@ export class InabilityService {
     try {
       const response = await this.prisma.inability.findUnique({
         where: { id, worker: { id_site } },
+        include: {
+          worker: {
+            select: {
+              name: true,
+            },
+          },
+          user: {
+            select: {
+              name: true,
+            },
+          },
+        },
       });
       if (!response) {
         return { status: 404, message: `Inability with id ${id} not found` };

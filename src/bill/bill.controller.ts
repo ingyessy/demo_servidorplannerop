@@ -21,7 +21,7 @@ import { Roles } from 'src/auth/decorators/roles.decorator';
 import { Role } from '@prisma/client';
 import { ParseIntPipe } from 'src/pipes/parse-int/parse-int.pipe';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
-import { UpdateBillDto } from './dto/update-bill.dto';
+import { UpdateBillDto, UpdateBillStatusDto } from './dto/update-bill.dto';
 
 @Controller('bill')
 @UseInterceptors(SiteInterceptor)
@@ -35,6 +35,10 @@ export class BillController {
   async create(
     @CurrentUser('userId') userId: number,
     @Body() createBillDto: CreateBillDto) {
+      // Agrega este console.log para ver lo que llega del frontend
+  console.log('=== Datos recibidos para crear factura ===');
+  console.log(JSON.stringify(createBillDto, null, 2));
+  console.log('==========================================');
     const response = await this.billService.create(createBillDto, userId);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
@@ -67,6 +71,20 @@ export class BillController {
     @Body() updateBillDto: UpdateBillDto,
   ) {
     return this.billService.update(id, updateBillDto, userId);
+  }
+  
+  @Patch(':id/status')
+  async updateStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateBillStatusDto: UpdateBillStatusDto,
+    @CurrentUser('userId') userId: number,
+  ) {
+    const response = await this.billService.updateStatus(
+      id, 
+      updateBillStatusDto.status, 
+      userId
+    );
+    return response;
   }
 
   @Delete(':id')

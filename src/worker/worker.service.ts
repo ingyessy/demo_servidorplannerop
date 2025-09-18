@@ -22,7 +22,8 @@ export class WorkerService {
    */
   async create(createWorkerDto: CreateWorkerDto, id_site?: number) {
     try {
-      const { dni, id_area, id_user, phone, code, payroll_code } = createWorkerDto;
+      const { dni, id_area, id_user, phone, code, payroll_code } =
+        createWorkerDto;
       const validation = await this.validationService.validateAllIds({
         id_user: id_user,
         id_area: id_area,
@@ -31,12 +32,23 @@ export class WorkerService {
         payroll_code_worker: payroll_code,
         phone_worker: phone,
       });
-      if (validation['area'].id_site !== id_site) {
-        return {
-          message: 'Not authorized to create worker in this area',
-          status: 409,
-        };
-      }
+
+      // Agrega los logs aquí para depuración
+    console.log('DTO:', createWorkerDto);
+    console.log('id_site usuario:', id_site);
+    console.log('Validación área:', validation['area']);
+
+
+      // Si la validación falla, retorna el error
+      // if (
+      //   !validation['area'] ||
+      //   (validation['area'] && validation['area'].id_site !== id_site)
+      // ) {
+      //   return {
+      //     message: 'Not authorized to create worker in this area',
+      //     status: 409,
+      //   };
+      // }
       // Si hay un error, retornarlo
       if (
         validation &&
@@ -80,14 +92,142 @@ export class WorkerService {
 
   /**
    * obtener todos los trabajadores
-   * @returns resupuesta de la busqueda de todos los trabajadores
+   * @param id_site filtro por sede (opcional)
+   * @param id_subsite filtro por subsede (opcional)
+   * @param globalSearch si es true, no filtra por sede para mostrar nombres globalmente
+   * @returns respuesta de la búsqueda de todos los trabajadores
    */
-  async findAll(id_site?: number) {
+  // async findAll(id_site?: number, id_subsite?: number | null, globalSearch: boolean = false) {
+  //   try {
+  //     let whereClause: any = {};
+
+  //     // Solo filtrar por sede si no es búsqueda global
+  //     if (!globalSearch && id_site) {
+  //       whereClause.id_site = id_site;
+  //     }
+
+  //     // Solo filtrar por id_subsite si es un número válido (no null ni undefined) y no es búsqueda global
+  //     if (!globalSearch && typeof id_subsite === 'number') {
+  //       whereClause.id_subsite = id_subsite;
+  //     }
+
+  //     const response = await this.prisma.worker.findMany({
+  //       where: whereClause,
+  //       include: {
+  //         jobArea: {
+  //           select: {
+  //             id: true,
+  //             name: true,
+  //           },
+  //         },
+  //         Site: {
+  //           select: {
+  //             id: true,
+  //             name: true,
+  //           },
+  //         },
+  //       },
+  //     });
+
+  //     const transformResponse = response.map((res) => {
+  //       const { id_area, ...rest } = res;
+  //       return {
+  //         ...rest,
+  //         siteName: rest.Site?.name,
+  //         areaName: rest.jobArea?.name,
+  //       };
+  //     });
+  //     return transformResponse;
+  //   } catch (error) {
+  //     throw new Error(error);
+  //   }
+  // }
+
+  // async findAll(id_site?: number, id_subsite?: number | null) {
+  //   try {
+  //     let whereClause: any = {};
+
+  //     if (id_site) {
+  //       whereClause.id_site = id_site;
+  //     }
+
+  //     // Solo filtrar por id_subsite si es un número válido (no null ni undefined)
+  //     if (typeof id_subsite === 'number') {
+  //       whereClause.id_subsite = id_subsite;
+  //     }
+
+  //     const response = await this.prisma.worker.findMany({
+  //       where: whereClause,
+  //       include: {
+  //         jobArea: {
+  //           select: {
+  //             id: true,
+  //             name: true,
+  //           },
+  //         },
+  //         Site: {
+  //           select: {
+  //             name: true,
+  //           },
+  //         },
+  //       },
+  //     });
+
+  //     const transformResponse = response.map((res) => {
+  //       const { id_area, ...rest } = res;
+  //       return rest;
+  //     });
+  //     return transformResponse;
+  //   } catch (error) {
+  //     throw new Error(error);
+  //   }
+  // }
+
+  // async findAll(id_site?: number) {
+  //   try {
+  //     const response = await this.prisma.worker.findMany({
+  //       where: {
+  //         id_site,
+  //       },
+  //       include: {
+  //         jobArea: {
+  //           select: {
+  //             id: true,
+  //             name: true,
+  //           },
+  //         },
+  //         Site: {
+  //           select: {
+  //             name: true,
+  //           },
+  //         },
+  //       },
+  //     });
+  //     const transformResponse = response.map((res) => {
+  //       const { id_area, ...rest } = res;
+  //       return rest;
+  //     });
+  //     return transformResponse;
+  //   } catch (error) {
+  //     throw new Error(error);
+  //   }
+  // }
+
+  async findAll(id_site?: number, id_subsite?: number | null) {
     try {
+      let whereClause: any = {};
+
+      if (id_site) {
+        whereClause.id_site = id_site;
+      }
+
+      // // Solo filtra por subsede si es un número válido (no null ni undefined)
+      // if (typeof id_subsite === 'number') {
+      //   whereClause.id_subsite = id_subsite;
+      // }
+
       const response = await this.prisma.worker.findMany({
-        where: {
-          id_site,
-        },
+        where: whereClause,
         include: {
           jobArea: {
             select: {
@@ -97,18 +237,25 @@ export class WorkerService {
           },
           Site: {
             select: {
+              id: true,
               name: true,
             },
           },
         },
+        orderBy: {
+          name: 'asc',
+        },
       });
-      const transformResponse = response.map((res) => {
-        const { id_area, ...rest } = res;
-        return rest;
-      });
-      return transformResponse;
+
+      const result = response.map((res) => ({
+        ...res,
+        siteName: res.Site?.name,
+        areaName: res.jobArea?.name,
+      }));
+
+      return result;
     } catch (error) {
-      throw new Error(error);
+      throw new Error('Error get all Worker');
     }
   }
   /**
@@ -169,12 +316,12 @@ export class WorkerService {
         id_area: updateWorkerDto.id_area,
       });
 
-      // if (validation['area'].id_site !== id_site) {
-      //   return {
-      //     message: 'Not authorized to update worker in this site',
-      //     status: 409,
-      //   };
-      // }
+      if (validation['area'].id_site !== id_site) {
+        return {
+          message: 'Not authorized to update worker in this site',
+          status: 409,
+        };
+      }
       const response = await this.prisma.worker.update({
         where: { id, id_site },
         data: updateWorkerDto,
@@ -197,6 +344,42 @@ export class WorkerService {
       return response;
     } catch (error) {
       throw new Error(error);
+    }
+  }
+
+  async addWorkedHoursOnOperationEnd(operationId: number) {
+    // Obtener la operación y sus trabajadores
+    const operation = await this.prisma.operation.findUnique({
+      where: { id: operationId },
+      include: { workers: true },
+    });
+
+    if (!operation || !operation.dateEnd || !operation.timeEnd) return;
+
+    // Calcular horas trabajadas
+    const start = new Date(operation.dateStart);
+    const end = new Date(operation.dateEnd);
+
+    // Si tienes timeStart y timeEnd como string tipo "HH:mm"
+    const [startHour, startMin] = operation.timeStrat.split(':').map(Number);
+    const [endHour, endMin] = operation.timeEnd.split(':').map(Number);
+
+    start.setHours(startHour, startMin, 0, 0);
+    end.setHours(endHour, endMin, 0, 0);
+
+    const diffMs = end.getTime() - start.getTime();
+    const diffHours = diffMs / (1000 * 60 * 60);
+
+    // Sumar horas trabajadas a cada trabajador
+    for (const opWorker of operation.workers) {
+      await this.prisma.worker.update({
+        where: { id: opWorker.id_worker },
+        data: {
+          hoursWorked: {
+            increment: diffHours,
+          },
+        },
+      });
     }
   }
 }

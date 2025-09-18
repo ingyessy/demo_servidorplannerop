@@ -1,18 +1,22 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { differenceInMinutes } from 'date-fns';
-import { 
-  getColombianDateTime, 
-  getColombianTimeString, 
-  getColombianStartOfDay, 
-  getColombianEndOfDay 
+import {
+  getColombianDateTime,
+  getColombianTimeString,
+  getColombianStartOfDay,
+  getColombianEndOfDay,
 } from 'src/common/utils/dateColombia';
+import { BillService } from 'src/bill/bill.service';
 
 @Injectable()
 export class UpdateOperationService {
   private readonly logger = new Logger(UpdateOperationService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private billService: BillService,
+  ) {}
 
   /**
    * Actualiza las operaciones de estado PENDING a INPROGRESS cuando hayan pasado 5 minutos
@@ -24,16 +28,14 @@ export class UpdateOperationService {
 
       // Usar hora colombiana en lugar de hora del servidor
       const now = getColombianDateTime();
-      
+
       // Crear fecha de inicio (hoy a medianoche hora colombiana)
       const startOfDay = getColombianStartOfDay(now);
-      
+
       // Crear fecha de fin (mañana a medianoche hora colombiana)
       const endOfDay = getColombianEndOfDay(now);
 
-      this.logger.debug(
-        `Colombian time now: ${now.toISOString()}`
-      );
+      this.logger.debug(`Colombian time now: ${now.toISOString()}`);
       this.logger.debug(
         `Searching operations for date: ${startOfDay.toISOString()}`,
       );
@@ -65,7 +67,7 @@ export class UpdateOperationService {
         this.logger.debug(
           `Operation ${operation.id}: ${minutesDiff} minutes since start time (Colombian time)`,
         );
-        
+
         if (minutesDiff >= 5) {
           // Actualizar el estado a INPROGRESS
           await this.prisma.operation.update({
@@ -108,16 +110,14 @@ export class UpdateOperationService {
 
       // Usar hora colombiana en lugar de hora del servidor
       const now = getColombianDateTime();
-      
+
       // Crear fecha de inicio (hoy a medianoche hora colombiana)
       const startOfDay = getColombianStartOfDay(now);
-      
+
       // Crear fecha de fin (mañana a medianoche hora colombiana)
       const endOfDay = getColombianEndOfDay(now);
 
-      this.logger.debug(
-        `Colombian time now: ${now.toISOString()}`
-      );
+      this.logger.debug(`Colombian time now: ${now.toISOString()}`);
       this.logger.debug(
         `Searching operations for date: ${startOfDay.toISOString()} to ${endOfDay.toISOString()}`,
       );
@@ -142,6 +142,7 @@ export class UpdateOperationService {
 
       let updatedCount = 0;
       let releasedWorkersCount = 0;
+      let billsCreatedCount = 0;
 
       for (const operation of inProgressOperations) {
         // Verificar que tenemos todos los datos necesarios
@@ -171,7 +172,7 @@ export class UpdateOperationService {
           // Paso 1: Obtener los trabajadores de esta operación desde la tabla intermedia
           const operationWorkers = await this.prisma.operation_Worker.findMany({
             where: { id_operation: operation.id },
-            select: { id_worker: true },
+            select: { id_worker: true, id_group: true },
           });
 
           const workerIds = operationWorkers.map((ow) => ow.id_worker);
@@ -201,6 +202,67 @@ export class UpdateOperationService {
             data: { status: 'COMPLETED' },
           });
 
+          // Paso 4: Crear factura en ceros automáticamente
+          try {
+            // Obtener grupos únicos de la operación
+            const uniqueGroups = [
+              ...new Set(operationWorkers.map((ow) => ow.id_group)),
+            ];
+
+            // Crear grupos para la factura en ceros
+            const billGroups = uniqueGroups
+              // .filter((groupId) => groupId !== null) // filtra los null
+              .map((groupId) => ({
+                id: String(groupId),
+                amount: 0,
+                group_hours: 0,
+                pays: operationWorkers
+                  .filter((ow) => ow.id_group === groupId)
+                  .map((ow) => ({
+                    id_worker: ow.id_worker,
+                    pay: 0,
+                  })),
+                paysheetHoursDistribution: {
+                  HOD: 0,
+                  HON: 0,
+                  HED: 0,
+                  HEN: 0,
+                  HFOD: 0,
+                  HFON: 0,
+                  HFED: 0,
+                  HFEN: 0,
+                },
+                billHoursDistribution: {
+                  HOD: 0,
+                  HON: 0,
+                  HED: 0,
+                  HEN: 0,
+                  HFOD: 0,
+                  HFON: 0,
+                  HFED: 0,
+                  HFEN: 0,
+                },
+              }));
+
+            const createBillDto = {
+              id_operation: operation.id,
+              groups: billGroups,
+            };
+
+            // Llamar al servicio de facturación (userId 1 para sistema automático)
+            await this.billService.create(createBillDto, 1);
+
+            billsCreatedCount++;
+            this.logger.debug(
+              `Factura en ceros creada automáticamente para operación ${operation.id}`,
+            );
+          } catch (billError) {
+            this.logger.error(
+              `Error creando factura en ceros para operación ${operation.id}:`,
+              billError,
+            );
+            // No interrumpir el proceso por error en facturación
+          }
 
           // Paso 4: Actualizar la fecha y hora de finalización en la tabla intermedia (con hora colombiana)
           await this.prisma.operation_Worker.updateMany({
@@ -216,7 +278,7 @@ export class UpdateOperationService {
           });
 
           //paso 5: actulizar el estado de cliente programming a COMPLETED
-          if(response.id_clientProgramming){
+          if (response.id_clientProgramming) {
             await this.prisma.clientProgramming.update({
               where: { id: response.id_clientProgramming },
               data: { status: 'COMPLETED' },
@@ -236,7 +298,10 @@ export class UpdateOperationService {
         );
       }
 
-      return { updatedCount };
+      return { updatedCount,
+        billsCreatedCount,
+        releasedWorkersCount
+       };
     } catch (error) {
       this.logger.error('Error updating completed operations:', error);
       throw error;

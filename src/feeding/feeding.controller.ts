@@ -171,4 +171,32 @@ export class FeedingController {
     }
     return response;
   }
+
+
+  @Get('operation/:id/available-meals')
+@ApiOperation({
+  summary: 'Obtener las comidas disponibles para una operación según la hora actual'
+})
+async getAvailableMealsForOperation(
+  @Param('id', ParseIntPipe) id: number,
+  @CurrentUser('siteId') siteId: number,
+) {
+  const response = await this.feedingService.getAvailableMealsForOperation(id);
+  if (response['status'] === 404) {
+    throw new NotFoundException(response['message']);
+  }
+  return response;
+}
+
+  @Get('operation/:id/missing-meals')
+  @ApiOperation({
+    summary: 'Obtener alimentaciones faltantes por trabajador en una operación para el día actual'
+  })
+  async getMissingMealsForOperation(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser('siteId') siteId: number,
+  ) {
+    const response = await this.feedingService.getMissingMealsForOperation(id);
+    return response;
+  }
 }

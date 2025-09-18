@@ -212,8 +212,14 @@ export class OperationService {
       timeStrat,
       timeEnd,
       id_clientProgramming,
+      id_task,
       ...restOperationData
     } = operationData;
+
+      // Si id_task no viene en operationData, pero sí en el primer grupo, úsalo
+  const mainTaskId =
+    id_task ||
+    (groups && groups.length > 0 && groups[0].id_task ? groups[0].id_task : null);
 
     if (id_subsite !== undefined) {
       if (operationData.id_subsite !== id_subsite) {
@@ -225,6 +231,7 @@ export class OperationService {
         ...restOperationData,
         id_user: operationData.id_user as number,
         id_clientProgramming: id_clientProgramming || null,
+        id_task: mainTaskId ? Number(mainTaskId) : null,
         dateStart: dateStart ? new Date(dateStart) : '',
         dateEnd: dateEnd ? new Date(dateEnd) : null,
         timeStrat: timeStrat || '',
@@ -347,6 +354,14 @@ export class OperationService {
   ) {
     const updateData = { ...directFields };
 
+    // Elimina campos no válidos para Prisma
+  delete updateData.id_area;
+  delete updateData.inChargedIds;
+  delete updateData.workerIds;
+  delete updateData.groups;
+  delete updateData.removedWorkerIds;
+  delete updateData.id;
+
     if (dateStart) updateData.dateStart = new Date(dateStart);
     if (dateEnd) updateData.dateEnd = new Date(dateEnd);
     if (timeStrat) updateData.timeStrat = timeStrat;
@@ -377,14 +392,58 @@ export class OperationService {
         }
       }
 
-      // Eliminar todos los trabajadores asignados a la operación
-      await this.operationWorkerService.releaseAllWorkersFromOperation(id);
-      const response = await this.prisma.operation.delete({
-        where: { id },
+      // Usar transacción para eliminar la operación y sus dependencias
+      return await this.prisma.$transaction(async (tx) => {
+        // 1. Eliminar todos los trabajadores asignados a la operación
+        await tx.operation_Worker.deleteMany({
+          where: { id_operation: id }
+        });
+
+        // 2. Eliminar encargados si existen
+        try {
+          await tx.inChargeOperation.deleteMany({
+            where: { id_operation: id }
+          });
+        } catch (error) {
+          // Si la tabla no existe, continuar
+        }
+
+        // 3. Eliminar la operación
+        const response = await tx.operation.delete({
+          where: { id },
+        });
+
+        return response;
       });
-      return response;
     } catch (error) {
       throw new Error(error.message);
     }
+  }
+
+  /**
+   * Elimina completamente una operación cancelada (para uso del cron)
+   * @param id - ID de la operación a eliminar
+   */
+  async removeCompletely(id: number) {
+    return await this.prisma.$transaction(async (tx) => {
+      // 1. Eliminar Operation_Worker
+      await tx.operation_Worker.deleteMany({
+        where: { id_operation: id }
+      });
+
+      // 2. Eliminar InCharged
+      try {
+        await tx.inChargeOperation.deleteMany({
+          where: { id_operation: id }
+        });
+      } catch (error) {
+        // Continuar si la tabla no existe
+      }
+
+      // 3. Eliminar la operación
+      return await tx.operation.delete({
+        where: { id }
+      });
+    });
   }
 }

@@ -21,5 +21,6 @@ import { BaseCalculationService } from './services/base-calculation.service';
     HoursCalculationService,
     BaseCalculationService
   ],
+  exports:[BillService],
 })
 export class BillModule {}

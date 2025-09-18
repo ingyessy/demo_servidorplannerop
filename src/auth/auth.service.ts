@@ -60,7 +60,6 @@ export class AuthService {
       status: user.status,
       id_site: user.id_site,
       site: user.Site?.name || null,
-      id_subsite: user.id_subsite || null,
     };
 
     return {
@@ -239,33 +238,36 @@ export class AuthService {
         };
       }
 
-      // Verificar que el usuario tenga acceso al site/subsite solicitado
-      if (newSiteId) {
-        // Verificar que el site existe y el usuario tiene acceso
-        const siteExists = await this.validationUser.validateUserSite(
-          userId,
-          newSiteId,
-        );
-        if (!siteExists) {
-          return {
-            message: `User does not have access to site ID ${newSiteId}`,
-            statusCode: HttpStatus.FORBIDDEN,
-          };
+      // Si es SUPERADMIN, no validar acceso a site/subsite
+      if (user.role !== 'SUPERADMIN') {
+        // Verificar que el usuario tenga acceso al site/subsite solicitado
+        if (newSiteId) {
+          // Verificar que el site existe y el usuario tiene acceso
+          const siteExists = await this.validationUser.validateUserSite(
+            userId,
+            newSiteId,
+          );
+          if (!siteExists) {
+            return {
+              message: `User does not have access to site ID ${newSiteId}`,
+              statusCode: HttpStatus.FORBIDDEN,
+            };
+          }
         }
-      }
 
-      if (newSubsiteId) {
-        // Verificar que el subsite existe y pertenece al site
-        const subsiteExists = await this.validationUser.validateUserSubsite(
-          userId,
-          newSiteId || user.id_site,
-          newSubsiteId,
-        );
-        if (!subsiteExists) {
-          return {
-            message: `User does not have access to site ID ${newSiteId}`,
-            statusCode: HttpStatus.FORBIDDEN,
-          };
+        if (newSubsiteId) {
+          // Verificar que el subsite existe y pertenece al site
+          const subsiteExists = await this.validationUser.validateUserSubsite(
+            userId,
+            newSiteId || user.id_site,
+            newSubsiteId,
+          );
+          if (!subsiteExists) {
+            return {
+              message: `User does not have access to site ID ${newSiteId}`,
+              statusCode: HttpStatus.FORBIDDEN,
+            };
+          }
         }
       }
 

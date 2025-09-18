@@ -108,27 +108,28 @@ export class ClientProgrammingController {
     return response;
   }
 
-  @Patch(':id')
-  @UsePipes(new DateTransformPipe())
-  async update(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() updateClientProgrammingDto: UpdateClientProgrammingDto,
-    @CurrentUser('siteId') siteId: number,
-  ) {
-    if (siteId && updateClientProgrammingDto.id_site !== siteId) {
-      throw new ForbiddenException(
-        'No tienes permiso para actualizar una programación en este sitio',
-      );
-    }
-    const response = await this.clientProgrammingService.update(
-      id,
-      updateClientProgrammingDto,
+ @Patch(':id')
+@UsePipes(new DateTransformPipe())
+async update(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() updateClientProgrammingDto: UpdateClientProgrammingDto,
+  @CurrentUser('siteId') siteId: number,
+  @CurrentUser('role') role: string,
+) {
+  if (role !== 'SUPERADMIN' && siteId && updateClientProgrammingDto.id_site !== siteId) {
+    throw new ForbiddenException(
+      'No tienes permiso para actualizar una programación en este sitio',
     );
-    if (response['status'] === 404) {
-      throw new NotFoundException(response['message']);
-    }
-    return response;
   }
+  const response = await this.clientProgrammingService.update(
+    id,
+    updateClientProgrammingDto,
+  );
+  if (response['status'] === 404) {
+    throw new NotFoundException(response['message']);
+  }
+  return response;
+}
 
   @Delete(':id')
   async remove(

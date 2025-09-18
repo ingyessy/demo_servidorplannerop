@@ -96,5 +96,10 @@ export class CreateBillDto {
   @IsOptional()
   id_operation: number;
 
+  // @ApiProperty({ example: 'ACTIVE', enum: ['ACTIVE', 'COMPLETED'] })
+  // @IsOptional()
+  // @IsString()
+  // status?: string;
+
   groups: GroupBillDto[];
 }

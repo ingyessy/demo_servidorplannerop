@@ -10,44 +10,121 @@ export class SubtaskService {
     private prisma: PrismaService,
     private validation: ValidationService,
   ) {}
+  // async create(createSubtaskDto: CreateSubtaskDto, id_site?: number) {
+  //   try {
+  //     const validationIdTask = await this.validation.validateAllIds({
+  //       id_task: createSubtaskDto.id_task,
+  //     });
+  //     if (id_site && validationIdTask.task.id_site !== id_site) {
+  //       return {
+  //         status: 403,
+  //         message: 'Forbidden: Task does not belong to this site',
+  //       };
+  //     }
+  //     const response = await this.prisma.subTask.create({
+  //       data: {
+  //         ...createSubtaskDto,
+  //       },
+  //     });
+  //     return response;
+  //   } catch (error) {
+  //     if (error.code === 'P2002') {
+  //       const target = error.meta?.target;
+  //       const fieldName = Array.isArray(target) ? target[0] : target;
+
+  //       return {
+  //         message: `Subtask with ${fieldName} '${createSubtaskDto[fieldName]}' already exists`,
+  //         status: 409,
+  //       };
+  //     }
+  //     throw new Error('Error creating subtask');
+  //   }
+  // }
+
+  // async findAll(id_site?: number, subsiteId?: number) {
+  //   try {
+  //     const response = await this.prisma.subTask.findMany({
+  //       where: { task: { id_site, id_subsite: subsiteId } },
+  //       include: {
+  //         Tariff: true,
+  //         task: {
+  //           include: {
+  //             subSite: true,
+  //           },
+  //         }
+  //       }
+  //     });
+  //     if (!response || response.length === 0) {
+  //       return { status: 404, message: 'No subtasks found' };
+  //     }
+  //     return response;
+  //   } catch (error) {
+  //     throw new Error('Error fetching subtasks');
+  //   }
+  // }
+
   async create(createSubtaskDto: CreateSubtaskDto, id_site?: number) {
-    try {
-      const validationIdTask = await this.validation.validateAllIds({
-        id_task: createSubtaskDto.id_task,
-      });
-      if (id_site && validationIdTask.task.id_site !== id_site) {
-        return {
-          status: 403,
-          message: 'Forbidden: Task does not belong to this site',
-        };
-      }
-      const response = await this.prisma.subTask.create({
-        data: {
-          ...createSubtaskDto,
-        },
-      });
-      return response;
-    } catch (error) {
-      if (error.code === 'P2002') {
-        const target = error.meta?.target;
-        const fieldName = Array.isArray(target) ? target[0] : target;
-
-        return {
-          message: `Subtask with ${fieldName} '${createSubtaskDto[fieldName]}' already exists`,
-          status: 409,
-        };
-      }
-      throw new Error('Error creating subtask');
+  try {
+    // Limpia cualquier campo 'task' que pueda venir en el DTO
+    if ('task' in createSubtaskDto) {
+      delete (createSubtaskDto as any).task;
     }
-  }
 
-  async findAll(id_site?: number, subsiteId?: number) {
+    const validationIdTask = await this.validation.validateAllIds({
+      id_task: createSubtaskDto.id_task,
+    });
+    if (id_site && validationIdTask.task.id_site !== id_site) {
+      return {
+        status: 403,
+        message: 'Forbidden: Task does not belong to this site',
+      };
+    }
+
+    const { name, code, status, id_task, id_subsite } = createSubtaskDto;
+
+    console.log('Datos enviados a Prisma:', { name, code, status, id_task, id_subsite });
+
+    const response = await this.prisma.subTask.create({
+      data: {
+        name,
+        code,
+        status,
+        id_task,
+        id_subsite,
+      },
+    });
+    return response;
+  } catch (error) {
+    if (error.code === 'P2002') {
+      const target = error.meta?.target;
+      const fieldName = Array.isArray(target) ? target[0] : target;
+
+      return {
+        message: `Subtask with ${fieldName} '${createSubtaskDto[fieldName]}' already exists`,
+        status: 409,
+      };
+    }
+    throw new Error('Error creating subtask');
+  }
+}
+
+  async findAll(id_site?: number, id_subsite?: number | null) {
     try {
       const response = await this.prisma.subTask.findMany({
-        where: { task: { id_site, id_subsite: subsiteId } },
+        where: {
+          task: {
+            id_site: id_site,
+          },
+          ...(typeof id_subsite === 'number' ? { id_subsite } : {}),
+        },
         include: {
           Tariff: true,
-        }
+          task: {
+            include: {
+              subSite: true,
+            },
+          },
+        },
       });
       if (!response || response.length === 0) {
         return { status: 404, message: 'No subtasks found' };
@@ -57,7 +134,6 @@ export class SubtaskService {
       throw new Error('Error fetching subtasks');
     }
   }
-
   async findOne(id: number, id_site?: number) {
     try {
       const response = await this.prisma.subTask.findUnique({
@@ -104,9 +180,11 @@ export class SubtaskService {
         },
       });
 
-
-
-      if (updateSubtaskDto.code) {
+      // Solo validar y actualizar el código SI es diferente al actual
+      if (
+        updateSubtaskDto.code &&
+        updateSubtaskDto.code !== foundSubtask.code
+      ) {
         const validationCode = await this.validation.validateAllIds({
           code_tariff: updateSubtaskDto.code,
         });

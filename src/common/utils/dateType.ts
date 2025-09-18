@@ -183,3 +183,50 @@ export function getBusinessDaysInRange(startDate: Date, endDate: Date): Date[] {
 export function getDayName(date: Date): string {
   return format(date, 'EEEE', { locale: es });
 }
+
+/**
+ * Devuelve un array con los nombres de los días de la semana en español para un rango de fechas
+ */
+export function getDayNamesInRange(startDate: Date | string, endDate: Date | string): string[] {
+  const days: string[] = [];
+
+  // Siempre crear fechas locales (sin zona horaria)
+  const toLocalDate = (d: Date | string) =>
+    typeof d === 'string'
+      ? new Date(
+          Number(d.slice(0, 4)),
+          Number(d.slice(5, 7)) - 1,
+          Number(d.slice(8, 10))
+        )
+      : new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+  const currentDate = toLocalDate(startDate);
+  const endDateCopy = toLocalDate(endDate);
+
+  while (currentDate <= endDateCopy) {
+    days.push(getDayName(currentDate));
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  return days;
+}
+/**
+ * Retorna true si hay al menos un domingo en el rango de fechas
+ */
+export function hasSundayInRange(startDate: Date, endDate: Date): boolean {
+  const currentDate = new Date(startDate);
+  while (currentDate <= endDate) {
+    if (getDay(currentDate) === 0) { // 0 = domingo
+      return true;
+    }
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+  return false;
+}
+
+/**
+ * Determina si una operación debe usar límites de horas para domingo
+ */
+export function shouldUseSundayHours(startDate: Date, endDate: Date): boolean {
+  return hasSundayInRange(startDate, endDate);
+}

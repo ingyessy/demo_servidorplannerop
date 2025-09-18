@@ -29,21 +29,47 @@ import { ApiBearerAuth } from '@nestjs/swagger';
 export class SubtaskController {
   constructor(private readonly subtaskService: SubtaskService) {}
 
-  @Post()
-  async create(
-    @Body() createSubtaskDto: CreateSubtaskDto,
-    @CurrentUser('siteId') siteId: number,
+  // @Post()
+  // async create(
+  //   @Body() createSubtaskDto: CreateSubtaskDto,
+  //   @CurrentUser('siteId') siteId: number,
+  // ) {
+  //   const response = await this.subtaskService.create(createSubtaskDto, siteId);
+  //   if (response['status'] === 403) {
+  //     throw new ForbiddenException(
+  //       'Forbidden: Task does not belong to this site',
+  //     );
+  //   }else if (response['status'] === 409) {
+  //     throw new ConflictException(response['message']);
+  //   }
+  //   return response;
+  // }
+
+@Post()
+@Post()
+async create(
+  @Body() createSubtaskDto: CreateSubtaskDto,
+  @CurrentUser('siteId') siteId: number,
+  @CurrentUser('subsiteId') subsiteId: number,
+) {
+  // Solo asigna si no viene en el DTO
+  if (
+    typeof createSubtaskDto.id_subsite === 'undefined' ||
+    createSubtaskDto.id_subsite === null
   ) {
-    const response = await this.subtaskService.create(createSubtaskDto, siteId);
-    if (response['status'] === 403) {
-      throw new ForbiddenException(
-        'Forbidden: Task does not belong to this site',
-      );
-    }else if (response['status'] === 409) {
-      throw new ConflictException(response['message']);
-    }
-    return response;
+    createSubtaskDto.id_subsite = subsiteId;
   }
+
+  const response = await this.subtaskService.create(createSubtaskDto, siteId);
+  if (response['status'] === 403) {
+    throw new ForbiddenException(
+      'Forbidden: Task does not belong to this site',
+    );
+  } else if (response['status'] === 409) {
+    throw new ConflictException(response['message']);
+  }
+  return response;
+}
 
   @Get()
   async findAll(
