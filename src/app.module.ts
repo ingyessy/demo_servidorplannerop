@@ -37,9 +37,11 @@ import { TariffModule } from './tariff/tariff.module';
 import { ConfigurationModule } from './configuration/configuration.module';
 import { BillModule } from './bill/bill.module';
 import { PermissionModule } from './permission/permission.module';
+import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
   imports: [
+    PrismaModule,
     ConfigModule.forRoot({
       isGlobal: true,
     }),

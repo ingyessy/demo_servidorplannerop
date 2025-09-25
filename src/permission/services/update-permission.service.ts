@@ -16,6 +16,38 @@ export class UpdatePermissionService {
     private prisma: PrismaService,
   ) {}
 
+
+    /**
+   * Actualiza el estado de los trabajadores cuyo permiso inicia hoy
+   */
+  async updateWorkersWithStartingPermissions() {
+    const now = getColombianDateTime();
+    const today = now.toISOString().split('T')[0]; // YYYY-MM-DD
+
+    // Busca permisos que inician hoy
+    const startingPermissions = await this.prisma.permission.findMany({
+      where: {
+        dateDisableStart: new Date(today),
+      },
+      select: { id_worker: true },
+    });
+
+    const workerIds = startingPermissions.map(p => p.id_worker);
+
+    if (workerIds.length > 0) {
+      await this.prisma.worker.updateMany({
+        where: { id: { in: workerIds } },
+        data: { status: 'PERMISSION' },
+      });
+      this.logger.log(`Actualizados ${workerIds.length} trabajadores a PERMISSION por permisos que inician hoy`);
+    }
+  }
+
+  
+    /**
+   * Actualiza el estado de los trabajadores cuyo permiso vence hoy y la hora ya pasó o es igual
+   */
+
   async updateWorkersWithExpiredPermissions() {
     const now = getColombianDateTime();
     const today = now.toISOString().split('T')[0]; // YYYY-MM-DD

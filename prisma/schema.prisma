@@ -125,6 +125,8 @@ model Operation_Worker {
   timeStart    String?
   id_group     String?
   id_task      Int?
+  id_subtask   Int?
+  SubTask      SubTask?  @relation(fields: [id_subtask], references: [id])
   id_tariff    Int?
   tariff       Tariff?   @relation(fields: [id_tariff], references: [id])
   task         Task?     @relation(fields: [id_task], references: [id])
@@ -160,6 +162,7 @@ model SubTask {
   Tariff  Tariff[]
   id_subsite       Int     
   subSite          SubSite           @relation(fields: [id_subsite], references: [id])
+  operation_Worker Operation_Worker[]
 }
 
 model Client {

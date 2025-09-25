@@ -60,6 +60,7 @@ export class AuthService {
       status: user.status,
       id_site: user.id_site,
       site: user.Site?.name || null,
+      id_subsite: user.id_subsite || null,
     };
 
     return {

@@ -50,34 +50,76 @@ export class OperationController {
     private readonly workerAnalyticsService: WorkerAnalyticsService,
   ) {}
 
-  @Post()
-  @UsePipes(new DateTransformPipe())
-  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
-  async create(
-    @Body() createOperationDto: CreateOperationDto,
-    @CurrentUser('userId') userId: number,
-    @CurrentUser('siteId') siteId: number,
-    @CurrentUser('subsiteId') subsiteId: number,
-  ) {
-    createOperationDto.id_user = userId;
+  // @Post()
+  // @UsePipes(new DateTransformPipe())
+  // @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  // async create(
+  //   @Body() createOperationDto: CreateOperationDto,
+  //   @CurrentUser('siteId') siteId: number,
+  //   @CurrentUser('subsiteId') subsiteId: number,
+  //    @CurrentUser('userId') userId: number,
+  // ) {
+  //   createOperationDto.id_user = userId;
+  //   createOperationDto.id_site = siteId;
+  //   createOperationDto.id_subsite = subsiteId;
+  //   const response = await this.operationService.createWithWorkers(
+  //     createOperationDto,
+  //     subsiteId,
+  //     siteId,
+  //   );
+  //   if (response['status'] === 404) {
+  //     throw new NotFoundException(response['message']);
+  //   } else if (response['status'] === 409) {
+  //     throw new ConflictException(response['message']);
+  //   } else if (response['status'] === 400) {
+  //     throw new BadRequestException(response['message']);
+  //   } else if (response['status'] === 403) {
+  //     throw new ForbiddenException(response['message']);
+  //   }
+  //   return response;
+  // }
+
+@Post()
+@UsePipes(new DateTransformPipe())
+@UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+async create(
+  @Body() createOperationDto: CreateOperationDto,
+  @CurrentUser('siteId') siteId: number,
+  @CurrentUser('subsiteId') subsiteId: number,
+  @CurrentUser('userId') userId: number,
+) {
+  
+console.log('Body crudo recibido:', arguments[0]);
+  // LOG para ver lo que llega del frontend
+  console.log('DTO recibido en controlador:', createOperationDto);
+  createOperationDto.id_user = userId;
+
+  if (typeof createOperationDto.id_site === 'undefined' || createOperationDto.id_site === null) {
     createOperationDto.id_site = siteId;
-    createOperationDto.id_subsite = subsiteId;
-    const response = await this.operationService.createWithWorkers(
-      createOperationDto,
-      subsiteId,
-      siteId,
-    );
-    if (response['status'] === 404) {
-      throw new NotFoundException(response['message']);
-    } else if (response['status'] === 409) {
-      throw new ConflictException(response['message']);
-    } else if (response['status'] === 400) {
-      throw new BadRequestException(response['message']);
-    } else if (response['status'] === 403) {
-      throw new ForbiddenException(response['message']);
-    }
-    return response;
   }
+
+  // Si el frontend NO envía id_subsite, usa el del usuario (puede ser null)
+  if (typeof createOperationDto.id_subsite === 'undefined' || createOperationDto.id_subsite === null) {
+    createOperationDto.id_subsite = subsiteId;
+  }
+
+  const response = await this.operationService.createWithWorkers(
+    createOperationDto,
+    createOperationDto.id_subsite,
+    createOperationDto.id_site,
+  );
+
+  if (response['status'] === 404) {
+    throw new NotFoundException(response['message']);
+  } else if (response['status'] === 409) {
+    throw new ConflictException(response['message']);
+  } else if (response['status'] === 400) {
+    throw new BadRequestException(response['message']);
+  } else if (response['status'] === 403) {
+    throw new ForbiddenException(response['message']);
+  }
+  return response;
+}
 
   @Get()
   @ApiQuery({

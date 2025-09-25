@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { OperationWorkerService } from './operation-worker.service';
 import { OperationWorkerController } from './operation-worker.controller';
-import { PrismaService } from 'src/prisma/prisma.service';
 import { AuthModule } from 'src/auth/auth.module';
 import { ValidationModule } from 'src/common/validation/validation.module';
 import { RemoveWorkerFromOperationService } from './service/remove-worker-from-operation/remove-worker-from-operation.service';
@@ -14,7 +13,6 @@ import { WorkerModule } from 'src/worker/worker.module';
   controllers: [OperationWorkerController],
   providers: [
     OperationWorkerService,
-    PrismaService,
     RemoveWorkerFromOperationService,
     UpdateWorkerSheduleService,
     AssignWorkerToOperationService,

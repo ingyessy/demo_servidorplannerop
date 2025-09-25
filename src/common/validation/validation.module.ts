@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { ValidationService } from './validation.service';
-import { PrismaService } from 'src/prisma/prisma.service';
 import { ExcelExportService } from './services/excel-export.service';
 import { ValidationWorkerService } from './services/validation-worker/validation-worker.service';
 import { ValidationClientProgrammingService } from './services/validation-client-programming/validation-client-programming.service';
@@ -10,7 +9,6 @@ import { ValidationUserSiteService } from './services/validation-user-site/valid
 @Module({
   providers: [
     ValidationService,
-    PrismaService,
     ExcelExportService,
     ValidationWorkerService,
     ValidationClientProgrammingService,

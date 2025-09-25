@@ -15,6 +15,12 @@ export interface OperationIncludeConfig {
       name: boolean;
     };
   };
+  // SubTask: {
+  //   select: {
+  //     id: boolean;
+  //     name: boolean;
+  //   };
+  // };
   task: {
     select: {
       id: boolean;
@@ -40,6 +46,7 @@ export interface OperationIncludeConfig {
       dateStart: boolean;
       dateEnd: boolean;
       id_group: boolean;
+      id_subtask: boolean;
       worker: {
         select: {
           id: boolean;
@@ -51,6 +58,13 @@ export interface OperationIncludeConfig {
         select: {
           id: boolean;
           name: boolean;
+        };
+      };
+      SubTask: { 
+        select: {
+          id: boolean;
+          name: boolean;
+          code: boolean;
         };
       };
       tariff: { 
@@ -91,6 +105,12 @@ export function createOperationInclude(): OperationIncludeConfig {
         name: true,
       },
     },
+    // SubTask: {
+    //   select: {
+    //     id: true,
+    //     name: true,
+    //   },
+    // },
     task: {
       select: {
         id: true,
@@ -116,6 +136,7 @@ export function createOperationInclude(): OperationIncludeConfig {
         dateStart: true,
         dateEnd: true,
         id_group: true,
+        id_subtask: true,
         worker: {
           select: {
             id: true,
@@ -127,6 +148,13 @@ export function createOperationInclude(): OperationIncludeConfig {
           select: {
             id: true,
             name: true,
+          },
+        },
+         SubTask: { // <--- Aquí traes la subtask seleccionada por grupo
+          select: {
+            id: true,
+            name: true,
+            code: true,
           },
         },
         tariff: { include: { subTask: true, unitOfMeasure: true, facturationUnit: true } },

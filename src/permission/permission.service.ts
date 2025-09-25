@@ -14,39 +14,45 @@ export class PermissionService {
   ) {}
 
   async create(createPermissionDto: CreatePermissionDto, id_site?: number) {
-    try {
-      const validation = await this.validate.validateAllIds({
-        workerIds: [createPermissionDto.id_worker],
-      });
-      if (validation && 'status' in validation && validation.status === 404) {
-        return validation;
+  try {
+    const validation = await this.validate.validateAllIds({
+      workerIds: [createPermissionDto.id_worker],
+    });
+    if (validation && 'status' in validation && validation.status === 404) {
+      return validation;
+    }
+    if (id_site !== undefined) {
+      const workerValidation = validation?.existingWorkers?.[0];
+      if (workerValidation && workerValidation.id_site !== id_site) {
+        return {
+          message: 'Not authorized to create permission for this worker',
+          status: 409,
+        };
       }
-      if (id_site !== undefined) {
-        const workerValidation = validation?.existingWorkers?.[0];
-        if (workerValidation && workerValidation.id_site !== id_site) {
-          return {
-            message: 'Not authorized to create permission for this worker',
-            status: 409,
-          };
-        }
-      }
+    }
 
-      // Crear el permiso
-      const response = await this.prisma.permission.create({
-        data: { ...createPermissionDto },
-      });
+    // Crear el permiso
+    const response = await this.prisma.permission.create({
+      data: { ...createPermissionDto },
+    });
 
-      // Actualizar el estado del trabajador a PERMISSION
+    // Comparar solo la fecha (YYYY-MM-DD) para evitar problemas de zona horaria
+    const todayStr = new Date().toISOString().split('T')[0];
+    const dateDisableStartStr = new Date(createPermissionDto.dateDisableStart).toISOString().split('T')[0];
+
+    if (dateDisableStartStr === todayStr) {
+      // Actualizar el estado del trabajador a PERMISSION solo si el permiso inicia hoy
       await this.prisma.worker.update({
         where: { id: createPermissionDto.id_worker },
         data: { status: 'PERMISSION' },
       });
-
-      return response;
-    } catch (error) {
-      throw new Error(`Error creating permission: ${error}`);
     }
+
+    return response;
+  } catch (error) {
+    throw new Error(`Error creating permission: ${error}`);
   }
+}
 
   async findByFilters(filters: FilterPermissionDto) {
     try {

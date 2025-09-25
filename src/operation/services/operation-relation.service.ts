@@ -381,6 +381,7 @@ console.log('Trabajadores actuales en BD:', currentWorkers);
           timeEnd: item.timeEnd,
           id_task: item.id_task,
           id_tariff: item.id_tariff,
+          id_subtask: item.id_subtask,
         });
       } else if ('id' in item && typeof item.id === 'number') {
         simpleWorkers.push(item.id);

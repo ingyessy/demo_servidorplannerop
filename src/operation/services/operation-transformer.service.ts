@@ -33,6 +33,12 @@ export class OperationTransformerService {
           facturation_unit: w.tariff ? w.tariff.facturationUnit?.name : null,
           id_facturation_unit: w.tariff ? w.tariff.facturationUnit?.id : null
         },
+        subTask: w.SubTask ? {
+          id: w.SubTask.id,
+          name: w.SubTask.name,
+          code: w.SubTask.code
+        }
+        : null,
       });
       }) || [];
 
@@ -66,6 +72,7 @@ export class OperationTransformerService {
         groupedByGroupId[groupId] = {
           groupId,
           schedule: worker.schedule,
+          subTask: worker.subTask,
           workers: [],
         };
       }

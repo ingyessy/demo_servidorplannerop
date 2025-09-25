@@ -34,6 +34,18 @@ export class OperationsCronService {
   }
 
   /**
+   * Actualiza los trabajadores con permisos que inician hoy
+   */
+  @Cron(CronExpression.EVERY_10_MINUTES)
+  async handleUpdateWorkersWithStartingPermissions() {
+    try {
+      await this.updatePermission.updateWorkersWithStartingPermissions();
+    } catch (error) {
+      this.logger.error('Error updating workers with starting permissions:', error);
+    }
+  }
+
+  /**
    * Actualiza los trabajadores con permisos expirados
    */
 

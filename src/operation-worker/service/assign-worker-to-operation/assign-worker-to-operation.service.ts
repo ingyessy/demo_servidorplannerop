@@ -124,6 +124,7 @@ export class AssignWorkerToOperationService {
             id_group: groupId,
             id_task: group.id_task || null,
             id_tariff: group.id_tariff || null,
+            id_subtask: group.id_subtask || null,
           };
 
           // Crear una promesa de creación para cada trabajador en el grupo

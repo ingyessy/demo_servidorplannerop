@@ -7,6 +7,7 @@ import { StatusComplete, StatusOperation } from '@prisma/client';
 import { OperationFinderService } from './services/operation-finder.service';
 import { OperationRelationService } from './services/operation-relation.service';
 import { OperationFilterDto } from './dto/fliter-operation.dto';
+import { WorkerService } from 'src/worker/worker.service';
 
 /**
  * Servicio para gestionar operaciones
@@ -19,6 +20,7 @@ export class OperationService {
     private operationWorkerService: OperationWorkerService,
     private finderService: OperationFinderService,
     private relationService: OperationRelationService,
+    private workerService: WorkerService, 
   ) {}
   /**
    * Obtiene todas las operaciones
@@ -118,6 +120,31 @@ export class OperationService {
     id_site?: number,
   ) {
     try {
+      if (createOperationDto.id_subsite) {
+        id_subsite = createOperationDto.id_subsite;
+      }
+
+      // Obtener el usuario y su rol (ajusta según tu modelo)
+      const user = await this.prisma.user.findUnique({
+        where: { id: createOperationDto.id_user },
+        select: { role: true },
+      });
+
+      // Validar fecha para SUPERVISOR
+      if (user?.role === 'SUPERVISOR' && createOperationDto.dateStart) {
+        const now = new Date();
+        const dateStart = new Date(createOperationDto.dateStart);
+        const diffMs = now.getTime() - dateStart.getTime();
+        const diffHours = diffMs / (1000 * 60 * 60);
+
+        if (diffHours > 48) {
+          return {
+            message: 'Como SUPERVISOR solo puedes crear operaciones con máximo 48 horas de antigüedad.',
+            status: 400,
+          };
+        }
+      }
+
       // Validaciones
       if (createOperationDto.id_user === undefined) {
         return { message: 'User ID is required', status: 400 };
@@ -236,6 +263,7 @@ export class OperationService {
         dateEnd: dateEnd ? new Date(dateEnd) : null,
         timeStrat: timeStrat || '',
         timeEnd: timeEnd || null,
+        id_subsite: id_subsite || null,
       },
     });
 
@@ -301,6 +329,7 @@ export class OperationService {
 
       // Handle status change
       if (directFields.status === StatusOperation.COMPLETED) {
+        await this.workerService.addWorkedHoursOnOperationEnd(id); 
         await this.operationWorkerService.completeClientProgramming(id);
         await this.operationWorkerService.releaseAllWorkersFromOperation(id);
       }
@@ -356,17 +385,37 @@ export class OperationService {
 
     // Elimina campos no válidos para Prisma
   delete updateData.id_area;
+  delete updateData.id_client;
+  delete updateData.id_zone;
+  delete updateData.id_clientProgramming;
   delete updateData.inChargedIds;
   delete updateData.workerIds;
+  delete updateData.id_subsite;
   delete updateData.groups;
-  delete updateData.removedWorkerIds;
-  delete updateData.id;
+  // delete updateData.removedWorkerIds;
+  // delete updateData.id;
+  // delete updateData.originalWorkerIds;
+  // delete updateData.updatedGroups;
+  // delete updateData.workers;
 
-    if (dateStart) updateData.dateStart = new Date(dateStart);
-    if (dateEnd) updateData.dateEnd = new Date(dateEnd);
-    if (timeStrat) updateData.timeStrat = timeStrat;
-    if (timeEnd) updateData.timeEnd = timeEnd;
-    return updateData;
+   
+   if (dateStart) updateData.dateStart = new Date(dateStart);
+  if (dateEnd) {
+    updateData.dateEnd = new Date(dateEnd);
+  } else if (updateData.status === StatusOperation.COMPLETED) {
+    updateData.dateEnd = new Date();
+  }
+  if (timeStrat) updateData.timeStrat = timeStrat;
+  if (timeEnd) {
+    updateData.timeEnd = timeEnd;
+  } else if (updateData.status === StatusOperation.COMPLETED) {
+    // Si se completa y no viene timeEnd, poner hora actual en formato HH:mm
+    const now = new Date();
+    const hh = now.getHours().toString().padStart(2, '0');
+    const mm = now.getMinutes().toString().padStart(2, '0');
+    updateData.timeEnd = `${hh}:${mm}`;
+  }
+  return updateData;
   }
   /**
    * Elimina una operación por su ID

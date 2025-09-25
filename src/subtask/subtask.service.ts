@@ -135,18 +135,30 @@ export class SubtaskService {
     }
   }
   async findOne(id: number, id_site?: number) {
-    try {
-      const response = await this.prisma.subTask.findUnique({
-        where: { id, task: { id_site } },
-      });
-      if (!response) {
-        return { status: 404, message: 'Subtask not found' };
-      }
-      return response;
-    } catch (error) {
-      throw new Error('Error fetching subtask');
+  try {
+    const response = await this.prisma.subTask.findUnique({
+      where: { id },
+      include: {
+        Tariff: true,
+        task: {
+          include: {
+            subSite: true,
+          },
+        },
+      },
+    });
+    if (!response) {
+      return { status: 404, message: 'Subtask not found' };
     }
+    // Si necesitas filtrar por id_site, hazlo manualmente:
+    if (id_site && response.task?.id_site !== id_site) {
+      return { status: 403, message: 'Forbidden: Task does not belong to this site' };
+    }
+    return response;
+  } catch (error) {
+    throw new Error('Error fetching subtask');
   }
+}
 
   async update(
     id: number,

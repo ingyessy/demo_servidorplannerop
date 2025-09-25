@@ -160,6 +160,7 @@ export class UpdateWorkerSheduleService {
               timeEnd: groupConfig.timeEnd,
               id_task: groupConfig.id_task,
               id_tariff: groupConfig.id_tariff,
+              id_subtask: groupConfig.id_subtask,
             }));
 
             await this.prisma.operation_Worker.createMany({

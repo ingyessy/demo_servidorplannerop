@@ -34,10 +34,9 @@ export class WorkerService {
       });
 
       // Agrega los logs aquí para depuración
-    console.log('DTO:', createWorkerDto);
-    console.log('id_site usuario:', id_site);
-    console.log('Validación área:', validation['area']);
-
+      console.log('DTO:', createWorkerDto);
+      console.log('id_site usuario:', id_site);
+      console.log('Validación área:', validation['area']);
 
       // Si la validación falla, retorna el error
       // if (
@@ -347,39 +346,91 @@ export class WorkerService {
     }
   }
 
+  // async addWorkedHoursOnOperationEnd(operationId: number) {
+  //   // Obtener la operación y sus trabajadores
+  //   const operation = await this.prisma.operation.findUnique({
+  //     where: { id: operationId },
+  //     include: { workers: true },
+  //   });
+
+  //   if (!operation || !operation.dateEnd || !operation.timeEnd) return;
+
+  //   // Calcular horas trabajadas
+  //   const start = new Date(operation.dateStart);
+  //   const end = new Date(operation.dateEnd);
+
+  //   // Si tienes timeStart y timeEnd como string tipo "HH:mm"
+  //   const [startHour, startMin] = operation.timeStrat.split(':').map(Number);
+  //   const [endHour, endMin] = operation.timeEnd.split(':').map(Number);
+
+  //   start.setHours(startHour, startMin, 0, 0);
+  //   end.setHours(endHour, endMin, 0, 0);
+
+  //   const diffMs = end.getTime() - start.getTime();
+  //   const diffHours = diffMs / (1000 * 60 * 60);
+
+  //   // Sumar horas trabajadas a cada trabajador
+  //   for (const opWorker of operation.workers) {
+  //     await this.prisma.worker.update({
+  //       where: { id: opWorker.id_worker },
+  //       data: {
+  //         hoursWorked: {
+  //           increment: diffHours,
+  //         },
+  //       },
+  //     });
+  //   }
+  // }
+
   async addWorkedHoursOnOperationEnd(operationId: number) {
-    // Obtener la operación y sus trabajadores
-    const operation = await this.prisma.operation.findUnique({
-      where: { id: operationId },
-      include: { workers: true },
+    // Obtener los Operation_Worker asociados a la operación, con fechas y horas de cada uno
+    const operationWorkers = await this.prisma.operation_Worker.findMany({
+      where: { id_operation: operationId },
+      select: {
+        id_worker: true,
+        dateStart: true,
+        dateEnd: true,
+        timeStart: true,
+        timeEnd: true,
+      },
     });
 
-    if (!operation || !operation.dateEnd || !operation.timeEnd) return;
+    for (const opWorker of operationWorkers) {
+      // Validar que existan fechas y horas
+      if (
+        !opWorker.dateStart ||
+        !opWorker.dateEnd ||
+        !opWorker.timeStart ||
+        !opWorker.timeEnd
+      ) {
+        continue;
+      }
 
-    // Calcular horas trabajadas
-    const start = new Date(operation.dateStart);
-    const end = new Date(operation.dateEnd);
+      // Crear objetos Date para inicio y fin
+      const start = new Date(opWorker.dateStart);
+      const end = new Date(opWorker.dateEnd);
 
-    // Si tienes timeStart y timeEnd como string tipo "HH:mm"
-    const [startHour, startMin] = operation.timeStrat.split(':').map(Number);
-    const [endHour, endMin] = operation.timeEnd.split(':').map(Number);
+      // Parsear horas y minutos
+      const [startHour, startMin] = opWorker.timeStart.split(':').map(Number);
+      const [endHour, endMin] = opWorker.timeEnd.split(':').map(Number);
 
-    start.setHours(startHour, startMin, 0, 0);
-    end.setHours(endHour, endMin, 0, 0);
+      start.setHours(startHour, startMin, 0, 0);
+      end.setHours(endHour, endMin, 0, 0);
 
-    const diffMs = end.getTime() - start.getTime();
-    const diffHours = diffMs / (1000 * 60 * 60);
+      const diffMs = end.getTime() - start.getTime();
+      const diffHours = diffMs / (1000 * 60 * 60);
 
-    // Sumar horas trabajadas a cada trabajador
-    for (const opWorker of operation.workers) {
-      await this.prisma.worker.update({
-        where: { id: opWorker.id_worker },
-        data: {
-          hoursWorked: {
-            increment: diffHours,
+      // Solo sumar si la diferencia es positiva
+      if (diffHours > 0) {
+        await this.prisma.worker.update({
+          where: { id: opWorker.id_worker },
+          data: {
+            hoursWorked: {
+              increment: diffHours,
+            },
           },
-        },
-      });
+        });
+      }
     }
   }
 }

@@ -61,7 +61,7 @@ if (typeof createAreaDto.id_subsite === 'undefined' || createAreaDto.id_subsite 
   }
 
   @Get()
-  @Roles(Role.SUPERADMIN, Role.SUPERVISOR, Role.ADMIN, Role.GH)
+  @Roles(Role.SUPERADMIN, Role.SUPERVISOR, Role.ADMIN, Role.GH, Role.SUPERVISOR)
   async findAll(
     @CurrentUser('siteId') siteId: number,
     @CurrentUser('subsiteId') subsiteId: number,

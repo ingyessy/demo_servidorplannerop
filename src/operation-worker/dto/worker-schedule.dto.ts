@@ -62,6 +62,14 @@ export class WorkerScheduleDto {
   @IsNumber()
   id_task?: number;
 
+   @ApiProperty({
+    description: 'ID de la subtask (subservicio) asignada al grupo',
+    example: 163,
+    required: true
+  })
+  @IsNumber()
+  id_subtask: number;
+
   @ApiProperty({
     description: 'Id de la tarifa asociada a este grupo de trabajadores',
     example: 1,

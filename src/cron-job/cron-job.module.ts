@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { OperationsCronService } from './cron-job.service';
-import { PrismaService } from 'src/prisma/prisma.service';
 import { UpdateOperationService } from './services/update-operation.service';
 import { UpdateWorkerService } from './services/update-worker.service';
 import { UpdateOperationWorkerService } from './services/update-operation-worker.service';
@@ -17,7 +16,6 @@ import { CancelledOperationsCleanupService } from './services/cancelled-operatio
   ],
   providers: [
     OperationsCronService,
-    PrismaService,
     UpdateOperationService,
     UpdateWorkerService,
     UpdateOperationWorkerService,
@@ -26,6 +24,6 @@ import { CancelledOperationsCleanupService } from './services/cancelled-operatio
     CancelledOperationsCleanupService,
     // BillService
   ],
-  exports: [OperationsCronService, PrismaService, UpdateOperationService, CancelledOperationsCleanupService],
+  exports: [OperationsCronService, UpdateOperationService, CancelledOperationsCleanupService],
 })
 export class CronJobModule {}

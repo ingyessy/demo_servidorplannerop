@@ -84,39 +84,48 @@ export class TaskService {
    * obtener todas las tareas
    * @returns respuesta de la busqueda de todas las tareas
    */
-  async findAll(id_site?: number, id_subsite?: number) {
-    try {
-      let whereClause: any = {};
+  async findAll(id_site?: number, id_subsite?: number | null) {
+  try {
+    let whereClause: any = {};
 
-      if (id_site) {
-        whereClause.id_site = id_site;
-      }
+    if (id_site) {
+      whereClause.id_site = id_site;
+    }
 
-      // Solo filtrar por id_subsite si es un número válido
-      // if (typeof id_subsite === 'number') {
-      //   whereClause.id_subsite = id_subsite;
-      // }
-
-      const response = await this.prisma.task.findMany({
-        where: whereClause,
-        include: {
-          SubTask: {
-            include: {
-              Tariff: {
-                select: {
-                  id: true,
-                  code: true,
+    const response = await this.prisma.task.findMany({
+      where: whereClause,
+      include: {
+        SubTask: id_subsite == null
+          ? { // Si subsite es null, trae todas las subtasks
+              include: {
+                Tariff: {
+                  select: {
+                    id: true,
+                    code: true,
+                  },
+                },
+              },
+            }
+          : { // Si subsite es number, filtra las subtasks por subsite
+              where: {
+                id_subsite: id_subsite,
+              },
+              include: {
+                Tariff: {
+                  select: {
+                    id: true,
+                    code: true,
+                  },
                 },
               },
             },
-          },
-        },
-      });
-      return response;
-    } catch (error) {
-      throw new Error('Error get all Task');
-    }
+      },
+    });
+    return response;
+  } catch (error) {
+    throw new Error('Error get all Task');
   }
+}
   /**
    * obtener una tarea por su ID
    * @param id id de la tarea a buscar
@@ -145,10 +154,10 @@ export class TaskService {
     if (!response) {
       return { message: 'Task not found', status: 404 };
     }
-    // Si no hay subtasks asociadas, retorna error 404 específico
-    if (!response.SubTask || response.SubTask.length === 0) {
-      return { message: 'No subtasks found', status: 404 };
-    }
+    // // Si no hay subtasks asociadas, retorna error 404 específico
+    // if (!response.SubTask || response.SubTask.length === 0) {
+    //   return { message: 'No subtasks found', status: 404 };
+    // }
     return response;
   } catch (error) {
     throw new Error('Error get Task');

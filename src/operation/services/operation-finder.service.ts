@@ -35,25 +35,25 @@ export class OperationFinderService {
    * Obtiene todas las operaciones con información detallada
    * @returns Lista de operaciones con relaciones incluidas
    */
- async findAll(id_site?: number, id_subsite?: number) {
-  try {
-    const where: any = {};
-    if (typeof id_site === 'number') where.id_site = id_site;
-    if (typeof id_subsite === 'number') where.id_subsite = id_subsite;
+  async findAll(id_site?: number, id_subsite?: number) {
+    try {
+      const where: any = {};
+      if (typeof id_site === 'number') where.id_site = id_site;
+      if (typeof id_subsite === 'number') where.id_subsite = id_subsite;
 
-    const response = await this.prisma.operation.findMany({
-      where,
-      include: this.defaultInclude,
-    });
+      const response = await this.prisma.operation.findMany({
+        where,
+        include: this.defaultInclude,
+      });
 
-    return response.map((op) =>
-      this.transformer.transformOperationResponse(op),
-    );
-  } catch (error) {
-    console.error('Error getting all operations:', error);
-    throw new Error(error.message);
+      return response.map((op) =>
+        this.transformer.transformOperationResponse(op),
+      );
+    } catch (error) {
+      console.error('Error getting all operations:', error);
+      throw new Error(error.message);
+    }
   }
-}
 
   /**
    * Busca una operación por su ID
@@ -61,26 +61,37 @@ export class OperationFinderService {
    * @returns Operación encontrada o mensaje de error
    */
   async findOne(id: number, id_site?: number, id_subsite?: number) {
-  try {
-    const where: any = { id };
-    if (typeof id_site === 'number') where.id_site = id_site;
-    if (typeof id_subsite === 'number') where.id_subsite = id_subsite;
+    try {
+      const where: any = { id };
+      if (typeof id_site === 'number') where.id_site = id_site;
+      if (typeof id_subsite === 'number') where.id_subsite = id_subsite;
 
-    const response = await this.prisma.operation.findFirst({
-      where,
-      include: this.defaultInclude,
-    });
+      const response = await this.prisma.operation.findFirst({
+        where,
+        include: {
+          ...this.defaultInclude,
+          Bill: {
+            include: {
+              billDetails: {
+                include: {
+                  operationWorker: true,
+                },
+              },
+            },
+          },
+        },
+      });
 
-    if (!response) {
-      return { message: 'Operation not found', status: 404 };
+      if (!response) {
+        return { message: 'Operation not found', status: 404 };
+      }
+
+      return this.transformer.transformOperationResponse(response);
+    } catch (error) {
+      console.error(`Error finding operation with ID ${id}:`, error);
+      throw new Error(error.message);
     }
-
-    return this.transformer.transformOperationResponse(response);
-  } catch (error) {
-    console.error(`Error finding operation with ID ${id}:`, error);
-    throw new Error(error.message);
   }
-}
 
   /**
    * Encuentra todas las operaciones con los estados especificados
@@ -88,49 +99,49 @@ export class OperationFinderService {
    * @returns Lista de operaciones filtradas o mensaje de error
    */
   async findByStatuses(
-  statuses: StatusOperation[],
-  id_site?: number,
-  id_subsite?: number,
-) {
-  try {
-    const isCompletedOnly =
-      statuses.length === 1 && statuses[0] === StatusOperation.COMPLETED;
+    statuses: StatusOperation[],
+    id_site?: number,
+    id_subsite?: number,
+  ) {
+    try {
+      const isCompletedOnly =
+        statuses.length === 1 && statuses[0] === StatusOperation.COMPLETED;
 
-    const where: any = {
-      status: { in: statuses },
-    };
-    if (typeof id_site === 'number') where.id_site = id_site;
-    if (typeof id_subsite === 'number') where.id_subsite = id_subsite;
-
-    const queryConfig: any = {
-      where,
-      include: this.defaultInclude,
-      orderBy: isCompletedOnly
-        ? { dateStart: Prisma.SortOrder.desc }
-        : { dateStart: Prisma.SortOrder.asc },
-    };
-
-    if (isCompletedOnly) {
-      queryConfig['take'] = 30;
-    }
-
-    const response = await this.prisma.operation.findMany(queryConfig);
-
-    if (response.length === 0) {
-      return {
-        message: `No operations found with statuses: ${statuses.join(', ')}`,
-        status: 404,
+      const where: any = {
+        status: { in: statuses },
       };
-    }
+      if (typeof id_site === 'number') where.id_site = id_site;
+      if (typeof id_subsite === 'number') where.id_subsite = id_subsite;
 
-    return response.map((operation) =>
-      this.transformer.transformOperationResponse(operation),
-    );
-  } catch (error) {
-    console.error('Error finding operations by status:', error);
-    throw new Error(`Error finding operations by status: ${error.message}`);
+      const queryConfig: any = {
+        where,
+        include: this.defaultInclude,
+        orderBy: isCompletedOnly
+          ? { dateStart: Prisma.SortOrder.desc }
+          : { dateStart: Prisma.SortOrder.asc },
+      };
+
+      if (isCompletedOnly) {
+        queryConfig['take'] = 30;
+      }
+
+      const response = await this.prisma.operation.findMany(queryConfig);
+
+      if (response.length === 0) {
+        return {
+          message: `No operations found with statuses: ${statuses.join(', ')}`,
+          status: 404,
+        };
+      }
+
+      return response.map((operation) =>
+        this.transformer.transformOperationResponse(operation),
+      );
+    } catch (error) {
+      console.error('Error finding operations by status:', error);
+      throw new Error(`Error finding operations by status: ${error.message}`);
+    }
   }
-}
   /**
    * Busca operaciones por rango de fechas
    * @param start Fecha de inicio
@@ -138,36 +149,36 @@ export class OperationFinderService {
    * @returns Resultado de la búsqueda
    */
   async findByDateRange(
-  start: Date,
-  end: Date,
-  id_site?: number,
-  id_subsite?: number,
-) {
-  try {
-    const where: any = {
-      dateStart: { gte: start },
-      dateEnd: { lte: end },
-    };
-    if (typeof id_site === 'number') where.id_site = id_site;
-    if (typeof id_subsite === 'number') where.id_subsite = id_subsite;
+    start: Date,
+    end: Date,
+    id_site?: number,
+    id_subsite?: number,
+  ) {
+    try {
+      const where: any = {
+        dateStart: { gte: start },
+        dateEnd: { lte: end },
+      };
+      if (typeof id_site === 'number') where.id_site = id_site;
+      if (typeof id_subsite === 'number') where.id_subsite = id_subsite;
 
-    const response = await this.prisma.operation.findMany({
-      where,
-      include: this.defaultInclude,
-    });
+      const response = await this.prisma.operation.findMany({
+        where,
+        include: this.defaultInclude,
+      });
 
-    if (response.length === 0) {
-      return { message: 'No operations found in this range', status: 404 };
+      if (response.length === 0) {
+        return { message: 'No operations found in this range', status: 404 };
+      }
+
+      return response.map((op) =>
+        this.transformer.transformOperationResponse(op),
+      );
+    } catch (error) {
+      console.error('Error finding operations by date range:', error);
+      throw new Error(error.message);
     }
-
-    return response.map((op) =>
-      this.transformer.transformOperationResponse(op),
-    );
-  } catch (error) {
-    console.error('Error finding operations by date range:', error);
-    throw new Error(error.message);
   }
-}
   /**
    * Obtiene operaciones con paginación y filtros opcionales
    * @param page Número de página (por defecto: 1)
@@ -204,28 +215,28 @@ export class OperationFinderService {
    * @returns Lista de operaciones asociadas al usuario o mensaje de error
    */
   async findByUser(id_user: number, id_site?: number, id_subsite?: number) {
-  try {
-    const where: any = { id_user };
-    if (typeof id_site === 'number') where.id_site = id_site;
-    if (typeof id_subsite === 'number') where.id_subsite = id_subsite;
+    try {
+      const where: any = { id_user };
+      if (typeof id_site === 'number') where.id_site = id_site;
+      if (typeof id_subsite === 'number') where.id_subsite = id_subsite;
 
-    const response = await this.prisma.operation.findMany({
-      where,
-      include: this.defaultInclude,
-    });
+      const response = await this.prisma.operation.findMany({
+        where,
+        include: this.defaultInclude,
+      });
 
-    if (response.length === 0) {
-      return { message: 'No operations found for this user', status: 404 };
+      if (response.length === 0) {
+        return { message: 'No operations found for this user', status: 404 };
+      }
+
+      return response.map((op) =>
+        this.transformer.transformOperationResponse(op),
+      );
+    } catch (error) {
+      console.error(`Error finding operations for user ${id_user}:`, error);
+      throw new Error(error.message);
     }
-
-    return response.map((op) =>
-      this.transformer.transformOperationResponse(op),
-    );
-  } catch (error) {
-    console.error(`Error finding operations for user ${id_user}:`, error);
-    throw new Error(error.message);
   }
-}
 
   /**
    * Actualiza la información de la operación para incluir detalles completos de tarifa

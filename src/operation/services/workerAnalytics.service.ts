@@ -287,7 +287,7 @@ export class WorkerAnalyticsService {
         );
       }
     } else if (operationStartedSameDay) {
-      console.log(`Using specific start time: ${startTime}`);
+      // console.log(`Using specific start time: ${startTime}`);
       // CASO 2: Operación empezó el mismo día - usar hora específica de inicio
       if (isToday && !endTime) {
         this.processActiveWorkerToday(

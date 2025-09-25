@@ -527,7 +527,7 @@ export class BillService {
           tariff,
           baseHours,
         );
-       
+
       return {
         hours: compensatoryHours,
         amount: compensatoryAmount,
@@ -881,6 +881,27 @@ export class BillService {
             name: true,
           },
         },
+        operation: {
+          select: {
+            id: true,
+            dateStart: true,
+            dateEnd: true,
+            timeStrat: true,
+            timeEnd: true,
+            client: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+            jobArea: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
         billDetails: {
           include: {
             operationWorker: {
@@ -909,17 +930,17 @@ export class BillService {
       orderBy: { createdAt: 'desc' },
     });
     // Calcular compensatorio para cada factura
-  const billsWithCompensatory = await Promise.all(
-    bills.map(async (bill) => {
-      const compensatory = await this.calculateCompensatoryForBill(bill);
-      return {
-        ...bill,
-        compensatory,
-      };
-    })
-  );
+    const billsWithCompensatory = await Promise.all(
+      bills.map(async (bill) => {
+        const compensatory = await this.calculateCompensatoryForBill(bill);
+        return {
+          ...bill,
+          compensatory,
+        };
+      }),
+    );
 
-  return billsWithCompensatory;
+    return billsWithCompensatory;
   }
 
   async findOne(id: number) {
@@ -930,6 +951,27 @@ export class BillService {
           select: {
             id: true,
             name: true,
+          },
+        },
+        operation: {
+          select: {
+            id: true,
+            dateStart: true,
+            dateEnd: true,
+            timeStrat: true,
+            timeEnd: true,
+            client: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+            jobArea: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
           },
         },
         billDetails: {
@@ -963,7 +1005,7 @@ export class BillService {
     if (!billDB) return null;
 
     // Calcular compensatorio
-  const compensatory = await this.calculateCompensatoryForBill(billDB);
+    const compensatory = await this.calculateCompensatoryForBill(billDB);
     // Mapeo para que la respuesta tenga la misma estructura que el DTO
     return {
       ...billDB,
@@ -1002,7 +1044,6 @@ export class BillService {
     if (!existingBill) {
       throw new ConflictException(`No se encontró la factura con ID: ${id}`);
     }
-
 
     const billDb = await this.prisma.bill.findUnique({
       where: { id },
@@ -1050,7 +1091,7 @@ export class BillService {
     const billDB = await this.findOne(id);
   }
 
-    async updateStatus(id: number, status: BillStatus, userId: number) {
+  async updateStatus(id: number, status: BillStatus, userId: number) {
     const existingBill = await this.prisma.bill.findUnique({ where: { id } });
     if (!existingBill) {
       throw new ConflictException(`No se encontró la factura con ID: ${id}`);
@@ -1115,9 +1156,9 @@ export class BillService {
       }
 
       // === AGREGAR ESTA LÍNEA PARA ACTUALIZAR AMOUNT ===
-    if (typeof group.amount !== 'undefined') {
-      updateData.amount = group.amount;
-    }
+      if (typeof group.amount !== 'undefined') {
+        updateData.amount = group.amount;
+      }
 
       let finalNumberOfHours: number | undefined = undefined;
 
@@ -1249,28 +1290,35 @@ export class BillService {
     let totalPaysheetGroup = 0;
     let totalFacturationGroup = 0;
 
-     // Agrega logs para depuración
-  console.log('matchingGroupSummary:', matchingGroupSummary);
-  console.log('matchingGroupSummary.dateRange:', matchingGroupSummary?.dateRange);
-//movio
-            if (matchingGroupSummary.schedule.unit_of_measure === 'JORNAL') {
-        matchingGroupSummary.paysheet_tariff = matchingGroupSummary.tariffDetails.paysheet_tariff;
-        matchingGroupSummary.facturation_tariff = matchingGroupSummary.tariffDetails.facturation_tariff;
-        matchingGroupSummary.agreed_hours = matchingGroupSummary.tariffDetails.agreed_hours;
-        matchingGroupSummary.hours = matchingGroupSummary.tariffDetails.hours;
-        matchingGroupSummary.workerCount = matchingGroupSummary.workers?.length || 0; // <-- Agrega esto
-      
-        const dateStart = matchingGroupSummary.schedule?.dateStart || new Date();
-      
-        const result = this.payrollCalculationService.processJornalGroups(
-          [matchingGroupSummary],
-          [group],
-          dateStart,
-        ).groupResults[0];
-      
-        totalPaysheetGroup = result?.payroll?.totalAmount || 0;
-        totalFacturationGroup = result?.billing?.totalAmount || 0;
-      }else if (
+    // Agrega logs para depuración
+    console.log('matchingGroupSummary:', matchingGroupSummary);
+    console.log(
+      'matchingGroupSummary.dateRange:',
+      matchingGroupSummary?.dateRange,
+    );
+    //movio
+    if (matchingGroupSummary.schedule.unit_of_measure === 'JORNAL') {
+      matchingGroupSummary.paysheet_tariff =
+        matchingGroupSummary.tariffDetails.paysheet_tariff;
+      matchingGroupSummary.facturation_tariff =
+        matchingGroupSummary.tariffDetails.facturation_tariff;
+      matchingGroupSummary.agreed_hours =
+        matchingGroupSummary.tariffDetails.agreed_hours;
+      matchingGroupSummary.hours = matchingGroupSummary.tariffDetails.hours;
+      matchingGroupSummary.workerCount =
+        matchingGroupSummary.workers?.length || 0; // <-- Agrega esto
+
+      const dateStart = matchingGroupSummary.schedule?.dateStart || new Date();
+
+      const result = this.payrollCalculationService.processJornalGroups(
+        [matchingGroupSummary],
+        [group],
+        dateStart,
+      ).groupResults[0];
+
+      totalPaysheetGroup = result?.payroll?.totalAmount || 0;
+      totalFacturationGroup = result?.billing?.totalAmount || 0;
+    } else if (
       matchingGroupSummary.schedule.unit_of_measure === 'HORAS' &&
       matchingGroupSummary.tariffDetails.alternative_paid_service !== 'YES'
     ) {
