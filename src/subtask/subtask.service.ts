@@ -80,9 +80,9 @@ export class SubtaskService {
       };
     }
 
-    const { name, code, status, id_task, id_subsite } = createSubtaskDto;
+    const { name, code, status, id_task, id_subsite, id_client } = createSubtaskDto;
 
-    console.log('Datos enviados a Prisma:', { name, code, status, id_task, id_subsite });
+    console.log('Datos enviados a Prisma:', { name, code, status, id_task, id_subsite, id_client });
 
     const response = await this.prisma.subTask.create({
       data: {
@@ -91,6 +91,7 @@ export class SubtaskService {
         status,
         id_task,
         id_subsite,
+        id_client,
       },
     });
     return response;
@@ -116,8 +117,10 @@ export class SubtaskService {
             id_site: id_site,
           },
           ...(typeof id_subsite === 'number' ? { id_subsite } : {}),
+    
         },
         include: {
+          client: true,
           Tariff: true,
           task: {
             include: {
@@ -139,6 +142,7 @@ export class SubtaskService {
     const response = await this.prisma.subTask.findUnique({
       where: { id },
       include: {
+        client: true,
         Tariff: true,
         task: {
           include: {
@@ -154,6 +158,7 @@ export class SubtaskService {
     if (id_site && response.task?.id_site !== id_site) {
       return { status: 403, message: 'Forbidden: Task does not belong to this site' };
     }
+   
     return response;
   } catch (error) {
     throw new Error('Error fetching subtask');

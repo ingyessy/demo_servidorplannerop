@@ -20,7 +20,7 @@ export class OperationService {
     private operationWorkerService: OperationWorkerService,
     private finderService: OperationFinderService,
     private relationService: OperationRelationService,
-    private workerService: WorkerService, 
+    private workerService: WorkerService,
   ) {}
   /**
    * Obtiene todas las operaciones
@@ -139,7 +139,8 @@ export class OperationService {
 
         if (diffHours > 48) {
           return {
-            message: 'Como SUPERVISOR solo puedes crear operaciones con máximo 48 horas de antigüedad.',
+            message:
+              'Como SUPERVISOR solo puedes crear operaciones con máximo 48 horas de antigüedad.',
             status: 400,
           };
         }
@@ -221,6 +222,28 @@ export class OperationService {
       throw new Error(error.message);
     }
   }
+
+  private calculateOperationDuration(
+    dateStart: Date,
+    timeStrat: string,
+    dateEnd: Date,
+    timeEnd: string,
+  ): number {
+    if (!dateStart || !timeStrat || !dateEnd || !timeEnd) return 0;
+
+    const start = new Date(dateStart);
+    const [sh, sm] = timeStrat.split(':').map(Number);
+    start.setHours(sh, sm, 0, 0);
+
+    const end = new Date(dateEnd);
+    const [eh, em] = timeEnd.split(':').map(Number);
+    end.setHours(eh, em, 0, 0);
+
+    const diffMs = end.getTime() - start.getTime();
+    const durationHours = Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100; // 2 decimales
+    return durationHours > 0 ? durationHours : 0;
+  }
+
   /**
    * Crea un registro de operación
    * @param operationData - Datos de la operación
@@ -243,10 +266,12 @@ export class OperationService {
       ...restOperationData
     } = operationData;
 
-      // Si id_task no viene en operationData, pero sí en el primer grupo, úsalo
-  const mainTaskId =
-    id_task ||
-    (groups && groups.length > 0 && groups[0].id_task ? groups[0].id_task : null);
+    // Si id_task no viene en operationData, pero sí en el primer grupo, úsalo
+    const mainTaskId =
+      id_task ||
+      (groups && groups.length > 0 && groups[0].id_task
+        ? groups[0].id_task
+        : null);
 
     if (id_subsite !== undefined) {
       if (operationData.id_subsite !== id_subsite) {
@@ -329,7 +354,32 @@ export class OperationService {
 
       // Handle status change
       if (directFields.status === StatusOperation.COMPLETED) {
-        await this.workerService.addWorkedHoursOnOperationEnd(id); 
+        const operation = await this.prisma.operation.findUnique({
+          where: { id },
+        });
+
+        if (
+          operation &&
+          operation.dateStart &&
+          operation.timeStrat &&
+          operation.dateEnd &&
+          operation.timeEnd
+        ) {
+          const opDuration = this.calculateOperationDuration(
+            operation.dateStart,
+            operation.timeStrat,
+            operation.dateEnd,
+            operation.timeEnd,
+          );
+
+          // Actualiza el campo op_duration
+          await this.prisma.operation.update({
+            where: { id },
+            data: { op_duration: opDuration },
+          });
+        }
+
+        await this.workerService.addWorkedHoursOnOperationEnd(id);
         await this.operationWorkerService.completeClientProgramming(id);
         await this.operationWorkerService.releaseAllWorkersFromOperation(id);
       }
@@ -384,38 +434,37 @@ export class OperationService {
     const updateData = { ...directFields };
 
     // Elimina campos no válidos para Prisma
-  delete updateData.id_area;
-  delete updateData.id_client;
-  delete updateData.id_zone;
-  delete updateData.id_clientProgramming;
-  delete updateData.inChargedIds;
-  delete updateData.workerIds;
-  delete updateData.id_subsite;
-  delete updateData.groups;
-  // delete updateData.removedWorkerIds;
-  // delete updateData.id;
-  // delete updateData.originalWorkerIds;
-  // delete updateData.updatedGroups;
-  // delete updateData.workers;
+    delete updateData.id_area;
+    delete updateData.id_client;
+    delete updateData.id_zone;
+    delete updateData.id_clientProgramming;
+    delete updateData.inChargedIds;
+    delete updateData.workerIds;
+    delete updateData.id_subsite;
+    delete updateData.groups;
+    delete updateData.removedWorkerIds;
+    delete updateData.id;
+    delete updateData.originalWorkerIds;
+    delete updateData.updatedGroups;
+    delete updateData.workers;
 
-   
-   if (dateStart) updateData.dateStart = new Date(dateStart);
-  if (dateEnd) {
-    updateData.dateEnd = new Date(dateEnd);
-  } else if (updateData.status === StatusOperation.COMPLETED) {
-    updateData.dateEnd = new Date();
-  }
-  if (timeStrat) updateData.timeStrat = timeStrat;
-  if (timeEnd) {
-    updateData.timeEnd = timeEnd;
-  } else if (updateData.status === StatusOperation.COMPLETED) {
-    // Si se completa y no viene timeEnd, poner hora actual en formato HH:mm
-    const now = new Date();
-    const hh = now.getHours().toString().padStart(2, '0');
-    const mm = now.getMinutes().toString().padStart(2, '0');
-    updateData.timeEnd = `${hh}:${mm}`;
-  }
-  return updateData;
+    if (dateStart) updateData.dateStart = new Date(dateStart);
+    if (dateEnd) {
+      updateData.dateEnd = new Date(dateEnd);
+    } else if (updateData.status === StatusOperation.COMPLETED) {
+      updateData.dateEnd = new Date();
+    }
+    if (timeStrat) updateData.timeStrat = timeStrat;
+    if (timeEnd) {
+      updateData.timeEnd = timeEnd;
+    } else if (updateData.status === StatusOperation.COMPLETED) {
+      // Si se completa y no viene timeEnd, poner hora actual en formato HH:mm
+      const now = new Date();
+      const hh = now.getHours().toString().padStart(2, '0');
+      const mm = now.getMinutes().toString().padStart(2, '0');
+      updateData.timeEnd = `${hh}:${mm}`;
+    }
+    return updateData;
   }
   /**
    * Elimina una operación por su ID
@@ -445,13 +494,13 @@ export class OperationService {
       return await this.prisma.$transaction(async (tx) => {
         // 1. Eliminar todos los trabajadores asignados a la operación
         await tx.operation_Worker.deleteMany({
-          where: { id_operation: id }
+          where: { id_operation: id },
         });
 
         // 2. Eliminar encargados si existen
         try {
           await tx.inChargeOperation.deleteMany({
-            where: { id_operation: id }
+            where: { id_operation: id },
           });
         } catch (error) {
           // Si la tabla no existe, continuar
@@ -477,13 +526,13 @@ export class OperationService {
     return await this.prisma.$transaction(async (tx) => {
       // 1. Eliminar Operation_Worker
       await tx.operation_Worker.deleteMany({
-        where: { id_operation: id }
+        where: { id_operation: id },
       });
 
       // 2. Eliminar InCharged
       try {
         await tx.inChargeOperation.deleteMany({
-          where: { id_operation: id }
+          where: { id_operation: id },
         });
       } catch (error) {
         // Continuar si la tabla no existe
@@ -491,7 +540,7 @@ export class OperationService {
 
       // 3. Eliminar la operación
       return await tx.operation.delete({
-        where: { id }
+        where: { id },
       });
     });
   }

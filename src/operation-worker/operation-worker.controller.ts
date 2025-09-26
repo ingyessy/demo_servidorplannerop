@@ -8,6 +8,7 @@ import {
   ParseIntPipe,
   UseGuards,
   UsePipes,
+  Patch,
 } from '@nestjs/common';
 import { OperationWorkerService } from './operation-worker.service';
 import { AssignWorkersDto } from './dto/assign-workers.dto';
@@ -89,24 +90,40 @@ export class OperationWorkerController {
     return this.operationWorkerService.getWorkersFromOperation(id_operation);
   }
 
+  @Patch('finalize-group')
+  async finalizeGroup(
+    @Body()
+    body: {
+      id_operation: number;
+      id_group: number;
+      dateEnd: Date;
+      timeEnd: string;
+    },
+  ) {
+    return this.operationWorkerService.finalizeGroup(
+      body.id_operation,
+      body.id_group,
+      body.dateEnd,
+      body.timeEnd,
+    );
+  }
+
   @Post('update-schedule')
-@ApiOperation({
-  summary: 'Actualizar programación de trabajadores en una operación',
-})
-@ApiResponse({
-  status: 200,
-  description: 'Programación actualizada exitosamente',
-})
-@ApiResponse({
-  status: 404,
-  description: 'Operación o trabajadores no encontrados',
-})
-updateWorkersSchedule(
-  @Body() dto: UpdateWorkersScheduleDto,
-) {
-  return this.operationWorkerService.updateWorkersSchedule(
-    dto.id_operation,
-    dto.workersToUpdate,
-  );
-}
+  @ApiOperation({
+    summary: 'Actualizar programación de trabajadores en una operación',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Programación actualizada exitosamente',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Operación o trabajadores no encontrados',
+  })
+  updateWorkersSchedule(@Body() dto: UpdateWorkersScheduleDto) {
+    return this.operationWorkerService.updateWorkersSchedule(
+      dto.id_operation,
+      dto.workersToUpdate,
+    );
+  }
 }

@@ -130,37 +130,44 @@ export class BillService {
     const operationDate = simpleHoursGroupsFiltered[0].dateRange.start;
 
     for (const matchingGroupSummary of simpleHoursGroupsFiltered) {
-      const group = createBillDto.groups.find(
-        (g) =>
-          String(g.id).trim() === String(matchingGroupSummary.groupId).trim(),
-      );
-      if (!group) continue;
+  const group = createBillDto.groups.find(
+    (g) =>
+      String(g.id).trim() === String(matchingGroupSummary.groupId).trim(),
+  );
+  if (!group) continue;
 
-      const result = await this.hoursCalculationService.processHoursGroups(
-        matchingGroupSummary,
-        group,
-      );
+  const result = await this.hoursCalculationService.processHoursGroups(
+    matchingGroupSummary,
+    group,
+  );
 
-      const billData = this.prepareHoursBillData(
-        result,
-        createBillDto.id_operation,
-        userId,
-        group, // Agregar este parámetro
-      );
-      const billSaved = await this.prisma.bill.create({
-        data: {
-          ...billData,
-        },
-      });
+  // Calcular duración real del grupo
+  // const groupDuration = await this.calcularDuracionGrupo(
+  //   createBillDto.id_operation,
+  //   group.id
+  // );
 
-      await this.processHoursBillDetails(
-        matchingGroupSummary.workers,
-        billSaved.id,
-        createBillDto.id_operation,
-        group,
-        result,
-      );
-    }
+  const billData = this.prepareHoursBillData(
+    result,
+    createBillDto.id_operation,
+    userId,
+    group,
+  );
+  const billSaved = await this.prisma.bill.create({
+    data: {
+      ...billData,
+      
+    },
+  });
+
+  await this.processHoursBillDetails(
+    matchingGroupSummary.workers,
+    billSaved.id,
+    createBillDto.id_operation,
+    group,
+    result,
+  );
+}
   }
 
   // Procesar grupos con servicio alternativo
@@ -182,42 +189,79 @@ export class BillService {
     if (twoUnitsGroupsFiltered.length === 0) return;
 
     for (const matchingGroupSummary of twoUnitsGroupsFiltered) {
-      const group = createBillDto.groups.find(
-        (g) =>
-          String(g.id).trim() === String(matchingGroupSummary.groupId).trim(),
-      );
-      if (!group) continue;
+  const group = createBillDto.groups.find(
+    (g) =>
+      String(g.id).trim() === String(matchingGroupSummary.groupId).trim(),
+  );
+  if (!group) continue;
 
-      const { totalFacturation, totalPaysheet } =
-        await this.calculateAlternativeServiceTotals(
-          matchingGroupSummary,
-          group,
-        );
+  const { totalFacturation, totalPaysheet } =
+    await this.calculateAlternativeServiceTotals(
+      matchingGroupSummary,
+      group,
+    );
 
-      const billData = this.prepareAlternativeServiceBillData(
-        matchingGroupSummary,
-        group,
-        totalFacturation,
-        totalPaysheet,
-        createBillDto.id_operation,
-        userId,
-      );
+  // // Calcular duración real del grupo
+  // const groupDuration = await this.calcularDuracionGrupo(
+  //   createBillDto.id_operation,
+  //   group.id
+  // );
 
-      const billSaved = await this.prisma.bill.create({
-        data: { ...billData, group_hours: group.group_hours },
-      });
+  const billData = this.prepareAlternativeServiceBillData(
+    matchingGroupSummary,
+    group,
+    totalFacturation,
+    totalPaysheet,
+    createBillDto.id_operation,
+    userId,
+  );
 
-      await this.processAlternativeServiceBillDetails(
-        matchingGroupSummary.workers,
-        billSaved.id,
-        createBillDto.id_operation,
-        group,
-        totalFacturation,
-        totalPaysheet,
-        matchingGroupSummary,
-      );
+  const billSaved = await this.prisma.bill.create({
+    data: {
+      ...billData,
+      group_hours: group.group_hours,
+     
+    },
+  });
+
+  await this.processAlternativeServiceBillDetails(
+    matchingGroupSummary.workers,
+    billSaved.id,
+    createBillDto.id_operation,
+    group,
+    totalFacturation,
+    totalPaysheet,
+    matchingGroupSummary,
+  );
+}
+  }
+  private async calcularDuracionGrupo(id_operation: number, id_group: string | number): Promise<number> {
+  const workersGrupo = await this.prisma.operation_Worker.findMany({
+    where: {
+      id_operation,
+      id_group: String(id_group),
+    },
+  });
+
+  let totalHoras = 0;
+  let count = 0;
+  for (const w of workersGrupo) {
+    if (w.dateStart && w.timeStart && w.dateEnd && w.timeEnd) {
+      const start = new Date(w.dateStart);
+      const [sh, sm] = w.timeStart.split(':').map(Number);
+      start.setHours(sh, sm, 0, 0);
+      const end = new Date(w.dateEnd);
+      const [eh, em] = w.timeEnd.split(':').map(Number);
+      end.setHours(eh, em, 0, 0);
+      const diff = (end.getTime() - start.getTime()) / 3_600_000;
+      if (diff > 0) {
+        totalHoras += diff;
+        count++;
+      }
     }
   }
+  return count > 0 ? Math.round((totalHoras / count) * 100) / 100 : 0;
+}
 
   private async processQuantityGroups(
     createBillDto: CreateBillDto,
@@ -248,38 +292,49 @@ export class BillService {
     if (quantityGroupsFiltered.length === 0) return;
 
     for (const group of createBillDto.groups) {
-      const matchingGroupSummary = quantityGroupsFiltered.find(
-        (summary) => summary.groupId === group.id,
-      );
-      if (!matchingGroupSummary) continue;
+  const matchingGroupSummary = quantityGroupsFiltered.find(
+    (summary) => summary.groupId === group.id,
+  );
+  if (!matchingGroupSummary) continue;
 
-      const { totalPaysheet, totalFacturation } = this.calculateQuantityTotals(
-        matchingGroupSummary,
-        group,
-        amountDb,
-      );
+  const { totalPaysheet, totalFacturation } = this.calculateQuantityTotals(
+    matchingGroupSummary,
+    group,
+    amountDb,
+  );
 
-      const billData = this.prepareQuantityBillData(
-        matchingGroupSummary,
-        group,
-        totalPaysheet,
-        totalFacturation,
-        createBillDto.id_operation,
-        userId,
-      );
+  // // Calcular duración real del grupo
+  // const groupDuration = await this.calcularDuracionGrupo(
+  //   createBillDto.id_operation,
+  //   group.id
+  // );
 
-      const billSaved = await this.prisma.bill.create({ data: billData });
+  const billData = this.prepareQuantityBillData(
+    matchingGroupSummary,
+    group,
+    totalPaysheet,
+    totalFacturation,
+    createBillDto.id_operation,
+    userId,
+  );
 
-      await this.processQuantityBillDetails(
-        matchingGroupSummary.workers,
-        billSaved.id,
-        createBillDto.id_operation,
-        group,
-        totalPaysheet,
-        totalFacturation,
-        matchingGroupSummary,
-      );
-    }
+  const billSaved = await this.prisma.bill.create({
+    data: {
+      ...billData,
+   
+    },
+  });
+
+  await this.processQuantityBillDetails(
+    matchingGroupSummary.workers,
+    billSaved.id,
+    createBillDto.id_operation,
+    group,
+    totalPaysheet,
+    totalFacturation,
+    matchingGroupSummary,
+  );
+}
   }
 
   // Calcular totales para servicio alternativo
@@ -960,6 +1015,7 @@ export class BillService {
             dateEnd: true,
             timeStrat: true,
             timeEnd: true,
+            op_duration: true,
             client: {
               select: {
                 id: true,

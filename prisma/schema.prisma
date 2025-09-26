@@ -93,13 +93,14 @@ model Operation {
   timeEnd              String?
   id_user              Int
   id_area              Int
-  id_task              Int?
+  id_task              Int?   
   id_client            Int
   motorShip            String?
   zone                 Int
   createAt             DateTime            @default(now())
   updateAt             DateTime            @default(now()) @updatedAt
   id_clientProgramming Int?
+  op_duration         Float?              @default(0)
   inChargeOperation    InChargeOperation[]
   jobArea              JobArea             @relation(fields: [id_area], references: [id])
   clientProgramming    ClientProgramming?  @relation(fields: [id_clientProgramming], references: [id])
@@ -163,6 +164,8 @@ model SubTask {
   id_subsite       Int     
   subSite          SubSite           @relation(fields: [id_subsite], references: [id])
   operation_Worker Operation_Worker[]
+  id_client       Int          
+  client         Client           @relation(fields: [id_client], references: [id])
 }
 
 model Client {
@@ -173,6 +176,7 @@ model Client {
   user       User             @relation(fields: [id_user], references: [id])
   operations Operation[]
   CostCenter CostCenter[]
+  SubTask    SubTask[]
 }
 
 model CalledAttention {
@@ -407,6 +411,7 @@ model Bill {
   FAC_HFEN          Decimal?  @db.Decimal(4, 2)
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
+  // operation_duration Float? @default(0)
   id_user           Int
   user              User      @relation(fields: [id_user], references: [id])
   billDetails       BillDetail[]

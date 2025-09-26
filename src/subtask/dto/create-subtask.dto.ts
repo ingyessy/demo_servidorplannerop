@@ -29,4 +29,9 @@ export class CreateSubtaskDto {
   @Type(() => Number)
   @IsNumber()
   id_subsite: number;
+
+  @ApiProperty({ example: '1' })
+  @IsNumber()
+  @Type(() => Number)
+  id_client: number;
 }

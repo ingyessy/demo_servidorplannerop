@@ -149,6 +149,6 @@ export class BaseCalculationService {
     tariff: number,
     baseHours: number
   ): number {
-    return compensatoryHours * workerCount * baseHours * tariff;
+    return compensatoryHours * workerCount  * tariff; //* baseHours
   }
 }
