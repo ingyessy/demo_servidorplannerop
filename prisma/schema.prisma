@@ -100,7 +100,7 @@ model Operation {
   createAt             DateTime            @default(now())
   updateAt             DateTime            @default(now()) @updatedAt
   id_clientProgramming Int?
-  op_duration         Float?              @default(0)
+  op_duration          Float?              @default(0)
   inChargeOperation    InChargeOperation[]
   jobArea              JobArea             @relation(fields: [id_area], references: [id])
   clientProgramming    ClientProgramming?  @relation(fields: [id_clientProgramming], references: [id])
