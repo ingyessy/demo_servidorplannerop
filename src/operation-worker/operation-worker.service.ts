@@ -135,12 +135,13 @@ export class OperationWorkerService {
         },
       });
 
-     // Filtrar solo trabajadores con status AVALIABLE o ASSIGNED
-    const workers = operationWorkers
-      .map((ow) => ow.worker)
-      .filter((worker) => 
-        worker.status === 'AVALIABLE' || worker.status === 'ASSIGNED'
-      );
+      // Filtrar solo trabajadores con status AVALIABLE o ASSIGNED
+      const workers = operationWorkers
+        .map((ow) => ow.worker)
+        .filter(
+          (worker) =>
+            worker.status === 'AVALIABLE' || worker.status === 'ASSIGNED',
+        );
       return workers;
     } catch (error) {
       console.error('Error getting workers from operation:', error);
@@ -158,6 +159,28 @@ export class OperationWorkerService {
     workersToUpdate: WorkerScheduleDto[],
     id_site?: number | null,
   ) {
+    console.log('[OperationWorkerService] updateWorkersSchedule llamado con:');
+    console.log('- id_operation:', id_operation);
+    console.log('- workersToUpdate:', JSON.stringify(workersToUpdate, null, 2));
+
+    // ✅ VERIFICAR QUE CADA WORKER TENGA id_subtask
+    workersToUpdate.forEach((worker, index) => {
+      console.log(`[OperationWorkerService] Worker ${index}:`, {
+        id_group: worker.id_group,
+        workerIds: worker.workerIds,
+        id_task: worker.id_task,
+        id_subtask: worker.id_subtask, // ✅ VERIFICAR QUE ESTÉ
+        id_tariff: worker.id_tariff,
+      });
+
+      if (worker.id_subtask === undefined) {
+        console.error(
+          `[OperationWorkerService] ERROR: Worker ${index} no tiene id_subtask`,
+        );
+      }
+    });
+
+    // Llamar al servicio específico
     return await this.updateWorkerSheduleService.updateWorkersSchedule(
       id_operation,
       workersToUpdate,
@@ -165,25 +188,23 @@ export class OperationWorkerService {
     );
   }
 
-
   async finalizeGroup(
-  id_operation: number,
-  id_group: number,
-  dateEnd: Date,
-  timeEnd: string,
-) {
-  return await this.prisma.operation_Worker.updateMany({
-    where: {
-      id_operation,
-      id_group: id_group.toString(),
-      dateEnd: null,
-      timeEnd: null,
-    },
-    data: {
-      dateEnd,
-      timeEnd,
-    },
-  });
-}
-
+    id_operation: number,
+    id_group: number,
+    dateEnd: Date,
+    timeEnd: string,
+  ) {
+    return await this.prisma.operation_Worker.updateMany({
+      where: {
+        id_operation,
+        id_group: id_group.toString(),
+        dateEnd: null,
+        timeEnd: null,
+      },
+      data: {
+        dateEnd,
+        timeEnd,
+      },
+    });
+  }
 }

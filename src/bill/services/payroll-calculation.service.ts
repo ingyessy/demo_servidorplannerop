@@ -20,88 +20,90 @@ export class PayrollCalculationService {
    * Procesa grupos con unidad de medida JORNAL
    */
   processJornalGroups(
-    groups: WorkerGroupSummary[],
-    groupsData: GroupBillDto[],
-    operationDate: Date | string | null,
-  ) {
-    let totalPayroll = 0;
-    let totalBilling = 0;
-    const groupResults: any[] = [];
+  groups: WorkerGroupSummary[],
+  groupsData: GroupBillDto[],
+  operationDate: Date | string | null,
+) {
+  let totalPayroll = 0;
+  let totalBilling = 0;
+  const groupResults: any[] = [];
 
-    for (const group of groups) {
-      const billData = groupsData.find((g) => g.id === group.groupId);
-      const paysheetData = groupsData.find((g) => g.id === group.groupId);
+  for (const group of groups) {
+    const billData = groupsData.find((g) => g.id === group.groupId);
+    const paysheetData = groupsData.find((g) => g.id === group.groupId);
 
+    if (group.settle_payment && group.settle_payment === 'YES') {
+      if (billData?.pays.length != group.workerCount) {
+        throw new ConflictException(
+          `El grupo ${group.groupId} tiene un número de trabajadores diferente al esperado: ${group.workerCount} trabajadores, pero se encontraron ${billData?.pays.length} pagos.`,
+        );
+      }
 
-      if (group.settle_payment && group.settle_payment === 'YES') {
-        if (billData?.pays.length != group.workerCount) {
+      for (const pay of billData?.pays || []) {
+        if (group.workers.find((w) => w.id === pay.id_worker) === undefined) {
           throw new ConflictException(
-            `El grupo ${group.groupId} tiene un número de trabajadores diferente al esperado: ${group.workerCount} trabajadores, pero se encontraron ${billData?.pays.length} pagos.`,
+            `El trabajador ${pay.id_worker} no está asignado al grupo ${group.groupId}.`,
           );
         }
-
-        for (const pay of billData?.pays || []) {
-          if (group.workers.find((w) => w.id === pay.id_worker) === undefined) {
-            throw new ConflictException(
-              `El trabajador ${pay.id_worker} no está asignado al grupo ${group.groupId}.`,
-            );
-          }
-        }
-      }
-
-      if (!billData || !paysheetData) {
-        console.error(`No se encontraron datos para el grupo ${group.groupId}`);
-        continue;
-      }
-
-      try {
-        const payrollResult = this.calculateJornalPayroll(
-          group,
-          paysheetData.paysheetHoursDistribution,
-          operationDate,
-        );
-
-        totalPayroll += payrollResult.totalAmount;
-
-        const billingResult = this.calculateJornalBilling(
-          group,
-          billData.billHoursDistribution,
-          operationDate,
-        );
-        
-        totalBilling += billingResult.totalAmount;
-
-        groupResults.push({
-          groupId: group.groupId,
-          site: group.site,
-          subSite: group.subSite,
-          dateRange: group.dateRange,
-          timeRange: group.timeRange,
-          week_number: group.week_number,
-          task: group.task,
-          code_tariff: group.code_tariff,
-          tariff: group.tariff,
-          unit_of_measure: group.unit_of_measure,
-          workerCount: group.workerCount,
-          payroll: payrollResult,
-          billing: billingResult,
-          observation: billData?.observation || '',
-          workers: group.workers
-        });
-      } catch (error) {
-        console.error(
-          `Error al calcular para el grupo ${group.groupId}:`,
-          error.message,
-        );
-        continue;
       }
     }
 
-    return {
-      message: 'Jornal groups processed successfully',
-      groupResults,
-    };
+    if (!billData || !paysheetData) {
+      console.error(`No se encontraron datos para el grupo ${group.groupId}`);
+      continue;
+    }
+
+    try {
+      // ✅ PASAR PAYS A LOS MÉTODOS DE CÁLCULO
+      const payrollResult = this.calculateJornalPayroll(
+        group,
+        paysheetData.paysheetHoursDistribution,
+        operationDate,
+        paysheetData.pays, // ✅ AGREGAR PAYS
+      );
+
+      totalPayroll += payrollResult.totalAmount;
+
+      const billingResult = this.calculateJornalBilling(
+        group,
+        billData.billHoursDistribution,
+        operationDate,
+        billData.pays, // ✅ AGREGAR PAYS
+      );
+      
+      totalBilling += billingResult.totalAmount;
+
+      groupResults.push({
+        groupId: group.groupId,
+        site: group.site,
+        subSite: group.subSite,
+        dateRange: group.dateRange,
+        timeRange: group.timeRange,
+        week_number: group.week_number,
+        task: group.task,
+        code_tariff: group.code_tariff,
+        tariff: group.tariff,
+        unit_of_measure: group.unit_of_measure,
+        workerCount: group.workerCount,
+        payroll: payrollResult,
+        billing: billingResult,
+        observation: billData?.observation || '',
+        workers: group.workers
+      });
+    } catch (error) {
+      console.error(
+        `Error al calcular para el grupo ${group.groupId}:`,
+        error.message,
+      );
+      continue;
+    }
   }
+
+  return {
+    message: 'Jornal groups processed successfully',
+    groupResults,
+  };
+}
 
   /**
    * Calcula nómina para grupos JORNAL
@@ -110,6 +112,7 @@ export class PayrollCalculationService {
     group: any,
     additionalHours: HoursDistribution,
     operationDate: Date | string | null,
+    pays?: Array<{id_worker: number, pay: number}>, // ✅ AGREGAR PARÁMETRO PAYS
   ): PayrollCalculationResult {
     this.validateGroup(group, 'paysheet_tariff');
 
@@ -119,19 +122,21 @@ export class PayrollCalculationService {
     const isHolidayOrSunday =
       dateInfo.type === DayType.HOLIDAY || dateInfo.type === DayType.SUNDAY;
 
-    // Cálculo base
-    const baseAmount = this.baseCalculationService.calculateBaseAmount(
-      group.workerCount,
+    // ✅ CALCULAR MONTO BASE CONSIDERANDO UNIDADES DE PAGO
+    const baseAmount = this.calculateBaseAmountWithPayUnits(
+      group,
       group.paysheet_tariff,
+      pays,
     );
 
-    // Cálculo de horas adicionales
-    const additionalHoursResult = this.calculateAdditionalHours(
+    // ✅ CALCULAR HORAS ADICIONALES CONSIDERANDO UNIDADES DE PAGO
+    const additionalHoursResult = this.calculateAdditionalHoursWithPayUnits(
       group,
       additionalHours,
       group.paysheet_tariff,
       group.agreed_hours,
       false, // usar multiplicadores normales
+      pays,
     );
 
     // Cálculo de días festivos
@@ -167,6 +172,7 @@ export class PayrollCalculationService {
     group: any,
     additionalHours: HoursDistribution,
     operationDate: Date | string | null,
+    pays?: Array<{id_worker: number, pay: number}>, // ✅ AGREGAR PARÁMETRO PAYS
   ): PayrollCalculationResult {
     this.validateGroup(group, 'facturation_tariff');
 
@@ -176,19 +182,21 @@ export class PayrollCalculationService {
     const isHolidayOrSunday =
       dateInfo.type === DayType.HOLIDAY || dateInfo.type === DayType.SUNDAY;
 
-    // Cálculo base
-    const baseAmount = this.baseCalculationService.calculateBaseAmount(
-      group.workerCount,
+    // ✅ CALCULAR MONTO BASE CONSIDERANDO UNIDADES DE PAGO
+    const baseAmount = this.calculateBaseAmountWithPayUnits(
+      group,
       group.facturation_tariff,
+      pays,
     );
 
-    // Cálculo de horas adicionales
-    const additionalHoursResult = this.calculateAdditionalHours(
+    // ✅ CALCULAR HORAS ADICIONALES CONSIDERANDO UNIDADES DE PAGO
+    const additionalHoursResult = this.calculateAdditionalHoursWithPayUnits(
       group,
       additionalHours,
       group.facturation_tariff,
       group.agreed_hours,
       true, // usar multiplicadores FAC_
+      pays,
     );
 
     // Cálculo de días festivos
@@ -293,4 +301,64 @@ export class PayrollCalculationService {
     }
     return { amount: 0, multiplier: 0 };
   }
+
+  // ✅ NUEVO MÉTODO PARA CALCULAR MONTO BASE CON UNIDADES DE PAGO
+private calculateBaseAmountWithPayUnits(
+  group: any,
+  tariff: number,
+  pays?: Array<{id_worker: number, pay: number}>,
+): number {
+  if (!pays || pays.length === 0) {
+    // Si no hay pays definidos, usar cálculo tradicional
+    return this.baseCalculationService.calculateBaseAmount(
+      group.workerCount,
+      tariff,
+    );
+  }
+
+  // ✅ SUMAR TODAS LAS UNIDADES DE PAGO Y MULTIPLICAR POR TARIFA
+  const totalPayUnits = pays.reduce((sum, pay) => sum + (pay.pay || 1), 0);
+  return totalPayUnits * tariff;
+}
+
+// ✅ NUEVO MÉTODO PARA CALCULAR HORAS ADICIONALES CON UNIDADES DE PAGO
+private calculateAdditionalHoursWithPayUnits(
+  group: any,
+  additionalHours: HoursDistribution,
+  tariff: number,
+  agreedHours: number,
+  useFacturationMultipliers: boolean,
+  pays?: Array<{id_worker: number, pay: number}>,
+) {
+  let amount = 0;
+  const details = {};
+
+  // ✅ CALCULAR TOTAL DE UNIDADES DE PAGO
+  const totalPayUnits = pays?.reduce((sum, pay) => sum + (pay.pay || 1), 0) || group.workerCount;
+
+  for (const [hourType, hours] of Object.entries(additionalHours)) {
+    const normalizedHourType = hourType.startsWith('H')
+      ? hourType.substring(1)
+      : hourType;
+    const multiplierKey = useFacturationMultipliers
+      ? `FAC_${normalizedHourType}`
+      : normalizedHourType;
+
+    if (hours && hours > 0 && group.hours[multiplierKey]) {
+      // ✅ FÓRMULA CORREGIDA: (tarifa * unidades_pago / horas_pactadas) * horas * multiplicador
+      const hourAmount =
+        (tariff * totalPayUnits / agreedHours) * hours * group.hours[multiplierKey];
+      amount += hourAmount;
+
+      details[hourType] = {
+        hours,
+        multiplier: group.hours[multiplierKey],
+        amount: hourAmount,
+        payUnits: totalPayUnits, // ✅ AGREGAR INFO DE DEBUG
+      };
+    }
+  }
+
+  return { amount, details };
+}
 }

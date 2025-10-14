@@ -73,6 +73,14 @@ export class GroupBillDto {
   @IsOptional()
   @ValidateNested({ each: true })
   pays: WorkerPay[];
+
+   @IsOptional()
+  @IsObject()
+  compensatory?: {
+    hours: number;
+    amount: number;
+    percentage: number;
+  };
 }
 
 export class WorkerPay {

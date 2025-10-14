@@ -144,11 +144,34 @@ export class BaseCalculationService {
    * Calcula el monto de horas compensatorias
    */
   calculateCompensatoryAmount(
-    compensatoryHours: number,
-    workerCount: number,
-    tariff: number,
-    baseHours: number
-  ): number {
-    return compensatoryHours * workerCount  * tariff; //* baseHours
+  compensatoryHours: number,
+  workerCount: number,
+  tariff: number,
+  baseHours: number
+): number {
+  // ✅ VALIDAR PARÁMETROS PARA EVITAR NaN
+  if (!compensatoryHours || !workerCount || !tariff) {
+    console.log('❌ Parámetros inválidos para compensatorio:', {
+      compensatoryHours,
+      workerCount,
+      tariff
+    });
+    return 0;
   }
+  
+  const result = compensatoryHours * workerCount * tariff;
+  
+  // ✅ VALIDAR QUE EL RESULTADO NO SEA NaN
+  if (isNaN(result)) {
+    console.error('❌ Resultado compensatorio es NaN:', {
+      compensatoryHours,
+      workerCount,
+      tariff,
+      result
+    });
+    return 0;
+  }
+  
+  return result;
+}
 }

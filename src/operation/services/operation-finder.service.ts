@@ -267,12 +267,20 @@ export class OperationFinderService {
         return { message: 'Operation not found', status: 404 };
       }
 
+      // ✅ AGREGAR LOG PARA VERIFICAR op_duration DE LA OPERACIÓN
+      console.log('=== OPERATION FINDER ===');
+      console.log('operation.op_duration:', operation.op_duration);
+
       // Transformar la operación con detalles de tarifa
       const transformedOperation =
         this.transformer.transformOperationResponse(operation);
 
+      // ✅ AGREGAR LOG PARA VERIFICAR DESPUÉS DE TRANSFORMACIÓN
+      console.log('transformedOperation.op_duration:', transformedOperation.op_duration);
+      console.log('transformedOperation.workerGroups length:', transformedOperation.workerGroups.length);
+
       // Actualizar cada trabajador con detalles completos de tarifa
-      transformedOperation.workerGroups.forEach((group) => {
+      transformedOperation.workerGroups.forEach((group, index) => {
         const originalWorkers = operation.workers.filter(
           (w) => w.id_group === group.groupId,
         );
@@ -292,12 +300,23 @@ export class OperationFinderService {
               }
             : { paysheet_tariff: 0, facturation_tariff: 0 };
 
-        // Agrega este log para depurar
-        console.log(
-          `Grupo ${group.groupId} - paysheet_tariff:`,
-          group.tariffDetails.paysheet_tariff,
-        );
+        // ✅ PROPAGAR op_duration DE LA OPERACIÓN AL GRUPO
+        group.op_duration = operation.op_duration;
+
+        // ✅ AGREGAR LOG PARA VERIFICAR PROPAGACIÓN
+        console.log(`=== GRUPO ${index + 1} ===`);
+        console.log(`Grupo ${group.groupId} - paysheet_tariff:`, group.tariffDetails.paysheet_tariff);
+        console.log(`Grupo ${group.groupId} - op_duration:`, group.op_duration);
       });
+
+      // ✅ VERIFICAR QUE op_duration ESTÉ EN LA RESPUESTA FINAL
+      console.log('=== RESPUESTA FINAL ===');
+      console.log('transformedOperation.op_duration:', transformedOperation.op_duration);
+      console.log('Grupos con op_duration:', transformedOperation.workerGroups.map(g => ({
+        groupId: g.groupId,
+        op_duration: g.op_duration
+      })));
+      console.log('=== FIN OPERATION FINDER ===');
 
       return transformedOperation;
     } catch (error) {

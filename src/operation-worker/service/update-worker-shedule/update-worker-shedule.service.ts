@@ -23,6 +23,18 @@ export class UpdateWorkerSheduleService {
     id_site?: number | null,
   ) {
     try {
+      console.log('[UpdateWorkerSheduleService] ===== INICIO ACTUALIZACIÓN =====');
+      console.log('[UpdateWorkerSheduleService] workersToUpdate:', JSON.stringify(workersToUpdate, null, 2));
+
+      // Verificar específicamente id_subtask en cada grupo
+      workersToUpdate.forEach((group, index) => {
+        console.log(`[UpdateWorkerSheduleService] Grupo ${index}:`);
+        console.log(`  - id_group: ${group.id_group}`);
+        console.log(`  - id_task: ${group.id_task}`);
+        console.log(`  - id_subtask: ${group.id_subtask} (tipo: ${typeof group.id_subtask})`);
+        console.log(`  - id_tariff: ${group.id_tariff}`);
+        console.log(`  - workerIds: ${JSON.stringify(group.workerIds)}`);
+      });
       // Verificar que la operación existe
       const operation = await this.prisma.operation.findUnique({
         where: { id: id_operation },
@@ -94,8 +106,17 @@ export class UpdateWorkerSheduleService {
           id_group,
           workerIds,
           id_task,
+          id_subtask, // ✅ EXTRAER id_subtask
           id_tariff,
         } = group;
+
+        console.log(`[UpdateWorkerSheduleService] ===== PROCESANDO GRUPO ${id_group} =====`);
+        console.log(`[UpdateWorkerSheduleService] Datos extraídos:`, {
+          id_task,
+          id_subtask, // ✅ LOG específico
+          id_tariff,
+          workerIds,
+        });
 
         // VALIDACIÓN CRÍTICA: Verificar que el id_group existe en la operación
         if (!id_group) {
@@ -179,6 +200,7 @@ export class UpdateWorkerSheduleService {
           }
         }
 
+        // ✅ PREPARAR DATOS DE ACTUALIZACIÓN INCLUYENDO id_subtask
         const updateData: any = {};
 
         // Solo incluir campos que se proporcionaron (evitar sobrescribir con undefined)
@@ -200,13 +222,26 @@ export class UpdateWorkerSheduleService {
 
         if (id_task !== undefined) {
           updateData.id_task = id_task || null;
+          console.log(`[UpdateWorkerSheduleService] Asignando id_task: ${id_task}`);
+        }
+
+        // ✅ PROCESAR id_subtask (REQUERIDO)
+        if (id_subtask !== undefined) {
+          updateData.id_subtask = id_subtask;
+          console.log(`[UpdateWorkerSheduleService] Asignando id_subtask: ${id_subtask}`);
+        } else {
+          console.error(`[UpdateWorkerSheduleService] ERROR: id_subtask no proporcionado para grupo ${id_group}`);
         }
 
         if (id_tariff !== undefined) {
           updateData.id_tariff = id_tariff || null;
+          console.log(`[UpdateWorkerSheduleService] Asignando id_tariff: ${id_tariff}`);
         }
 
-        // Ejecutar la actualización del grupo completo (incluye los nuevos trabajadores)
+        console.log(`[UpdateWorkerSheduleService] ===== updateData FINAL =====`);
+        console.log(JSON.stringify(updateData, null, 2));
+
+        // ✅ EJECUTAR ACTUALIZACIÓN
         const updateResult = await this.prisma.operation_Worker.updateMany({
           where: {
             id_operation,
@@ -215,17 +250,39 @@ export class UpdateWorkerSheduleService {
           data: updateData,
         });
 
+        console.log(`[UpdateWorkerSheduleService] Grupo ${id_group} actualizado. Registros afectados: ${updateResult.count}`);
+
+        // ✅ VERIFICAR ACTUALIZACIÓN
+        const verifyUpdate = await this.prisma.operation_Worker.findMany({
+          where: {
+            id_operation,
+            id_group: id_group,
+          },
+          select: {
+            id_worker: true,
+            id_task: true,
+            id_subtask: true,
+            id_tariff: true,
+            timeStart: true,
+          },
+        });
+
+        console.log(`[UpdateWorkerSheduleService] Verificación post-actualización:`, verifyUpdate);
+
         groupsUpdated++;
         totalWorkersUpdated += updateResult.count;
       }
 
-      return {
+      const result = {
         message: `Workers schedule updated successfully: ${groupsUpdated} groups updated, ${totalWorkersUpdated} workers affected`,
         groupsUpdated,
         totalWorkersUpdated,
       };
+
+      console.log('[UpdateWorkerSheduleService] ===== RESULTADO FINAL =====', result);
+      return result;
     } catch (error) {
-      console.error('Error updating workers schedule:', error);
+      console.error('[UpdateWorkerSheduleService] ERROR:', error);
       throw new Error(error.message);
     }
   }

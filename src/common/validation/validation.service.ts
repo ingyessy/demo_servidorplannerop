@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { StatusComplete } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 
@@ -150,37 +150,49 @@ export class ValidationService {
 
       // 8. Validar que todos los trabajadores existan si se proporcionan IDs
       if (workerIds && workerIds.length > 0) {
-        const existingWorkers = await this.prisma.worker.findMany({
-          where: {
-            id: {
-              in: workerIds,
+        // console.log('[ValidationService] IDs recibidos para validar:', workerIds);
+        
+        // FILTRAR valores undefined, null o inválidos antes de la consulta
+        const validWorkerIds = workerIds
+          .filter(id => {
+            const isValid = id !== undefined && id !== null && !isNaN(Number(id)) && Number(id) > 0;
+            if (!isValid) {
+              console.warn('[ValidationService] ID inválido filtrado:', id);
+            }
+            return isValid;
+          })
+          .map(id => Number(id)); // Convertir a número
+        
+        // console.log('[ValidationService] IDs válidos para validar:', validWorkerIds);
+        
+        if (validWorkerIds.length > 0) {
+          const existingWorkers = await this.prisma.worker.findMany({
+            where: {
+              id: {
+                in: validWorkerIds  // Usar solo IDs válidos
+              }
             },
-          },
-          select: {
-            id: true,
-            id_site: true,
-            id_subsite: true,
-          },
-        });
-        const existingWorkerIds = existingWorkers.map((worker) => worker.id);
-        const existingWorkerSitesAndSubsite = existingWorkers.map((worker) => ({
-          id: worker.id,
-          id_site: worker.id_site,
-          id_subsite: worker.id_subsite,
-        }));
-        const nonExistingWorkerIds = workerIds.filter(
-          (workerId) => !existingWorkerIds.includes(workerId),
-        );
+            select: {
+              id: true,
+              id_site: true,
+              id_subsite: true
+            }
+          });
 
-        if (nonExistingWorkerIds.length > 0) {
-          console.log('Workers not found:', nonExistingWorkerIds);
-          return {
-            message: `Workers not found: ${nonExistingWorkerIds.join(', ')}`,
-            status: 404,
-          };
+          const existingWorkerIds = existingWorkers.map(w => w.id);
+          const missingWorkerIds = validWorkerIds.filter(id => !existingWorkerIds.includes(id));
+
+          if (missingWorkerIds.length > 0) {
+            throw new NotFoundException(`Trabajadores no encontrados con IDs: ${missingWorkerIds.join(', ')}`);
+          }
+
+          console.log('[ValidationService] Todos los trabajadores válidos existen');
+        } else {
+          if (workerIds.length > 0) {
+            throw new BadRequestException('No se proporcionaron IDs de trabajadores válidos');
+          }
+          console.log('[ValidationService] No hay IDs válidos de trabajadores para validar');
         }
-
-        response.existingWorkerIds = existingWorkerSitesAndSubsite;
       }
 
       // 9. Validar que todos los encargados existan si se proporcionan IDs

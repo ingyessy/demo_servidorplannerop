@@ -31,35 +31,76 @@ import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
+  // @Post()
+  // @Roles(Role.SUPERADMIN, Role.ADMIN)
+  // async create(
+  //   @Request() req,
+  //   @Body() createUserDto: CreateUserDto,
+  //   @CurrentUser('siteId') siteId: number,
+  //   @CurrentUser('subsiteId') subsiteId: number,
+  // ) {
+  //   if(!createUserDto.id_site || !createUserDto.id_subsite){
+  //     createUserDto.id_site = siteId;
+  //     createUserDto.id_subsite = subsiteId;
+  //   }
+
+  //   const currentUserRole = req.user.role;
+  //   const newUserRole = createUserDto.role;
+  //   if (currentUserRole === Role.ADMIN && newUserRole === Role.SUPERADMIN) {
+  //     throw new ForbiddenException('Admins cannot create superadmin accounts');
+  //   }
+
+  //   if (currentUserRole === Role.ADMIN && createUserDto.id_site !== siteId) {
+  //     throw new ForbiddenException('Not authorized to create user for this site');
+  //   }
+
+  //   const response = await this.userService.create(createUserDto);
+  //   if (response['status'] === 409) {
+  //     throw new ConflictException(response['message']);
+  //   }
+  //   return response;
+  // }
+
   @Post()
-  @Roles(Role.SUPERADMIN, Role.ADMIN)
-  async create(
-    @Request() req,
-    @Body() createUserDto: CreateUserDto,
-    @CurrentUser('siteId') siteId: number,
-    @CurrentUser('subsiteId') subsiteId: number,
-  ) {
-    if(!createUserDto.id_site || !createUserDto.id_subsite){
-      createUserDto.id_site = siteId;
-      createUserDto.id_subsite = subsiteId;
-    }
-
-    const currentUserRole = req.user.role;
-    const newUserRole = createUserDto.role;
-    if (currentUserRole === Role.ADMIN && newUserRole === Role.SUPERADMIN) {
-      throw new ForbiddenException('Admins cannot create superadmin accounts');
-    }
-
-    if (currentUserRole === Role.ADMIN && createUserDto.id_site !== siteId) {
-      throw new ForbiddenException('Not authorized to create user for this site');
-    }
-
-    const response = await this.userService.create(createUserDto);
-    if (response['status'] === 409) {
-      throw new ConflictException(response['message']);
-    }
-    return response;
+@Roles(Role.SUPERADMIN, Role.ADMIN)
+async create(
+  @Request() req,
+  @Body() createUserDto: CreateUserDto,
+  @CurrentUser('siteId') siteId: number,
+  @CurrentUser('subsiteId') subsiteId: number,
+) {
+  // Solo asignar si no viene definido en el DTO o es null/undefined
+  if (typeof createUserDto.id_site === 'undefined' || createUserDto.id_site === null) {
+    createUserDto.id_site = siteId;
   }
+  
+  // ✅ SOLO ASIGNAR subsiteId SI NO VIENE EN EL DTO Y EL USUARIO ACTUAL TIENE UNO VÁLIDO
+ if (typeof createUserDto.id_subsite === 'undefined' || createUserDto.id_subsite === null) {
+  createUserDto.id_subsite = subsiteId;
+}
+
+  console.log('[UserController] DTO después de asignaciones:', {
+    id_site: createUserDto.id_site,
+    id_subsite: createUserDto.id_subsite,
+    userCurrentSubsite: subsiteId
+  });
+
+  const currentUserRole = req.user.role;
+  const newUserRole = createUserDto.role;
+  if (currentUserRole === Role.ADMIN && newUserRole === Role.SUPERADMIN) {
+    throw new ForbiddenException('Admins cannot create superadmin accounts');
+  }
+
+  if (currentUserRole === Role.ADMIN && createUserDto.id_site !== siteId) {
+    throw new ForbiddenException('Not authorized to create user for this site');
+  }
+
+  const response = await this.userService.create(createUserDto);
+  if (response['status'] === 409) {
+    throw new ConflictException(response['message']);
+  }
+  return response;
+}
 
   @Get()
   @Roles(Role.SUPERADMIN, Role.ADMIN, Role.SUPERVISOR)

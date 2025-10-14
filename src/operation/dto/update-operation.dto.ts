@@ -1,6 +1,6 @@
 import { PartialType, OmitType, ApiProperty } from '@nestjs/swagger';
 import { CreateOperationDto } from './create-operation.dto';
-import { IsArray, IsNumber, IsOptional, ValidateNested } from 'class-validator';
+import { IsArray, IsNumber, IsOptional, ValidateNested, IsString } from 'class-validator';
 import { Type } from 'class-transformer';
 import { WorkerScheduleDto } from 'src/operation-worker/dto/worker-schedule.dto';
 
@@ -26,6 +26,7 @@ export class WorkerDisconnect {
     description: "Si se proporciona, solo desconecta del grupo específico. Si no, desconecta de toda la operación."
   })
   @IsOptional()
+  @IsString()
   id_group?: string;
 }
 
@@ -39,6 +40,51 @@ export class SimpleWorkerConnect {
 // DTO específico para la conexión de trabajadores programados
 export class ScheduledWorkerConnect extends WorkerScheduleDto {}
 
+export class WorkerUpdate {
+  @ApiProperty({ example: 1 })
+  @IsNumber()
+  id_worker: number;
+
+  @ApiProperty({ example: "bc5a073b-e861-4825-a718-6ec81f46404f" })
+  @IsString()
+  id_group: string;
+
+  @ApiProperty({ example: 1, required: false })
+  @IsOptional()
+  @IsNumber()
+  id_task?: number;
+  
+  @ApiProperty({ example: 1, required: false })
+  @IsOptional()
+  @IsNumber()
+  id_subtask?: number;
+
+  @ApiProperty({ example: 1, required: false })
+  @IsOptional()
+  @IsNumber()
+  id_tariff?: number;
+
+  @ApiProperty({ example: "2023-10-01", required: false })
+  @IsOptional()
+  @IsString()
+  dateStart?: string;
+
+  @ApiProperty({ example: "2023-10-31", required: false })
+  @IsOptional()
+  @IsString()
+  dateEnd?: string;
+
+  @ApiProperty({ example: "08:00", required: false })
+  @IsOptional()
+  @IsString()
+  timeStart?: string;
+
+  @ApiProperty({ example: "17:00", required: false })
+  @IsOptional()
+  @IsString()
+  timeEnd?: string;
+}
+
 // Hacemos los campos restantes opcionales
 export class UpdateOperationDto extends PartialType(OperationUpdateBaseDto) {
   // Si aún necesitas actualizar workers, usa un formato que Prisma pueda entender
@@ -46,39 +92,27 @@ export class UpdateOperationDto extends PartialType(OperationUpdateBaseDto) {
     type: Object,
     required: false,
     example: {
-      connect: [
-        { id: 1 },
-        { id: 2 },
-        {
-          workerIds: [3, 4],
-          dateStart: "2023-10-01",
-          dateEnd: "2023-10-31",
-          timeStart: "08:00",
-          timeEnd: "17:00",
-          id_task: 1,
-          id_tariff: 1
-        }
-      ],
-      update: [
-        {
-          workerIds: [3, 4],
-          dateStart: "2023-11-01",
-          dateEnd: "2023-11-15",
-          timeStart: "09:00",
-          timeEnd: "18:00",
-          id_group: "UID-12345",
-          id_task: 1,
-          id_tariff: 1
-        }
-      ],
+      connect: [{ id: 1 }],
+      update: [{
+        id_worker: 3,
+        id_group: "UID-12345",
+        id_task: 1,
+        id_tariff: 1,
+        dateStart: "2023-11-01",
+        dateEnd: "2023-11-15",
+        timeStart: "09:00",
+        timeEnd: "18:00"
+      }],
       disconnect: [{ id: 5, id_group: "UID-12345" }]
     }
   })
   @IsOptional()
+  @ValidateNested()
+  @Type(() => Object)
   workers?: {
-    connect?: Array<SimpleWorkerConnect | ScheduledWorkerConnect>;
-    update?: WorkerScheduleDto[]; // Nueva propiedad
-    disconnect?: Array<WorkerDisconnect>;
+    connect?: SimpleWorkerConnect[];
+    update?: WorkerUpdate[];
+    disconnect?: WorkerDisconnect[];
   };
   // Si aún necesitas actualizar inCharged, usa un formato que Prisma pueda entender
   @ApiProperty({ 
@@ -86,10 +120,12 @@ export class UpdateOperationDto extends PartialType(OperationUpdateBaseDto) {
     required: false,
     example: { 
       connect: [{ id: 1 }, { id: 2 }],
-      disconnect: [{ id: 3 },{id: 4, id_group: "UID-12345"}]
+      disconnect: [{ id: 3 }]
     } 
   })
   @IsOptional()
+  @ValidateNested()
+  @Type(() => Object)
   inCharged?: {
     connect?: Array<{ id: number }>;
     disconnect?: Array<{ id: number }>;

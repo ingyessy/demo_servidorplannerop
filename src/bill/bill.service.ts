@@ -1,4 +1,4 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { CreateBillDto, GroupBillDto } from './dto/create-bill.dto';
 import { UpdateBillDto } from './dto/update-bill.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -6,10 +6,19 @@ import { OperationFinderService } from 'src/operation/services/operation-finder.
 import { WorkerGroupAnalysisService } from './services/worker-group-analysis.service';
 import { PayrollCalculationService } from './services/payroll-calculation.service';
 import { HoursCalculationService } from './services/hours-calculation.service';
-import { getWeekNumber } from 'src/common/utils/dateType';
+import { ConfigurationService } from 'src/configuration/configuration.service';
+import {
+  getWeekNumber,
+  hasSundayInRange,
+  getDayName,
+} from 'src/common/utils/dateType';
 import { BaseCalculationService } from './services/base-calculation.service';
 import { group } from 'console';
 import { BillStatus } from '@prisma/client';
+import {
+  getColombianDateTime,
+  getColombianTimeString,
+} from 'src/common/utils/dateColombia';
 
 @Injectable()
 export class BillService {
@@ -20,6 +29,7 @@ export class BillService {
     private payrollCalculationService: PayrollCalculationService,
     private hoursCalculationService: HoursCalculationService,
     private baseCalculationService: BaseCalculationService,
+    private configurationService: ConfigurationService
   ) {}
   async create(createBillDto: CreateBillDto, userId: number) {
     const validateOperationID = await this.validateOperation(
@@ -54,11 +64,30 @@ export class BillService {
   }
 
   // Validar operación
-  private async validateOperation(operationId: number) {
-    return await this.operationFinderService.getOperationWithDetailedTariffs(
+ private async validateOperation(operationId: number) {
+  const validateOperationID =
+    await this.operationFinderService.getOperationWithDetailedTariffs(
       operationId,
     );
+
+  if (!validateOperationID || validateOperationID.status === 404) {
+    throw new NotFoundException('Operation not found');
   }
+
+  // ✅ AGREGAR LOG PARA VERIFICAR QUE op_duration LLEGUE CORRECTAMENTE
+  console.log('=== VALIDATE OPERATION ===');
+  console.log('validateOperationID.op_duration:', validateOperationID.op_duration);
+  console.log('validateOperationID.workerGroups:', validateOperationID.workerGroups?.length);
+  
+  if (validateOperationID.workerGroups) {
+    validateOperationID.workerGroups.forEach((group, index) => {
+      console.log(`Grupo ${index + 1} - op_duration:`, group.op_duration);
+    });
+  }
+  console.log('=== FIN VALIDATE OPERATION ===');
+
+  return validateOperationID;
+}
 
   // Procesar grupos JORNAL
   private async processJornalGroups(
@@ -88,6 +117,16 @@ export class BillService {
 
     for (const result of calculationResults.groupResults) {
       const groupDto = this.getGroupDto(createBillDto.groups, result.groupId);
+
+         
+    // ✅ AGREGAR INFORMACIÓN DE LA OPERACIÓN AL RESULTADO
+    result.operation = {
+      dateStart: validateOperationID.dateStart,
+      timeStrat: validateOperationID.timeStrat, // Usar el nombre real con typo
+      dateEnd: validateOperationID.dateEnd,
+      timeEnd: validateOperationID.timeEnd,
+    };
+
       const billData = this.prepareBillData(
         result,
         createBillDto.id_operation,
@@ -108,67 +147,66 @@ export class BillService {
 
   // Procesar grupos HORAS (sin servicio alternativo)
   private async processSimpleHoursGroups(
-    createBillDto: CreateBillDto,
-    userId: number,
-    validateOperationID: any,
-  ) {
-    const simpleHoursGroups =
-      await this.workerGroupAnalysisService.findGroupsByCriteria(
-        validateOperationID.workerGroups,
-        {
-          unit_of_measure: 'HORAS',
-          alternative_paid_service: 'NO',
-        },
-      );
-
-    const simpleHoursGroupsFiltered = simpleHoursGroups.filter((shg) =>
-      createBillDto.groups.some((g) => String(g.id) === String(shg.groupId)),
+  createBillDto: CreateBillDto,
+  userId: number,
+  validateOperationID: any,
+) {
+  const simpleHoursGroups =
+    await this.workerGroupAnalysisService.findGroupsByCriteria(
+      validateOperationID.workerGroups,
+      {
+        unit_of_measure: 'HORAS',
+        alternative_paid_service: 'NO',
+      },
     );
 
-    if (simpleHoursGroupsFiltered.length === 0) return;
-
-    const operationDate = simpleHoursGroupsFiltered[0].dateRange.start;
-
-    for (const matchingGroupSummary of simpleHoursGroupsFiltered) {
-  const group = createBillDto.groups.find(
-    (g) =>
-      String(g.id).trim() === String(matchingGroupSummary.groupId).trim(),
-  );
-  if (!group) continue;
-
-  const result = await this.hoursCalculationService.processHoursGroups(
-    matchingGroupSummary,
-    group,
+  const simpleHoursGroupsFiltered = simpleHoursGroups.filter((shg) =>
+    createBillDto.groups.some((g) => String(g.id) === String(shg.groupId)),
   );
 
-  // Calcular duración real del grupo
-  // const groupDuration = await this.calcularDuracionGrupo(
-  //   createBillDto.id_operation,
-  //   group.id
-  // );
+  if (simpleHoursGroupsFiltered.length === 0) return;
 
-  const billData = this.prepareHoursBillData(
-    result,
-    createBillDto.id_operation,
-    userId,
-    group,
-  );
-  const billSaved = await this.prisma.bill.create({
-    data: {
-      ...billData,
-      
-    },
-  });
+  // ✅ AGREGAR LOG PARA VERIFICAR op_duration DE LA OPERACIÓN
+  console.log('=== OPERACIÓN PRINCIPAL ===');
+  console.log('validateOperationID.op_duration:', validateOperationID.op_duration);
 
-  await this.processHoursBillDetails(
-    matchingGroupSummary.workers,
-    billSaved.id,
-    createBillDto.id_operation,
-    group,
-    result,
-  );
-}
+  for (const matchingGroupSummary of simpleHoursGroupsFiltered) {
+    const group = createBillDto.groups.find(
+      (g) =>
+        String(g.id).trim() === String(matchingGroupSummary.groupId).trim(),
+    );
+    if (!group) continue;
+
+    // ✅ VERIFICAR QUE op_duration ESTÉ EN EL SUMMARY
+    console.log('=== GRUPO INDIVIDUAL ===');
+    console.log('matchingGroupSummary.op_duration:', matchingGroupSummary.op_duration);
+
+    const result = await this.hoursCalculationService.processHoursGroups(
+      matchingGroupSummary,
+      group,
+    );
+    
+    const billData = this.prepareHoursBillData(
+      result,
+      createBillDto.id_operation,
+      userId,
+      group,
+    );
+    const billSaved = await this.prisma.bill.create({
+      data: {
+        ...billData,
+      },
+    });
+
+    await this.processHoursBillDetails(
+      matchingGroupSummary.workers,
+      billSaved.id,
+      createBillDto.id_operation,
+      group,
+      result,
+    );
   }
+}
 
   // Procesar grupos con servicio alternativo
   private async processAlternativeServiceGroups(
@@ -189,79 +227,81 @@ export class BillService {
     if (twoUnitsGroupsFiltered.length === 0) return;
 
     for (const matchingGroupSummary of twoUnitsGroupsFiltered) {
-  const group = createBillDto.groups.find(
-    (g) =>
-      String(g.id).trim() === String(matchingGroupSummary.groupId).trim(),
-  );
-  if (!group) continue;
+      const group = createBillDto.groups.find(
+        (g) =>
+          String(g.id).trim() === String(matchingGroupSummary.groupId).trim(),
+      );
+      if (!group) continue;
 
-  const { totalFacturation, totalPaysheet } =
-    await this.calculateAlternativeServiceTotals(
-      matchingGroupSummary,
-      group,
-    );
+      const { totalFacturation, totalPaysheet } =
+        await this.calculateAlternativeServiceTotals(
+          matchingGroupSummary,
+          group,
+        );
 
-  // // Calcular duración real del grupo
-  // const groupDuration = await this.calcularDuracionGrupo(
-  //   createBillDto.id_operation,
-  //   group.id
-  // );
+      // // Calcular duración real del grupo
+      // const groupDuration = await this.calcularDuracionGrupo(
+      //   createBillDto.id_operation,
+      //   group.id
+      // );
 
-  const billData = this.prepareAlternativeServiceBillData(
-    matchingGroupSummary,
-    group,
-    totalFacturation,
-    totalPaysheet,
-    createBillDto.id_operation,
-    userId,
-  );
+      const billData = this.prepareAlternativeServiceBillData(
+        matchingGroupSummary,
+        group,
+        totalFacturation,
+        totalPaysheet,
+        createBillDto.id_operation,
+        userId,
+      );
 
-  const billSaved = await this.prisma.bill.create({
-    data: {
-      ...billData,
-      group_hours: group.group_hours,
-     
-    },
-  });
+      const billSaved = await this.prisma.bill.create({
+        data: {
+          ...billData,
+          group_hours: group.group_hours,
+        },
+      });
 
-  await this.processAlternativeServiceBillDetails(
-    matchingGroupSummary.workers,
-    billSaved.id,
-    createBillDto.id_operation,
-    group,
-    totalFacturation,
-    totalPaysheet,
-    matchingGroupSummary,
-  );
-}
-  }
-  private async calcularDuracionGrupo(id_operation: number, id_group: string | number): Promise<number> {
-  const workersGrupo = await this.prisma.operation_Worker.findMany({
-    where: {
-      id_operation,
-      id_group: String(id_group),
-    },
-  });
-
-  let totalHoras = 0;
-  let count = 0;
-  for (const w of workersGrupo) {
-    if (w.dateStart && w.timeStart && w.dateEnd && w.timeEnd) {
-      const start = new Date(w.dateStart);
-      const [sh, sm] = w.timeStart.split(':').map(Number);
-      start.setHours(sh, sm, 0, 0);
-      const end = new Date(w.dateEnd);
-      const [eh, em] = w.timeEnd.split(':').map(Number);
-      end.setHours(eh, em, 0, 0);
-      const diff = (end.getTime() - start.getTime()) / 3_600_000;
-      if (diff > 0) {
-        totalHoras += diff;
-        count++;
-      }
+      await this.processAlternativeServiceBillDetails(
+        matchingGroupSummary.workers,
+        billSaved.id,
+        createBillDto.id_operation,
+        group,
+        totalFacturation,
+        totalPaysheet,
+        matchingGroupSummary,
+      );
     }
   }
-  return count > 0 ? Math.round((totalHoras / count) * 100) / 100 : 0;
-}
+  private async calcularDuracionGrupo(
+    id_operation: number,
+    id_group: string | number,
+  ): Promise<number> {
+    const workersGrupo = await this.prisma.operation_Worker.findMany({
+      where: {
+        id_operation,
+        id_group: String(id_group),
+      },
+    });
+
+    let totalHoras = 0;
+    let count = 0;
+    for (const w of workersGrupo) {
+      if (w.dateStart && w.timeStart && w.dateEnd && w.timeEnd) {
+        const start = new Date(w.dateStart);
+        const [sh, sm] = w.timeStart.split(':').map(Number);
+        start.setHours(sh, sm, 0, 0);
+        const end = new Date(w.dateEnd);
+        const [eh, em] = w.timeEnd.split(':').map(Number);
+        end.setHours(eh, em, 0, 0);
+        const diff = (end.getTime() - start.getTime()) / 3_600_000;
+        if (diff > 0) {
+          totalHoras += diff;
+          count++;
+        }
+      }
+    }
+    return count > 0 ? Math.round((totalHoras / count) * 100) / 100 : 0;
+  }
 
   private async processQuantityGroups(
     createBillDto: CreateBillDto,
@@ -292,49 +332,48 @@ export class BillService {
     if (quantityGroupsFiltered.length === 0) return;
 
     for (const group of createBillDto.groups) {
-  const matchingGroupSummary = quantityGroupsFiltered.find(
-    (summary) => summary.groupId === group.id,
-  );
-  if (!matchingGroupSummary) continue;
+      const matchingGroupSummary = quantityGroupsFiltered.find(
+        (summary) => summary.groupId === group.id,
+      );
+      if (!matchingGroupSummary) continue;
 
-  const { totalPaysheet, totalFacturation } = this.calculateQuantityTotals(
-    matchingGroupSummary,
-    group,
-    amountDb,
-  );
+      const { totalPaysheet, totalFacturation } = this.calculateQuantityTotals(
+        matchingGroupSummary,
+        group,
+        amountDb,
+      );
 
-  // // Calcular duración real del grupo
-  // const groupDuration = await this.calcularDuracionGrupo(
-  //   createBillDto.id_operation,
-  //   group.id
-  // );
+      // // Calcular duración real del grupo
+      // const groupDuration = await this.calcularDuracionGrupo(
+      //   createBillDto.id_operation,
+      //   group.id
+      // );
 
-  const billData = this.prepareQuantityBillData(
-    matchingGroupSummary,
-    group,
-    totalPaysheet,
-    totalFacturation,
-    createBillDto.id_operation,
-    userId,
-  );
+      const billData = this.prepareQuantityBillData(
+        matchingGroupSummary,
+        group,
+        totalPaysheet,
+        totalFacturation,
+        createBillDto.id_operation,
+        userId,
+      );
 
-  const billSaved = await this.prisma.bill.create({
-    data: {
-      ...billData,
-   
-    },
-  });
+      const billSaved = await this.prisma.bill.create({
+        data: {
+          ...billData,
+        },
+      });
 
-  await this.processQuantityBillDetails(
-    matchingGroupSummary.workers,
-    billSaved.id,
-    createBillDto.id_operation,
-    group,
-    totalPaysheet,
-    totalFacturation,
-    matchingGroupSummary,
-  );
-}
+      await this.processQuantityBillDetails(
+        matchingGroupSummary.workers,
+        billSaved.id,
+        createBillDto.id_operation,
+        group,
+        totalPaysheet,
+        totalFacturation,
+        matchingGroupSummary,
+      );
+    }
   }
 
   // Calcular totales para servicio alternativo
@@ -444,6 +483,31 @@ export class BillService {
     userId: number,
     groupDto: GroupBillDto,
   ) {
+    // ✅ OBTENER FECHAS CORRECTAS DE LA OPERACIÓN
+    const operation = result.operation || result.operationData;
+
+    // ✅ USAR FECHAS REALES DE LA OPERACIÓN (no calcular)
+    const realDateStart = operation?.dateStart || result.dateStart;
+    const realTimeStart = operation?.timeStrat || result.timeStart; // Nota: timeStrat (con typo) es el nombre real en BD
+    const realDateEnd = operation?.dateEnd || result.dateEnd;
+    const realTimeEnd = operation?.timeEnd || result.timeEnd;
+
+    // ✅ CALCULAR DURACIÓN REAL BASADA EN FECHAS DE OPERACIÓN
+    let realDuration = 0;
+    if (realDateStart && realTimeStart && realDateEnd && realTimeEnd) {
+      const start = new Date(realDateStart);
+      const [sh, sm] = realTimeStart.split(':').map(Number);
+      start.setHours(sh, sm, 0, 0);
+
+      const end = new Date(realDateEnd);
+      const [eh, em] = realTimeEnd.split(':').map(Number);
+      end.setHours(eh, em, 0, 0);
+
+      realDuration =
+        Math.round(
+          ((end.getTime() - start.getTime()) / (1000 * 60 * 60)) * 100,
+        ) / 100;
+    }
     const additionalHours = [
       groupDto.paysheetHoursDistribution.HED || 0,
       0,
@@ -493,6 +557,28 @@ export class BillService {
     userId: number,
     groupDto: GroupBillDto,
   ) {
+
+    // ✅ OBTENER FECHAS CORRECTAS DE LA OPERACIÓN
+  const operation = result.operation || result.operationData;
+  
+  const realDateStart = operation?.dateStart || result.dateStart;
+  const realTimeStart = operation?.timeStrat || result.timeStart;
+  const realDateEnd = operation?.dateEnd || result.dateEnd;
+  const realTimeEnd = operation?.timeEnd || result.timeEnd;
+
+  // ✅ CALCULAR DURACIÓN REAL
+  let realDuration = 0;
+  if (realDateStart && realTimeStart && realDateEnd && realTimeEnd) {
+    const start = new Date(realDateStart);
+    const [sh, sm] = realTimeStart.split(':').map(Number);
+    start.setHours(sh, sm, 0, 0);
+
+    const end = new Date(realDateEnd);
+    const [eh, em] = realTimeEnd.split(':').map(Number);
+    end.setHours(eh, em, 0, 0);
+
+    realDuration = Math.round(((end.getTime() - start.getTime()) / (1000 * 60 * 60)) * 100) / 100;
+  }
     return {
       week_number: result.week_number,
       id_operation: operationId,
@@ -560,46 +646,96 @@ export class BillService {
    * Calcula el valor del compensatorio para una factura
    */
   private async calculateCompensatoryForBill(billDB: any): Promise<any> {
-    try {
-      // Usar las horas compensatorias de la distribución de facturación
-      const compensatoryHours =
-        await this.hoursCalculationService.calculateCompensatoryHours(
-          (billDB.FAC_HOD || 0) + (billDB.FAC_HON || 0),
-        );
-
-      const workerCount = billDB.number_of_workers || 0;
-      const baseHours = billDB.number_of_hours || 0;
-
-      // Obtener la tarifa desde los detalles de la factura
-      const tariff =
-        billDB.billDetails?.[0]?.operationWorker?.tariff?.paysheet_tariff || 0;
-
-      // Calcular el monto del compensatorio
-      const compensatoryAmount =
-        this.baseCalculationService.calculateCompensatoryAmount(
-          compensatoryHours,
-          workerCount,
-          tariff,
-          baseHours,
-        );
-
-      return {
-        hours: compensatoryHours,
-        amount: compensatoryAmount,
-        percentage:
-          compensatoryHours > 0
-            ? (compensatoryAmount / billDB.total_paysheet) * 100
-            : 0,
-      };
-    } catch (error) {
+  try {
+    const opDuration = billDB.operation?.op_duration;
+    if (typeof opDuration === 'undefined' || opDuration === null) {
       return {
         hours: 0,
         amount: 0,
         percentage: 0,
-        error: 'Error al calcular compensatorio',
+        error: 'No se encontró la duración de la operación (op_duration)',
       };
     }
+
+    // Normalizar fechas a local CORRECTAMENTE
+    const toLocalDate = (date: string | Date) => {
+      if (typeof date === 'string') {
+        const y = Number(date.slice(0, 4));
+        const m = Number(date.slice(5, 7)) - 1;
+        const d = Number(date.slice(8, 10));
+        return new Date(y, m, d);
+      }
+      return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    };
+
+    const startDate = billDB.operation?.dateStart
+      ? toLocalDate(billDB.operation.dateStart)
+      : undefined;
+    const endDate = billDB.operation?.dateEnd
+      ? toLocalDate(billDB.operation.dateEnd)
+      : undefined;
+
+    // VERIFICAR SI HAY DOMINGO REAL
+    let hasSundayReal = false;
+    if (startDate && endDate) {
+      hasSundayReal = hasSundayInRange(startDate, endDate);
+    }
+
+    if (hasSundayReal) {
+      return {
+        hours: 0,
+        amount: 0,
+        percentage: 0,
+        info: 'No se calcula compensatorio porque hay domingo en el rango',
+      };
+    }
+
+    // ✅ OBTENER HORAS SEMANALES DINÁMICAMENTE
+    let weekHours = 44; // valor por defecto
+    if (startDate && endDate) {
+      const sundayHoursConfig = await this.configurationService.findOneByName('HORAS_SEMANALES_DOMINGO');
+      const weekHoursConfig = await this.configurationService.findOneByName('HORAS_SEMANALES');
+      
+      if (hasSundayReal && sundayHoursConfig?.value) {
+        weekHours = parseInt(sundayHoursConfig.value, 10);
+      } else if (!hasSundayReal && weekHoursConfig?.value) {
+        weekHours = parseInt(weekHoursConfig.value, 10);
+      }
+    }
+
+    // ✅ CÁLCULO CORRECTO DEL COMPENSATORIO
+    const dayHours = weekHours / 6; // 7.333333 para 44 horas
+    const compensatoryDay = dayHours / 6; // 1.222222 para 44 horas
+    const compensatoryPerHour = compensatoryDay / dayHours; // compensatorio por hora
+    
+    // ✅ USAR DURACIÓN REAL DE LA OPERACIÓN, LIMITADA AL MÁXIMO DIARIO
+    const effectiveHours = Math.min(opDuration, dayHours);
+    const compensatoryHours = effectiveHours * compensatoryPerHour;
+
+
+    const workerCount = billDB.number_of_workers || 0;
+    const tariff = billDB.billDetails?.[0]?.operationWorker?.tariff?.paysheet_tariff || 0;
+
+    const compensatoryAmount = compensatoryHours * workerCount * tariff;
+
+
+    return {
+      hours: compensatoryHours,
+      amount: compensatoryAmount,
+      percentage: compensatoryHours > 0 
+        ? (compensatoryAmount / billDB.total_paysheet) * 100 
+        : 0,
+    };
+  } catch (error) {
+    console.error('Error en calculateCompensatoryForBill:', error);
+    return {
+      hours: 0,
+      amount: 0,
+      percentage: 0,
+      error: 'Error al calcular compensatorio',
+    };
   }
+}
 
   // Preparar datos para servicio alternativo
   private prepareAlternativeServiceBillData(
@@ -943,6 +1079,7 @@ export class BillService {
             dateEnd: true,
             timeStrat: true,
             timeEnd: true,
+            op_duration: true,
             client: {
               select: {
                 id: true,
@@ -990,6 +1127,7 @@ export class BillService {
         const compensatory = await this.calculateCompensatoryForBill(bill);
         return {
           ...bill,
+          op_duration: bill.operation?.op_duration,
           compensatory,
         };
       }),
@@ -1065,6 +1203,7 @@ export class BillService {
     // Mapeo para que la respuesta tenga la misma estructura que el DTO
     return {
       ...billDB,
+      op_duration: billDB.operation?.op_duration,
       compensatory,
       billHoursDistribution: {
         HOD: billDB.HOD,

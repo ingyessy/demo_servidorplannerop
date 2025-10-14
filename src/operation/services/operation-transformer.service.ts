@@ -42,11 +42,14 @@ export class OperationTransformerService {
       });
       }) || [];
 
-    const inCharge =
-      inChargeOperation?.map((ic) => ({
-        id: ic.id_user,
-        name: ic.user.name,
-      })) || [];
+    // ✅ PROCESAR ENCARGADOS CON FILTRADO DE DUPLICADOS
+    let inCharge: any[] = [];
+    
+    if (operation.inChargeOperation && Array.isArray(operation.inChargeOperation)) {
+      inCharge = this.removeDuplicateInCharge(operation.inChargeOperation);
+    } else if (operation.inCharge && Array.isArray(operation.inCharge)) {
+      inCharge = this.removeDuplicateInCharge(operation.inCharge);
+    }
 
     const workerGroups =
       this.groupWorkersByScheduleAndGroup(workersWithSchedule);
@@ -54,7 +57,9 @@ export class OperationTransformerService {
     return {
       ...rest,
       workerGroups,
-      inCharge,
+      inCharge, // ✅ USAR LOS ENCARGADOS ÚNICOS
+      // Remover la relación intermedia
+      inChargeOperation: undefined
     };
   }
 
@@ -86,5 +91,45 @@ export class OperationTransformerService {
 
     // Convertir el objeto en array
     return Object.values(groupedByGroupId);
+  }
+
+  // ✅ AGREGAR MÉTODO PARA FILTRAR DUPLICADOS DE ENCARGADOS
+  private removeDuplicateInCharge(inChargeData: any[]): any[] {
+    if (!Array.isArray(inChargeData)) return [];
+    
+    // Usar Map para eliminar duplicados por ID de usuario
+    const uniqueInCharge = new Map();
+    
+    inChargeData.forEach(item => {
+      let userId, userData;
+      
+      // Manejar diferentes estructuras de datos
+      if (item.user) {
+        userId = item.user.id;
+        userData = {
+          id: item.user.id,
+          name: item.user.name,
+          occupation: item.user.occupation || null
+        };
+      } else if (item.id) {
+        userId = item.id;
+        userData = {
+          id: item.id,
+          name: item.name,
+          occupation: item.occupation || null
+        };
+      }
+      
+      // Solo agregar si no existe ya
+      if (userId && !uniqueInCharge.has(userId)) {
+        uniqueInCharge.set(userId, userData);
+      }
+    });
+    
+    const result = Array.from(uniqueInCharge.values());
+    // console.log('[OperationTransformer] inCharge originales:', inChargeData.length);
+    // console.log('[OperationTransformer] inCharge únicos:', result.length);
+    
+    return result;
   }
 }

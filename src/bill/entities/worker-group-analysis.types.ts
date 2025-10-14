@@ -72,6 +72,7 @@ export interface WorkerGroupSummary {
   id_unit_of_measure: number | null;
   unit_of_measure: string | null;
   id_facturation_unit: number | null;
+  op_duration: number | null;
   facturation_unit: string | null;
   code_tariff: string | null;
   tariff: string | null;
@@ -87,6 +88,7 @@ export interface WorkerGroupSummary {
   alternative_paid_service: string | undefined;
   group_tariff: string | undefined;
   settle_payment: string | undefined;
+  id_operation?: number | null;
   dateRange: {
     start: string | null;
     end: string | null;
@@ -94,6 +96,10 @@ export interface WorkerGroupSummary {
   timeRange: {
     start: string | null;
     end: string | null;
+  };
+   operation?: {
+    op_duration?: number;
+    
   };
   workers: any[];
 }

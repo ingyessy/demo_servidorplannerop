@@ -19,33 +19,104 @@ export class UserService {
    * @param createUserDto datos del usuario a crear
    * @returns respuesta de la creacion del usuario
    */
+  // async create(createUserDto: CreateUserDto) {
+  //   try {
+  //     const validationUser = await this.findOne(createUserDto.dni);
+  //     const userByUsername = await this.findByUsername(createUserDto.username);
+  //     const validate = await this.validation.validateAllIds({
+  //       id_subsite: createUserDto.id_subsite,
+  //     });
+  
+  //     if (validate && validate?.subsite?.id_site !== createUserDto.id_site) {
+  //       return {
+  //         message: 'This subsite does not belong to the site',
+  //         status: 409,
+  //       };
+  //     }
+  //     if (validationUser['status'] !== 404 || userByUsername !== null) {
+  //       return { message: 'User already DNI/Username exists', status: 409 };
+  //     }
+
+  //     const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
+  //     const response = await this.prisma.user.create({
+  //       data: { ...createUserDto, password: hashedPassword },
+  //     });
+  //     return response;
+  //   } catch (error) {
+  //     throw new Error(error);
+  //   }
+  // }
+
   async create(createUserDto: CreateUserDto) {
-    try {
-      const validationUser = await this.findOne(createUserDto.dni);
-      const userByUsername = await this.findByUsername(createUserDto.username);
-      const validate = await this.validation.validateAllIds({
+  try {
+    console.log('[UserService] createUserDto recibido:', createUserDto);
+    
+    const validationUser = await this.findOne(createUserDto.dni);
+    const userByUsername = await this.findByUsername(createUserDto.username);
+    
+    // ✅ SOLO VALIDAR SUBSITE SI SE PROPORCIONA Y NO ES NULL/UNDEFINED
+    let validate: { status?: number; [key: string]: any } | null = null;
+    if (createUserDto.id_subsite !== undefined && createUserDto.id_subsite !== null) {
+      console.log('[UserService] Validando subsite:', createUserDto.id_subsite);
+      
+      validate = await this.validation.validateAllIds({
         id_subsite: createUserDto.id_subsite,
       });
-  
-      if (validate && validate?.subsite?.id_site !== createUserDto.id_site) {
+
+      console.log('[UserService] Resultado validación subsite:', validate);
+
+      // Verificar que la validación no retorne error
+      if (validate && 'status' in validate && validate.status !== 200) {
+        return validate;
+      }
+
+      // Verificar que el subsite pertenezca al site
+      if (
+        validate &&
+        (validate as { Subsite?: { id_site: number } }).Subsite &&
+        (validate as { Subsite: { id_site: number } }).Subsite.id_site !== createUserDto.id_site
+      ) {
         return {
           message: 'This subsite does not belong to the site',
           status: 409,
         };
       }
-      if (validationUser['status'] !== 404 || userByUsername !== null) {
-        return { message: 'User already DNI/Username exists', status: 409 };
-      }
-
-      const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
-      const response = await this.prisma.user.create({
-        data: { ...createUserDto, password: hashedPassword },
-      });
-      return response;
-    } catch (error) {
-      throw new Error(error);
+    } else {
+      console.log('[UserService] id_subsite no proporcionado o es null, omitiendo validación');
     }
+
+    // Validar duplicados
+    if (validationUser['status'] !== 404 || userByUsername !== null) {
+      return { message: 'User already DNI/Username exists', status: 409 };
+    }
+
+    // Crear usuario
+    const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
+    
+    // ✅ PREPARAR DATOS - ELIMINAR id_subsite SI ES NULL/UNDEFINED
+    const userData = { ...createUserDto, password: hashedPassword };
+    if (userData.id_subsite === null || userData.id_subsite === undefined) {
+      delete userData.id_subsite;
+      console.log('[UserService] id_subsite eliminado del userData (era null/undefined)');
+    }
+
+    console.log('[UserService] userData final para crear:', {
+      ...userData,
+      password: '[HIDDEN]' // No mostrar password en logs
+    });
+
+    const response = await this.prisma.user.create({
+      data: userData,
+    });
+
+    console.log('[UserService] Usuario creado exitosamente con ID:', response.id);
+    return response;
+
+  } catch (error) {
+    console.error('[UserService] Error creando usuario:', error);
+    throw new Error(`Error validating IDs: ${error}`);
   }
+}
   /**
    * obtene todos los usuarios
    * @returns respuesta de la busqueda de todos los usuarios
