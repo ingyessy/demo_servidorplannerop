@@ -55,6 +55,11 @@ git pull origin bin
 ```bash
 # Aplicar cambios estructurales sin perder datos
 npx prisma db push
+
+#intalar libreria
+ npm i date-holidays
+
+
 ```
 
 ### Paso 2: Crear Migración Baseline
@@ -107,39 +112,82 @@ BEGIN;
 --   "updateAt" = CURRENT_TIMESTAMP;
 
 -- Asegurar que existe la subsede principal
-INSERT INTO "SubSite" ("id", "name", "id_site", "status")
-VALUES (1, 'Principal', 1, 'ACTIVE')
-ON CONFLICT ("id") DO UPDATE SET
-  "name" = EXCLUDED."name",
-  "id_site" = EXCLUDED."id_site";
+-- INSERT INTO "SubSite" ("id", "name", "id_site", "status")
+-- VALUES (1, 'Principal', 1, 'ACTIVE')
+-- ON CONFLICT ("id") DO UPDATE SET
+--   "name" = EXCLUDED."name",
+--   "id_site" = EXCLUDED."id_site";
 
--- Actualizar todos los usuarios
-UPDATE "User" SET "id_site" = 1 WHERE "id_site" IS NULL;
-UPDATE "User" SET "id_subsite" = 1 WHERE "id_subsite" IS NULL AND "id_site" = 1;
+-- -- Actualizar todos los usuarios
+-- UPDATE "User" SET "id_site" = 1 WHERE "id_site" IS NULL;
+-- UPDATE "User" SET "id_subsite" = 1 WHERE "id_subsite" IS NULL AND "id_site" = 1;
 
--- Actualizar todas las áreas de trabajo
-UPDATE "JobArea" SET "id_site" = 1 WHERE "id_site" IS NULL;
-UPDATE "JobArea" SET "id_subsite" = 1 WHERE "id_subsite" IS NULL AND "id_site" = 1;
+-- -- Actualizar todas las áreas de trabajo
+-- UPDATE "JobArea" SET "id_site" = 1 WHERE "id_site" IS NULL;
+-- UPDATE "JobArea" SET "id_subsite" = 1 WHERE "id_subsite" IS NULL AND "id_site" = 1;
 
--- Actualizar todos los trabajadores
-UPDATE "Worker" SET "id_site" = 1 WHERE "id_site" IS NULL;
-UPDATE "Worker" SET "id_subsite" = 1 WHERE "id_subsite" IS NULL AND "id_site" = 1;
+-- -- Actualizar todos los trabajadores
+-- UPDATE "Worker" SET "id_site" = 1 WHERE "id_site" IS NULL;
+-- UPDATE "Worker" SET "id_subsite" = 1 WHERE "id_subsite" IS NULL AND "id_site" = 1;
 
--- Actualizar todas las operaciones
-UPDATE "Operation" SET "id_site" = 1 WHERE "id_site" IS NULL;
-UPDATE "Operation" SET "id_subsite" = 1 WHERE "id_subsite" IS NULL AND "id_site" = 1;
+-- -- Actualizar todas las operaciones
+-- UPDATE "Operation" SET "id_site" = 1 WHERE "id_site" IS NULL;
+-- UPDATE "Operation" SET "id_subsite" = 1 WHERE "id_subsite" IS NULL AND "id_site" = 1;
 
--- Actualizar todas las tareas
-UPDATE "Task" SET "id_site" = 1 WHERE "id_site" IS NULL;
-UPDATE "Task" SET "id_subsite" = 1 WHERE "id_subsite" IS NULL AND "id_site" = 1;
+-- -- Actualizar todas las tareas
+-- UPDATE "Task" SET "id_site" = 1 WHERE "id_site" IS NULL;
+-- UPDATE "Task" SET "id_subsite" = 1 WHERE "id_subsite" IS NULL AND "id_site" = 1;
 
--- Actualizar programaciones de cliente
-UPDATE "ClientProgramming" SET "id_site" = 1 WHERE "id_site" IS NULL;
-UPDATE "ClientProgramming" SET "id_subsite" = 1 WHERE "id_subsite" IS NULL AND "id_site" = 1;
+-- -- Actualizar programaciones de cliente
+-- UPDATE "ClientProgramming" SET "id_site" = 1 WHERE "id_site" IS NULL;
+-- UPDATE "ClientProgramming" SET "id_subsite" = 1 WHERE "id_subsite" IS NULL AND "id_site" = 1;
 
--- Actualizar secuencias para asegurar IDs únicos
-SELECT setval('"Site_id_seq"', COALESCE((SELECT MAX(id) FROM "Site"), 1), true);
-SELECT setval('"SubSite_id_seq"', COALESCE((SELECT MAX(id) FROM "SubSite"), 1), true);
+-- -- Actualizar secuencias para asegurar IDs únicos
+-- SELECT setval('"Site_id_seq"', COALESCE((SELECT MAX(id) FROM "Site"), 1), true);
+-- SELECT setval('"SubSite_id_seq"', COALESCE((SELECT MAX(id) FROM "SubSite"), 1), true);
+
+
+---- TABLAS QUE QUEDAN IGUAL ANTES DE LA MIGRACIÓN:
+CalledAttention
+
+Client - adicionar datos faltantes (Urabá)
+Worker - adicionar datos faltantes (Urabá) y id_site y is_subsite
+JobArea - adicionar datos faltantes (Urabá) y id_site y is_subsite
+Sit - adicionar datos faltantes (Urabá) conid=2
+SubTask - adicionar datos fatatante de SMT(code) y Urabá
+Taks - adionar datos faltantes de uraba y smt
+User - adionar datos faltantes de uraba y campos id_site y is_subsite
+Worker - adionar datos faltantes de uraba y campos (id_site y is_subsite payroll_code)
+
+ 
+
+
+
+
+
+INSERT INTO public."Site" ("name","status","createAt","updateAt",id_user) VALUES
+	 ('Uraba','ACTIVE'::public."StatusActivation",'2025-06-04 14:06:28.432','2025-06-04 14:06:28.432',38);
+
+INSERT INTO public."SubSite" ("name",id_site,"status") VALUES
+	 ('IP Uniban Zungo ',2,'ACTIVE'::public."StatusActivation"),
+	 ('IP Uniban Colonia',2,'ACTIVE'::public."StatusActivation"),
+	 ('IP CFS Zungo ',2,'ACTIVE'::public."StatusActivation"),
+	 ('IP CFS Colonia ',2,'ACTIVE'::public."StatusActivation"),
+	 ('Operaciones Marinas',2,'ACTIVE'::public."StatusActivation");
+
+UPDATE "Operation" SET "id_subsite" = 6 WHERE "id_subsite" IS NULL;
+UPDATE "Worker" SET "id_subsite" = 6 WHERE "id_subsite" IS NULL;
+
+INSERT INTO public."Client" ("name",id_user,"status") VALUES
+	 ('Uniban Logistica ',36,'ACTIVE'::public."StatusActivation"),
+	 ('Conserba',36,'ACTIVE'::public."StatusActivation"),
+	 ('CFS',36,'ACTIVE'::public."StatusActivation"),
+	 ('Banacol',36,'ACTIVE'::public."StatusActivation"),
+	 ('Simbacol',36,'ACTIVE'::public."StatusActivation"),
+	 ('Banafrut',36,'ACTIVE'::public."StatusActivation"),
+	 ('CI Uniban',36,'ACTIVE'::public."StatusActivation");
+
+
 
 COMMIT;
 
