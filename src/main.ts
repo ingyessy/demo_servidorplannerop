@@ -16,7 +16,7 @@ async function bootstrap() {
   const authService = app.get(AuthService);
 
   const docsAuthMiddleware = new DocsAuthMiddleware(authService);
-  app.use(docsAuthMiddleware.use.bind(docsAuthMiddleware));
+  app.use('/docs', docsAuthMiddleware.use.bind(docsAuthMiddleware));
   
   app.enableCors({
     origin: '*',
