@@ -24,6 +24,23 @@ export class WorkerService {
     try {
       const { dni, id_area, id_user, phone, code, payroll_code } =
         createWorkerDto;
+        // Check if code exists but is assigned to a deactivated worker
+    const existingWorker = await this.prisma.worker.findFirst({
+      where: { 
+        code,
+        status:{
+        not: 'DEACTIVATED'
+        }
+      }
+    });
+
+    // If code is in use by an active worker, return error
+    if (existingWorker) {
+      return {
+        message: 'Worker code already in use by an active worker',
+        status: 409,
+      };
+    }
       const validation = await this.validationService.validateAllIds({
         id_user: id_user,
         id_area: id_area,
