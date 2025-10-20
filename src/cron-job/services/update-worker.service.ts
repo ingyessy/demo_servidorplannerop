@@ -82,7 +82,7 @@ export class UpdateWorkerService {
         );
 
         await this.prisma.worker.update({
-          where: { id: worker.id },
+          where: { dni: worker.dni },
           data: {
             failures: 0,
           },

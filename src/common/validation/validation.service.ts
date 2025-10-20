@@ -100,17 +100,55 @@ export class ValidationService {
 
       // 5. Validar código si se proporciona
       if (code_worker !== undefined) {
-        const existingWorkerWithCode = await this.prisma.worker.findUnique({
+        const validationId = Math.random().toString(36).substring(7);
+        console.log(`[ValidationService] 🔍 ${validationId} - Validando código: ${code_worker}`);
+        
+        // Primero, verificar todos los trabajadores con ese código para debugging
+        const allWorkersWithCode = await this.prisma.worker.findMany({
           where: { code: code_worker },
+          select: { id: true, status: true, name: true }
         });
+        
+        console.log(`[ValidationService] ${validationId} - Trabajadores encontrados con código ${code_worker}:`, allWorkersWithCode);
+        
+        console.log(`[ValidationService] ${validationId} - Ejecutando consulta para trabajadores activos con código ${code_worker}...`);
+        const existingWorkerWithCode = await this.prisma.worker.findFirst({
+          where: { 
+            code: code_worker,
+            status: {
+              not: 'DEACTIVATED' // Solo considerar códigos de trabajadores que NO están DEACTIVATED
+            }
+          },
+        });
+        
+        console.log(`[ValidationService] ${validationId} - Resultado de consulta de trabajadores activos:`, existingWorkerWithCode);
 
         if (existingWorkerWithCode) {
           console.log(
-            'Found existing worker with code:',
-            existingWorkerWithCode.id,
+            `[ValidationService] ${validationId} - ❌ ENCONTRADO trabajador activo con código:`,
+            existingWorkerWithCode.id, 'Status:', existingWorkerWithCode.status
           );
+          console.log(`[ValidationService] ${validationId} - ❌ RETORNANDO ERROR: Code already exists`);
           return { message: 'Code already exists', status: 409 };
         }
+        
+        // Log adicional para debugging
+        const deactivatedWorkerWithCode = await this.prisma.worker.findFirst({
+          where: { 
+            code: code_worker,
+            status: 'DEACTIVATED'
+          },
+        });
+        
+        if (deactivatedWorkerWithCode) {
+          console.log(
+            `[ValidationService] ${validationId} - Código ${code_worker} existe pero pertenece a trabajador DEACTIVATED (ID: ${deactivatedWorkerWithCode.id}), permitiendo reutilización`,
+          );
+        }
+        
+        console.log(`[ValidationService] ${validationId} - ✅ Código ${code_worker} está disponible para uso`);
+      } else {
+        console.log(`[ValidationService] ⚪ No se proporcionó código para validar`);
       }
 
 
@@ -328,17 +366,24 @@ export class ValidationService {
 
       //16. validar el codigo de nomina
        if (payroll_code_worker!== undefined) {
-        const existingWorkerWithCode = await this.prisma.worker.findUnique({
-          where: { payroll_code: payroll_code_worker },
+        console.log(`[ValidationService] Validando código de nómina: ${payroll_code_worker}`);
+        
+        const existingWorkerWithCode = await this.prisma.worker.findFirst({
+          where: { 
+            payroll_code: payroll_code_worker
+            // El código de nómina debe ser único sin importar el estado del trabajador
+          },
         });
 
         if (existingWorkerWithCode) {
           console.log(
             'Found existing worker with payroll code:',
-            existingWorkerWithCode.id,
+            existingWorkerWithCode.id, 'Status:', existingWorkerWithCode.status
           );
           return { message: 'Payroll code already exists', status: 409 };
         }
+        
+        console.log(`[ValidationService] ✅ Código de nómina ${payroll_code_worker} está disponible para uso`);
       }
 
       // 17. Validar código de tarifa si se proporciona
@@ -353,6 +398,7 @@ export class ValidationService {
         
       }
 
+      console.log(`[ValidationService] ✅ Todas las validaciones completadas exitosamente - ValidationId: ${Math.random().toString(36).substring(7)}`);
       return response;
     } catch (error) {
       console.error('Error validating IDs:', error);
@@ -517,14 +563,19 @@ export class ValidationService {
   }
 
   /**
-   * Verifica si un código de trabajador ya existe
+   * Verifica si un código de trabajador ya existe (excluyendo trabajadores DEACTIVATED)
    * @param code - Código a verificar
    * @returns true si ya existe, false si no
    */
   async workerCodeExists(code: string): Promise<boolean> {
     try {
-      const existingWorker = await this.prisma.worker.findUnique({
-        where: { code },
+      const existingWorker = await this.prisma.worker.findFirst({
+        where: { 
+          code,
+          status: {
+            not: 'DEACTIVATED' // Solo considerar trabajadores que NO están DEACTIVATED
+          }
+        },
       });
       return !!existingWorker;
     } catch (error) {
@@ -564,6 +615,72 @@ export class ValidationService {
     } catch (error) {
       console.error('Error checking if worker phone exists:', error);
       throw new Error(`Error checking worker phone: ${error.message}`);
+    }
+  }
+
+  /**
+   * Valida que un código no esté en uso por otro trabajador activo al actualizar
+   * @param code - Código a verificar
+   * @param workerId - ID del trabajador que se está actualizando (para excluirlo)
+   * @returns true si el código está disponible, false si está en uso
+   */
+  async validateCodeForUpdate(code: string, workerId: number): Promise<{ available: boolean; message?: string }> {
+    try {
+      const existingWorker = await this.prisma.worker.findFirst({
+        where: {
+          code: code,
+          status: {
+            not: 'DEACTIVATED'
+          },
+          id: {
+            not: workerId
+          }
+        }
+      });
+
+      if (existingWorker) {
+        return {
+          available: false,
+          message: `Code ${code} is already in use by another active worker (ID: ${existingWorker.id})`
+        };
+      }
+
+      return { available: true };
+    } catch (error) {
+      console.error('Error validating code for update:', error);
+      throw new Error(`Error validating code: ${error.message}`);
+    }
+  }
+
+  /**
+   * Valida que un código de nómina no esté en uso por otro trabajador al actualizar
+   * @param payrollCode - Código de nómina a verificar
+   * @param workerId - ID del trabajador que se está actualizando (para excluirlo)
+   * @returns true si el código está disponible, false si está en uso
+   */
+  async validatePayrollCodeForUpdate(payrollCode: string, workerId: number): Promise<{ available: boolean; message?: string }> {
+    try {
+      const existingWorker = await this.prisma.worker.findFirst({
+        where: {
+          payroll_code: payrollCode,
+          id: {
+            not: workerId
+          }
+          // El código de nómina debe ser único sin importar el estado del trabajador
+        }
+      });
+
+      if (existingWorker) {
+        return {
+          available: false,
+          message: `Payroll code ${payrollCode} is already in use by another worker (ID: ${existingWorker.id})`
+        };
+      }
+
+      return { available: true };
+    } catch (error) {
+      console.error('Error validating payroll code for update:', error);
+      throw new Error(`Error validating payroll code: ${error.message}`);
     }
   }
 }

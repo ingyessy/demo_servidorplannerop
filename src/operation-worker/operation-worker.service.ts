@@ -194,12 +194,15 @@ export class OperationWorkerService {
     dateEnd: Date,
     timeEnd: string,
   ) {
+    console.log(`[OperationWorkerService] Finalizando grupo ${id_group} con fecha/hora: ${dateEnd.toISOString()} ${timeEnd}`);
+    
     return await this.prisma.operation_Worker.updateMany({
       where: {
         id_operation,
         id_group: id_group.toString(),
         dateEnd: null,
         timeEnd: null,
+        id_worker: { not: -1 }, // ✅ EXCLUIR PLACEHOLDERS
       },
       data: {
         dateEnd,
