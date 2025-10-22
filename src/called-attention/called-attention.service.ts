@@ -697,13 +697,7 @@ export class CalledAttentionService {
     activatePaginated: boolean = true,
   ) {
     try {
-      console.log('[CalledAttentionService] Obteniendo atenciones paginadas:', {
-        page,
-        limit,
-        filters,
-        activatePaginated,
-      });
-
+    
       // Usar el servicio de paginación específico para called attention
       const response = await this.paginateService.paginateCalledAttentions({
         prisma: this.prisma,
@@ -712,8 +706,6 @@ export class CalledAttentionService {
         filters,
         activatePaginated,
       });
-
-      console.log('[CalledAttentionService] Atenciones obtenidas exitosamente');
       return response;
     } catch (error) {
       console.error(

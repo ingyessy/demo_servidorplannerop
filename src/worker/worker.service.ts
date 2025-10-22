@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { CreateWorkerDto } from './dto/create-worker.dto';
 import { UpdateWorkerDto } from './dto/update-worker.dto';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { ValidationService } from 'src/common/validation/validation.service';
 
 /**
