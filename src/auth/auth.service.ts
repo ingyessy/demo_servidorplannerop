@@ -5,7 +5,7 @@ import { UserService } from 'src/user/user.service';
 import { Inject } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
-import { ValidationUserSiteService } from 'src/common/validation/services/validation-user-site/validation-user-site.service';
+import { ValidationUserSiteService } from '../common/validation/services/validation-user-site/validation-user-site.service';
 
 /**
  * Servicio para gestionar la autenticación de usuarios

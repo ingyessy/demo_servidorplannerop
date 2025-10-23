@@ -10,7 +10,7 @@ import {
   Matches,
   ValidateNested,
 } from 'class-validator';
-import { WorkerScheduleDto } from 'src/operation-worker/dto/worker-schedule.dto';
+import { WorkerScheduleDto } from '../../operation-worker/dto/worker-schedule.dto';
 
 export class CreateOperationDto {
   @ApiProperty({ example: `${Object.values(StatusOperation).join(', ')}` })

@@ -1,5 +1,5 @@
 import { ConflictException, Injectable } from '@nestjs/common';
-import { getDateType, DayType } from 'src/common/utils/dateType';
+import { getDateType, DayType } from '../../common/utils/dateType';
 import { WorkerGroupSummary } from '../entities/worker-group-analysis.types';
 import { GroupBillDto, HoursDistribution } from '../dto/create-bill.dto';
 import { BaseCalculationService } from './base-calculation.service';

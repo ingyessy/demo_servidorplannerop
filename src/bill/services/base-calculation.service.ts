@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { HoursDistribution } from '../dto/create-bill.dto';
-import { hasSundayInRange } from 'src/common/utils/dateType';
+import { hasSundayInRange } from '../../common/utils/dateType';
 
 @Injectable()
 export class BaseCalculationService {

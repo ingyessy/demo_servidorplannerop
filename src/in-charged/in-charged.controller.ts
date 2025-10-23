@@ -3,7 +3,7 @@ import { OperationInChargeService } from './in-charged.service';
 import { AssignInChargeDto } from './dto/assign-in-charge.dto';
 import { RemoveInChargeDto } from './dto/remove-in-charge.dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('Operation In Charge')
 @Controller('operation-in-charge')

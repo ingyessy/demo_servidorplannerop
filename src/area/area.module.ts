@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
 import { AreaService } from './area.service';
 import { AreaController } from './area.controller';
-import { UserService } from 'src/user/user.service';
-import { AuthModule } from 'src/auth/auth.module';
+import { UserService } from '../user/user.service';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [AuthModule],
