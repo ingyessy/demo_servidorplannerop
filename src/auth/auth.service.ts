@@ -1,7 +1,7 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { UserService } from 'src/user/user.service';
+import { UserService } from '../user/user.service';
 import { Inject } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
@@ -216,16 +216,18 @@ export class AuthService {
     }
   }
   /**
-   * Regenera un token con nuevos valores de site/subsite
+   * Refresca el token de acceso con nuevos valores de site/subsite
    * @param userId ID del usuario
    * @param newSiteId Nuevo ID de site (opcional)
    * @param newSubsiteId Nuevo ID de subsite (opcional)
+   * @param explicitParams Indica qué parámetros fueron proporcionados explícitamente
    * @returns Nuevo token de acceso
    */
   async refreshUserToken(
     userId: number,
     newSiteId?: number,
-    newSubsiteId?: number,
+    newSubsiteId?: number | null,
+    explicitParams?: { siteProvided: boolean; subsiteProvided: boolean },
   ): Promise<
     { access_token: string } | { message: string; statusCode: HttpStatus }
   > {
@@ -286,7 +288,7 @@ export class AuthService {
         site: newSiteId
           ? await this.getSiteName(newSiteId)
           : await this.getSiteName(user.id_site),
-        id_subsite: newSubsiteId || user.id_subsite || null,
+        id_subsite: this.determineSubsiteId(user, newSubsiteId, explicitParams),
       };
 
       return {
@@ -295,6 +297,29 @@ export class AuthService {
     } catch (error) {
       console.error('Error refreshing token:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Determina el id_subsite correcto basado en el rol del usuario y parámetros explícitos
+   */
+  private determineSubsiteId(
+    user: any,
+    newSubsiteId: number | null | undefined,
+    explicitParams?: { siteProvided: boolean; subsiteProvided: boolean }
+  ): number | null {
+    // Si el usuario envió explícitamente id_subsite (incluso si es null)
+    if (explicitParams?.subsiteProvided) {
+      return newSubsiteId || null;
+    }
+
+    // Si el usuario NO envió id_subsite
+    if (user.role === 'SUPERADMIN') {
+      // Para SUPERADMIN: si no especifica subsite, usar null (puede trabajar sin subsite)
+      return null;
+    } else {
+      // Para usuarios normales: si no especifica subsite, mantener la actual
+      return user.id_subsite || null;
     }
   }
 

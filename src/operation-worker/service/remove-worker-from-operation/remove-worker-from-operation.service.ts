@@ -259,12 +259,38 @@ export class RemoveWorkerFromOperationService {
         });
       }
 
-      // Actualizar fecha de finalización en la tabla intermedia
+      // ✅ OBTENER FECHA/HORA DE LA OPERACIÓN COMPLETADA PARA RESPETAR LO QUE ELIGIÓ EL USUARIO
+      const operation = await this.prisma.operation.findUnique({
+        where: { id: id_operation },
+        select: { dateEnd: true, timeEnd: true, status: true },
+      });
+
+      let finalDateEnd: Date;
+      let finalTimeEnd: string;
+
+      if (operation?.dateEnd && operation?.timeEnd) {
+        // ✅ USAR FECHA/HORA QUE EL USUARIO ESPECIFICÓ AL COMPLETAR LA OPERACIÓN
+        finalDateEnd = operation.dateEnd;
+        finalTimeEnd = operation.timeEnd;
+        console.log(`[RemoveWorkerService] Usando fecha/hora de la operación: ${finalDateEnd.toISOString()} ${finalTimeEnd}`);
+      } else {
+        // Solo como fallback usar hora actual
+        finalDateEnd = getColombianDateTime();
+        finalTimeEnd = getColombianTimeString();
+        console.log(`[RemoveWorkerService] Usando fecha/hora actual como fallback: ${finalDateEnd.toISOString()} ${finalTimeEnd}`);
+      }
+
+      // Actualizar fecha de finalización en la tabla intermedia SOLO para trabajadores sin fecha de fin
       await this.prisma.operation_Worker.updateMany({
-        where: { id_operation, dateEnd: null, timeEnd: null },
+        where: { 
+          id_operation, 
+          dateEnd: null, 
+          timeEnd: null,
+          id_worker: { not: -1 } // ✅ EXCLUIR PLACEHOLDERS
+        },
         data: {
-          dateEnd: getColombianDateTime(),
-          timeEnd: getColombianTimeString(),
+          dateEnd: finalDateEnd,
+          timeEnd: finalTimeEnd,
         },
       });
 

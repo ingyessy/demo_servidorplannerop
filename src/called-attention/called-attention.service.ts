@@ -29,40 +29,139 @@ export class CalledAttentionService {
    * @returns respuesta de la creacion de la atencion llamada
    */
   async create(
-    createCalledAttentionDto: CreateCalledAttentionDto,
-    id_site?: number,
-  ) {
-    try {
-      if (createCalledAttentionDto.id_user === undefined) {
-        return { message: 'User ID is required', status: 400 };
-      }
-      const validation = await this.validation.validateAllIds({
-        workerIds: [createCalledAttentionDto.id_worker],
-      });
-      const workerValidation = validation?.existingWorkerIds?.[0];
-      if (id_site != undefined) {
-        if (workerValidation && workerValidation.id_site !== id_site) {
-          return {
-            message: 'Not authorized to create attention for this worker',
-            status: 409,
-          };
-        }
-      }
-      if (validation && 'status' in validation && validation.status === 404) {
-        return validation;
-      }
+  createCalledAttentionDto: CreateCalledAttentionDto,
+  id_site?: number,
+) {
+  try {
+    // ✅ VALIDAR QUE id_user EXISTA PRIMERO
+    if (createCalledAttentionDto.id_user === undefined) {
+      return { message: 'User ID is required', status: 400 };
+    }
 
-      const response = await this.prisma.calledAttention.create({
+    // ✅ ASEGURAR QUE EL DNI SEA STRING
+    const dniWorker =
+      typeof createCalledAttentionDto.dni_worker === 'number'
+        ? String(createCalledAttentionDto.dni_worker)
+        : typeof createCalledAttentionDto.dni_worker === 'string'
+        ? createCalledAttentionDto.dni_worker
+        : undefined;
+
+    if (!dniWorker) {
+      return { message: 'Worker DNI is required', status: 400 };
+    }
+
+    // ✅ CREAR VARIABLE LOCAL PARA id_user ASEGURADO
+    const userId = createCalledAttentionDto.id_user; // Ya sabemos que no es undefined
+
+    console.log(
+      '[CalledAttentionService] Creando atención con DNI (transformado):',
+      dniWorker,
+      '(tipo:',
+      typeof dniWorker,
+      ') - Usuario:',
+      userId,
+    );
+
+    // ✅ BUSCAR EL TRABAJADOR POR DNI Y VALIDAR
+    const worker = await this.prisma.worker.findUnique({
+      where: { dni: dniWorker },
+      select: {
+        id: true,
+        dni: true,
+        name: true,
+        status: true,
+        id_site: true,
+        failures: true,
+      },
+    });
+
+    if (!worker) {
+      return {
+        message: `Trabajador con DNI ${dniWorker} no encontrado`,
+        status: 404,
+      };
+    }
+
+    console.log('[CalledAttentionService] Trabajador encontrado:', worker);
+
+    // ✅ VALIDAR PERMISOS POR SITE
+    if (id_site !== undefined && worker.id_site !== id_site) {
+      return {
+        message: 'Not authorized to create attention for this worker',
+        status: 409,
+      };
+    }
+
+    // ✅ VALIDAR QUE EL TRABAJADOR ESTÉ DISPONIBLE
+    if (worker.status === 'UNAVALIABLE' || worker.status === 'DEACTIVATED') {
+      return {
+        message:
+          'Cannot create attention for unavailable or deactivated worker',
+        status: 400,
+      };
+    }
+
+    // ✅ USAR TRANSACCIÓN PARA CREAR LA ATENCIÓN Y ACTUALIZAR EL CONTADOR DE FAILURES
+    const result = await this.prisma.$transaction(async (prisma) => {
+      // Crear la atención llamada
+      const calledAttention = await prisma.calledAttention.create({
         data: {
-          ...createCalledAttentionDto,
-          id_user: createCalledAttentionDto.id_user,
+          dni_worker: dniWorker,
+          description: createCalledAttentionDto.description,
+          type: createCalledAttentionDto.type,
+          id_user: userId, // ✅ USAR LA VARIABLE LOCAL ASEGURADA
+        },
+        include: {
+          worker: {
+            select: {
+              dni: true,
+              name: true,
+              id_site: true,
+              status: true,
+            },
+          },
+          user: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
         },
       });
-      return response;
-    } catch (error) {
-      throw new Error(error.message);
-    }
+
+      // ✅ INCREMENTAR EL CONTADOR DE FAILURES EN EL WORKER
+      const updatedWorker = await prisma.worker.update({
+        where: { dni: dniWorker },
+        data: {
+          failures: {
+            increment: 1, // Incrementar en 1 el contador de failures
+          },
+        },
+        select: {
+          dni: true,
+          name: true,
+          failures: true,
+        },
+      });
+
+      console.log(
+        '[CalledAttentionService] Contador de failures actualizado:',
+        `${updatedWorker.name} (DNI: ${updatedWorker.dni}) ahora tiene ${updatedWorker.failures} failures`,
+      );
+
+      return calledAttention;
+    });
+
+    console.log(
+      '[CalledAttentionService] Atención creada exitosamente:',
+      result.id,
+    );
+    return result;
+  } catch (error) {
+    console.error('[CalledAttentionService] Error creando atención:', error);
+    throw new Error(error.message);
   }
+}
 
   /**
    * Obtener todas las atenciones llamadas de trabajadores activos de los últimos 3 meses
@@ -117,48 +216,57 @@ export class CalledAttentionService {
   // }
 
   async findAll(id_site?: number) {
-  try {
-    // Calcular la fecha de hace 3 meses
-    const threeMonthsAgo = new Date();
-    threeMonthsAgo.setDate(threeMonthsAgo.getDate() - 40);
+    try {
+      const threeMonthsAgo = new Date();
+      threeMonthsAgo.setDate(threeMonthsAgo.getDate() - 90);
 
-    const maxDate = new Date();
-    maxDate.setDate(maxDate.getDate() + 1);
+      const maxDate = new Date();
+      maxDate.setDate(maxDate.getDate() + 1);
 
-    const response = await this.prisma.calledAttention.findMany({
-      where: {
-        worker: {
-          status: {
-            notIn: ['UNAVALIABLE'],
+      const response = await this.prisma.calledAttention.findMany({
+        where: {
+          worker: {
+            status: {
+              notIn: ['UNAVALIABLE', 'DEACTIVATED'],
+            },
+            ...(id_site && { id_site: id_site }),
           },
-          id_site: id_site,
-        },
-        createAt: {
-          gte: threeMonthsAgo,
-          lte: maxDate,
-        },
-      },
-      include: {
-        worker: {
-          select: {
-            dni: true,
-            name: true,
-            id_site: true,
+          createAt: {
+            gte: threeMonthsAgo,
+            lte: maxDate,
           },
         },
-      },
-      orderBy: {
-        createAt: 'desc',
-      },
-    });
+        include: {
+          worker: {
+            select: {
+              dni: true,
+              name: true,
+              id_site: true,
+              status: true,
+              failures: true,
+            },
+          },
+          user: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+        orderBy: {
+          createAt: 'desc',
+        },
+      });
 
-    // En vez de lanzar excepción, devuelve array vacío
-    return response;
-  } catch (error) {
-    console.error('Error finding called attentions:', error);
-    throw new Error(error.message);
+      return response;
+    } catch (error) {
+      console.error(
+        '[CalledAttentionService] Error obteniendo atenciones:',
+        error,
+      );
+      throw new Error(error.message);
+    }
   }
-}
 
   /**
    * Obtener una atencion llamada por ID
@@ -168,83 +276,93 @@ export class CalledAttentionService {
   async findOne(id: number, id_site?: number) {
     try {
       const response = await this.prisma.calledAttention.findUnique({
-        where: {
-          id,
+        where: { id },
+        include: {
           worker: {
-            id_site: id_site,
+            select: {
+              dni: true,
+              name: true,
+              id_site: true,
+              status: true,
+              failures: true,
+            },
+          },
+          user: {
+            select: {
+              id: true,
+              name: true,
+            },
           },
         },
       });
+
       if (!response) {
-        return { message: 'Called Attention not found', status: 404 };
+        return { message: 'Atención no encontrada', status: 404 };
       }
-      return response;
-    } catch (error) {
-      throw new Error(error.message);
-    }
-  }
 
-  /**
-   * Obtener una atencion llamada por ID sin validacion de existencia
-   * @param id ID de la atencion llamada a buscar
-   * @returns respuesta de la busqueda de la atencion llamada
-   */
-  async findOneByIdWorker(id: number, id_site?: number) {
-    try {
-      const response = await this.prisma.calledAttention.findMany({
-        where: {
-          id_worker: id,
-          worker: {
-            id_site: id_site,
-          },
-        },
-      });
-      if (!response || response.length === 0) {
-        return { message: 'Called Attention not found', status: 404 };
-      }
-      return response;
-    } catch (error) {
-      throw new Error(error.message);
-    }
-  }
-
-  /**
-   * Obtener atenciones llamadas con paginación y prefetch de páginas adicionales
-   * @param page Número de página (por defecto: 1)
-   * @param limit Elementos por página (por defecto: 10, máximo: 50)
-   * @returns Respuesta paginada con los datos actuales y prefetch de las siguientes 2 páginas
-   */
-  async findAllPaginated(
-    page: number = 1,
-    limit: number = 10,
-    filters?: FilterCalledAttentionDto,
-    activatePaginated: boolean = true,
-  ) {
-    try {
-      // Usar el servicio de paginación para llamadas de atención
-      const paginatedResponse =
-        await this.paginateService.paginateCalledAttentions({
-          prisma: this.prisma,
-          page,
-          limit,
-          filters,
-          activatePaginated,
-        });
-
-      // Si no hay resultados, mantener el formato de respuesta de error
-      if (paginatedResponse.items.length === 0) {
+      // ✅ VALIDAR PERMISOS POR SITE
+      if (id_site !== undefined && response.worker.id_site !== id_site) {
         return {
-          message: 'No called attentions found for the requested page',
-          status: 404,
-          pagination: paginatedResponse.pagination,
-          items: [],
-          nextPages: [],
+          message: 'No autorizado para acceder a esta atención',
+          status: 403,
         };
       }
 
-      return paginatedResponse;
+      return response;
     } catch (error) {
-      console.error('Error finding called attentions with pagination:', error);
+      console.error(
+        '[CalledAttentionService] Error obteniendo atención:',
+        error,
+      );
+      throw new Error(error.message);
+    }
+  }
+
+  /**
+   * Obtener atenciones llamadas por DNI del trabajador
+   * @param dni_worker DNI del trabajador
+   * @param id_site ID del sitio (opcional)
+   * @returns Lista de atenciones llamadas asociadas al DNI del trabajador
+   */
+  async findByWorkerDni(dni_worker: string, id_site?: number) {
+    try {
+      const response = await this.prisma.calledAttention.findMany({
+        where: {
+          dni_worker: dni_worker,
+          ...(id_site && {
+            worker: {
+              id_site: id_site,
+            },
+          }),
+        },
+        include: {
+          worker: {
+            select: {
+              dni: true,
+              name: true,
+              id_site: true,
+              status: true,
+              failures: true,
+            },
+          },
+          user: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+        orderBy: {
+          createAt: 'desc',
+        },
+      });
+
+      return response;
+    } catch (error) {
+      console.error(
+        '[CalledAttentionService] Error obteniendo atenciones por DNI:',
+        error,
+      );
       throw new Error(error.message);
     }
   }
@@ -261,53 +379,79 @@ export class CalledAttentionService {
     id_site?: number,
   ) {
     try {
-      const validationCalled = await this.findOne(id);
-      if (validationCalled['status'] === 404) {
-        return validationCalled;
+      // ✅ VERIFICAR QUE LA ATENCIÓN EXISTE
+      const existingAttention = await this.findOne(id, id_site);
+      if ('status' in existingAttention && existingAttention.status !== 200) {
+        return existingAttention;
       }
-      if (id_site != undefined) {
-        const id_worker = validationCalled['id_worker'];
-        const validateWorker = await this.validation.validateAllIds({
-          workerIds: [id_worker],
+
+      // ✅ SI SE ESTÁ CAMBIANDO EL DNI DEL TRABAJADOR, VALIDAR
+      if (updateCalledAttentionDto.dni_worker) {
+        const worker = await this.prisma.worker.findUnique({
+          where: { dni: updateCalledAttentionDto.dni_worker },
+          select: {
+            id: true,
+            dni: true,
+            name: true,
+            status: true,
+            id_site: true,
+          },
         });
-        const wokerValidation = validateWorker?.existingWorkerIds?.[0];
-        if (wokerValidation && wokerValidation.id_site != id_site) {
+
+        if (!worker) {
           return {
-            message: 'Not authorized to update attention',
-            status: 409,
+            message: `Trabajador con DNI ${updateCalledAttentionDto.dni_worker} no encontrado`,
+            status: 404,
+          };
+        }
+
+        // ✅ VALIDAR PERMISOS POR SITE
+        if (id_site !== undefined && worker.id_site !== id_site) {
+          return {
+            message: 'No autorizado para asignar atención a este trabajador',
+            status: 403,
+          };
+        }
+
+        // ✅ VALIDAR QUE EL TRABAJADOR ESTÉ DISPONIBLE
+        if (
+          worker.status === 'UNAVALIABLE' ||
+          worker.status === 'DEACTIVATED'
+        ) {
+          return {
+            message: 'No se puede asignar atención a trabajador no disponible',
+            status: 400,
           };
         }
       }
-      if (updateCalledAttentionDto.id_worker === undefined) {
-        return { message: 'Worker ID is required', status: 400 };
-      }
-      const validadionGlobal = await this.validation.validateAllIds({
-        workerIds: [updateCalledAttentionDto.id_worker],
-      });
 
-      if (
-        validadionGlobal &&
-        'status' in validadionGlobal &&
-        validadionGlobal.status === 404
-      ) {
-        return validadionGlobal;
-      }
-
-      const workerValidation = validadionGlobal?.existingWorkerIds?.[0];
-      if (id_site != undefined) {
-        if (workerValidation && workerValidation.id_site != id_site) {
-          return {
-            message: 'Not authorized to create attention for this worker',
-            status: 409,
-          };
-        }
-      }
       const response = await this.prisma.calledAttention.update({
         where: { id },
         data: updateCalledAttentionDto,
+        include: {
+          worker: {
+            select: {
+              dni: true,
+              name: true,
+              id_site: true,
+              status: true,
+            },
+          },
+          user: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
       });
+
       return response;
     } catch (error) {
+      console.error(
+        '[CalledAttentionService] Error actualizando atención:',
+        error,
+      );
       throw new Error(error.message);
     }
   }
@@ -319,30 +463,258 @@ export class CalledAttentionService {
    * @throws Error
    */
   async remove(id: number, id_site?: number) {
-    try {
-      const validationCalled = await this.findOne(id);
-      if (validationCalled['status'] === 404) {
-        return validationCalled;
-      }
-      if (id_site != undefined) {
-        const id_worker = validationCalled['id_worker'];
-        const validateWorker = await this.validation.validateAllIds({
-          workerIds: [id_worker],
-        });
-        const wokerValidation = validateWorker?.existingWorkers?.[0];
-        if (wokerValidation && wokerValidation.id_site != id_site) {
-          return {
-            message: 'Not authorized to remove attention',
-            status: 409,
-          };
-        }
-      }
-      const response = await this.prisma.calledAttention.delete({
+  try {
+    const existingAttention = await this.findOne(id, id_site);
+    if ('status' in existingAttention && existingAttention.status !== 200) {
+      return existingAttention;
+    }
+
+    // ✅ USAR TRANSACCIÓN PARA ELIMINAR LA ATENCIÓN Y DECREMENTAR EL CONTADOR
+    const result = await this.prisma.$transaction(async (prisma) => {
+      // Obtener los datos de la atención antes de eliminarla
+      const attentionToDelete = await prisma.calledAttention.findUnique({
         where: { id },
+        include: {
+          worker: {
+            select: {
+              dni: true,
+              name: true,
+              failures: true,
+            },
+          },
+        },
+      });
+
+      if (!attentionToDelete) {
+        throw new Error('Called attention not found');
+      }
+
+      // Eliminar la atención
+      const deletedAttention = await prisma.calledAttention.delete({
+        where: { id },
+        include: {
+          worker: {
+            select: {
+              dni: true,
+              name: true,
+            },
+          },
+        },
+      });
+
+      // ✅ DECREMENTAR EL CONTADOR DE FAILURES EN EL WORKER
+      if (attentionToDelete.worker.failures > 0) {
+        const updatedWorker = await prisma.worker.update({
+          where: { dni: attentionToDelete.worker.dni },
+          data: {
+            failures: {
+              decrement: 1,
+            },
+          },
+          select: {
+            dni: true,
+            name: true,
+            failures: true,
+          },
+        });
+
+        console.log(
+          '[CalledAttentionService] Contador de failures decrementado:',
+          `${updatedWorker.name} (DNI: ${updatedWorker.dni}) ahora tiene ${updatedWorker.failures} failures`
+        );
+      }
+
+      return deletedAttention;
+    });
+
+    return result;
+  } catch (error) {
+    console.error('[CalledAttentionService] Error eliminando atención:', error);
+    throw new Error(error.message);
+  }
+}
+
+  /**
+   * Buscar atenciones por texto (DNI, nombre del trabajador, descripción)
+   */
+  async searchAttentions(searchTerm: string, id_site?: number) {
+    try {
+      const response = await this.prisma.calledAttention.findMany({
+        where: {
+          OR: [
+            {
+              dni_worker: {
+                contains: searchTerm,
+                mode: 'insensitive',
+              },
+            },
+            {
+              description: {
+                contains: searchTerm,
+                mode: 'insensitive',
+              },
+            },
+            {
+              worker: {
+                name: {
+                  contains: searchTerm,
+                  mode: 'insensitive',
+                },
+              },
+            },
+          ],
+          ...(id_site && {
+            worker: {
+              id_site: id_site,
+            },
+          }),
+        },
+        include: {
+          worker: {
+            select: {
+              dni: true,
+              name: true,
+              id_site: true,
+              status: true,
+              failures: true,
+            },
+          },
+          user: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+        orderBy: {
+          createAt: 'desc',
+        },
+      });
+
+      return response;
+    } catch (error) {
+      console.error(
+        '[CalledAttentionService] Error buscando atenciones:',
+        error,
+      );
+      throw new Error(error.message);
+    }
+  }
+
+  /**
+   * Obtener atenciones llamadas por ID del trabajador (usando la relación antigua)
+   * @param id_worker ID del trabajador
+   * @param id_site ID del sitio (opcional)
+   * @returns Lista de atenciones llamadas asociadas al trabajador
+   */
+  async findOneByIdWorker(id_worker: number, id_site?: number) {
+    try {
+      // Primero obtener el trabajador para validar y obtener su DNI
+      const worker = await this.prisma.worker.findUnique({
+        where: { id: id_worker },
+        select: {
+          id: true,
+          dni: true,
+          name: true,
+          status: true,
+          id_site: true,
+          failures: true,
+        },
+      });
+
+      if (!worker) {
+        return {
+          message: `Trabajador con ID ${id_worker} no encontrado`,
+          status: 404,
+        };
+      }
+
+      // Validar permisos por site
+      if (id_site !== undefined && worker.id_site !== id_site) {
+        return {
+          message:
+            'No autorizado para acceder a las atenciones de este trabajador',
+          status: 403,
+        };
+      }
+
+      // Buscar atenciones por DNI del trabajador
+      const response = await this.prisma.calledAttention.findMany({
+        where: {
+          dni_worker: worker.dni,
+        },
+        include: {
+          worker: {
+            select: {
+              dni: true,
+              name: true,
+              id_site: true,
+              status: true,
+              failures: true,
+            },
+          },
+          user: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+        orderBy: {
+          createAt: 'desc',
+        },
+      });
+
+      if (response.length === 0) {
+        return {
+          message: `No se encontraron atenciones para el trabajador ${worker.name}`,
+          status: 404,
+        };
+      }
+
+      return response;
+    } catch (error) {
+      console.error(
+        '[CalledAttentionService] Error obteniendo atenciones por ID del trabajador:',
+        error,
+      );
+      throw new Error(error.message);
+    }
+  }
+
+  /**
+   * Obtener atenciones llamadas con paginación
+   * @param page Número de página
+   * @param limit Elementos por página
+   * @param filters Filtros opcionales
+   * @param activatePaginated Si activar paginación
+   * @returns Respuesta paginada con atenciones llamadas
+   */
+  async findAllPaginated(
+    page: number = 1,
+    limit: number = 10,
+    filters?: FilterCalledAttentionDto,
+    activatePaginated: boolean = true,
+  ) {
+    try {
+    
+      // Usar el servicio de paginación específico para called attention
+      const response = await this.paginateService.paginateCalledAttentions({
+        prisma: this.prisma,
+        page,
+        limit,
+        filters,
+        activatePaginated,
       });
       return response;
     } catch (error) {
-      throw new Error(error.message);
+      console.error(
+        '[CalledAttentionService] Error obteniendo atenciones paginadas:',
+        error,
+      );
+      throw new Error(
+        `Error obteniendo atenciones paginadas: ${error.message}`,
+      );
     }
   }
 }

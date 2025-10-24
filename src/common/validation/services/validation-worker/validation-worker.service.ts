@@ -96,14 +96,19 @@ export class ValidationWorkerService {
   }
 
   /**
-   * Verifica si un código de trabajador ya existe
+   * Verifica si un código de trabajador ya existe (excluyendo trabajadores DEACTIVATED)
    * @param code - Código a verificar
    * @returns true si ya existe, false si no
    */
   async workerCodeExists(code: string): Promise<boolean> {
     try {
-      const existingWorker = await this.prisma.worker.findUnique({
-        where: { code },
+      const existingWorker = await this.prisma.worker.findFirst({
+        where: { 
+          code,
+          status: {
+            not: 'DEACTIVATED' // Solo considerar trabajadores que NO están DEACTIVATED
+          }
+        },
       });
       return !!existingWorker;
     } catch (error) {

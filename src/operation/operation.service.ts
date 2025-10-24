@@ -401,9 +401,10 @@ export class OperationService {
         });
       }
 
-      await this.workerService.addWorkedHoursOnOperationEnd(id);
+      // ✅ CAMBIAR EL ORDEN: PRIMERO ACTUALIZAR FECHAS, LUEGO CALCULAR HORAS
       await this.operationWorkerService.completeClientProgramming(id);
       await this.operationWorkerService.releaseAllWorkersFromOperation(id);
+      await this.workerService.addWorkedHoursOnOperationEnd(id);
     }
 
     // Get updated operation

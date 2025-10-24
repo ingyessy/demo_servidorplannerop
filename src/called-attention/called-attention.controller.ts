@@ -22,7 +22,7 @@ import { UpdateCalledAttentionDto } from './dto/update-called-attention.dto';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { ParseIntPipe } from 'src/pipes/parse-int/parse-int.pipe';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
-import { ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { ExcelExportService } from 'src/common/validation/services/excel-export.service';
 import { FilterCalledAttentionDto } from './dto/filter-called-attention';
 import { PaginatedCalledAttentionQueryDto } from './dto/paginate-called-attention.dto';
@@ -248,5 +248,40 @@ export class CalledAttentionController {
     }
 
     return response;
+  }
+
+  @Get('worker/:dni')
+  @ApiOperation({ 
+    summary: 'Obtener atenciones por DNI del trabajador',
+    description: 'Busca todas las atenciones llamadas de un trabajador específico por su DNI'
+  })
+  @ApiParam({
+    name: 'dni',
+    description: 'DNI del trabajador',
+    example: '12345678'
+  })
+  async findByWorkerDni(
+    @Param('dni') dni: string,
+    @CurrentUser('siteId') siteId: number,
+  ) {
+    const response = await this.calledAttentionService.findByWorkerDni(dni, siteId);
+    return response;
+  }
+
+  @Get('search/:term')
+  @ApiOperation({ 
+    summary: 'Buscar atenciones por texto',
+    description: 'Busca atenciones por DNI, nombre del trabajador o descripción'
+  })
+  @ApiParam({
+    name: 'term',
+    description: 'Término de búsqueda',
+    example: 'Juan'
+  })
+  async searchAttentions(
+    @Param('term') searchTerm: string,
+    @CurrentUser('siteId') siteId: number,
+  ) {
+    return await this.calledAttentionService.searchAttentions(searchTerm, siteId);
   }
 }

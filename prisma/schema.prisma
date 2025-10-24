@@ -64,7 +64,7 @@ model Worker {
   createAt         DateTime           @default(now())
   updateAt         DateTime           @updatedAt
   id_user          Int
-  code             String?             @unique
+  code             String?            
   payroll_code     String?             @unique
   dateDisableEnd   DateTime?
   dateDisableStart DateTime?
@@ -183,11 +183,11 @@ model CalledAttention {
   id          Int       @id @default(autoincrement())
   description String?
   id_user     Int
-  id_worker   Int
+  dni_worker   String
   type        Failures?
   createAt    DateTime  @default(now())
   user        User      @relation(fields: [id_user], references: [id])
-  worker      Worker    @relation(fields: [id_worker], references: [id])
+  worker      Worker    @relation(fields: [dni_worker], references: [dni])
 }
 
 model InChargeOperation {

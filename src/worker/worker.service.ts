@@ -21,6 +21,9 @@ export class WorkerService {
    * @returns respuesta de la creacion del trabajador
    */
   async create(createWorkerDto: CreateWorkerDto, id_site?: number) {
+    const requestId = Math.random().toString(36).substring(7);
+    console.log(`[WorkerService] 🆔 Iniciando creación de trabajador - Request ID: ${requestId}`);
+    
     try {
       const { dni, id_area, id_user, phone, code, payroll_code } =
         createWorkerDto;
@@ -51,9 +54,9 @@ export class WorkerService {
       });
 
       // Agrega los logs aquí para depuración
-      console.log('DTO:', createWorkerDto);
-      console.log('id_site usuario:', id_site);
-      console.log('Validación área:', validation['area']);
+      console.log(`[WorkerService] ${requestId} - DTO:`, createWorkerDto);
+      console.log(`[WorkerService] ${requestId} - id_site usuario:`, id_site);
+      console.log(`[WorkerService] ${requestId} - Validación área:`, validation['area']);
 
       // Si la validación falla, retorna el error
       // if (
@@ -71,13 +74,18 @@ export class WorkerService {
         'status' in validation &&
         (validation.status === 404 || validation.status === 409)
       ) {
+        console.log(`[WorkerService]  ❌ Validación falló:`, validation);
         return validation;
       }
+
+      console.log(`[WorkerService]✅ Todas las validaciones pasaron, procediendo a crear trabajador`);
 
       // Ensure id_user is defined before creating worker
       if (createWorkerDto.id_user === undefined) {
         return { message: 'User ID is required', status: 400 };
       }
+
+      console.log(`[WorkerService] Iniciando creación en base de datos...`);
 
       const response = await this.prisma.worker.create({
         data: {
@@ -86,6 +94,51 @@ export class WorkerService {
         },
       });
 
+      console.log(`[WorkerService] ✅ Trabajador creado exitosamente:`, response.id);
+
+      // --- Post-create verification to avoid race condition ---
+      // 1) payroll_code must be unique across ALL workers
+      if (createWorkerDto.payroll_code) {
+        const existingPayroll = await this.prisma.worker.findFirst({
+          where: {
+            payroll_code: createWorkerDto.payroll_code,
+            id: { not: response.id },
+          },
+        });
+
+        if (existingPayroll) {
+          console.log(`[WorkerService]  ❌ Conflicto payroll_code detectado después de crear. Eliminando worker ${response.id}`);
+          // Rollback: eliminar el registro creado y retornar error
+          await this.prisma.worker.delete({ where: { id: response.id } });
+          return {
+            message: `Payroll code ${createWorkerDto.payroll_code} already exists`,
+            status: 409,
+          };
+        }
+      }
+
+      // 2) code must not be used by any ACTIVE worker (i.e., ignore DEACTIVATED)
+      if (createWorkerDto.code) {
+        const existingActive = await this.prisma.worker.findFirst({
+          where: {
+            code: createWorkerDto.code,
+            status: { not: 'DEACTIVATED' },
+            id: { not: response.id },
+          },
+        });
+
+        if (existingActive) {
+          console.log(`[WorkerService]  ❌ Conflicto code detectado después de crear. Eliminando worker ${response.id}`);
+          // Rollback: eliminar el registro creado y retornar error
+          await this.prisma.worker.delete({ where: { id: response.id } });
+          return {
+            message: `Code already exists`,
+            status: 409,
+          };
+        }
+      }
+
+      // Si no hay conflictos post-creación, retornar el trabajador creado
       return response;
     } catch (error) {
       throw new Error(error.message || String(error));
@@ -279,47 +332,119 @@ export class WorkerService {
    * @param id id del trabajador a buscar
    * @returns resupuesta de la busqueda del trabajador
    */
-  async findOne(id: number, id_site?: number) {
-    try {
-      const response = await this.prisma.worker.findUnique({
-        where: { id, id_site },
-        include: {
-          jobArea: {
-            select: {
-              id: true,
-              name: true,
-            },
+  // src/worker/worker.service.ts
+
+async findOne(dni: string, id_site?: number) {
+  try {
+    console.log(`[WorkerService] Buscando trabajador con DNI: ${dni}, site: ${id_site}`);
+    
+    const response = await this.prisma.worker.findUnique({
+      where: { dni },
+      include: {
+        jobArea: true,
+        user: {
+          select: {
+            name: true,
           },
         },
-      });
-      if (!response) {
-        return { message: 'Worker not found', status: 404 };
-      }
+        Site: {
+          select: {
+            name: true,
+          },
+        },
+        subSite: {
+          select: {
+            name: true,
+          },
+        },
+        calledAttention: {
+          select: {
+            id: true,
+            description: true,
+            type: true,
+            createAt: true,
+          },
+          orderBy: {
+            createAt: 'desc',
+          },
+          take: 10,
+        },
+      },
+    });
 
-      const { id_area, ...rest } = response;
-      return rest;
-    } catch (error) {
-      throw new Error(error);
+    if (!response) {
+      return { message: 'Worker not found', status: 404 };
     }
-  }
-  /**
-   * obtener un trabajador por su DNI
-   * @param dni numero de identificacion del trabajador a buscar
-   * @returns respuesta de la busqueda del trabajador
-   */
-  async findOneById(dni: string) {
-    try {
-      const response = await this.prisma.worker.findUnique({
-        where: { dni },
-      });
-      if (!response) {
-        return { message: 'Worker not found', status: 404 };
-      }
-      return response;
-    } catch (error) {
-      throw new Error(error);
+
+    if (id_site !== undefined && response.id_site !== id_site) {
+      return { message: 'Not authorized to access this worker', status: 403 };
     }
+
+    return response;
+  } catch (error) {
+    console.error('[WorkerService] Error finding worker by DNI:', error);
+    throw new Error(error.message);
   }
+}
+
+/**
+ * obtener un trabajador por su DNI
+ * @param dni numero de identificacion del trabajador a buscar
+ * @returns respuesta de la busqueda del trabajador
+ */
+
+async findById(id: number, id_site?: number) {
+  try {
+    console.log(`[WorkerService] Buscando trabajador con ID: ${id}, site: ${id_site}`);
+    
+    const response = await this.prisma.worker.findUnique({
+      where: { id },
+      include: {
+        jobArea: true,
+        user: {
+          select: {
+            name: true,
+          },
+        },
+        Site: {
+          select: {
+            name: true,
+          },
+        },
+        subSite: {
+          select: {
+            name: true,
+          },
+        },
+        calledAttention: {
+          select: {
+            id: true,
+            description: true,
+            type: true,
+            createAt: true,
+          },
+          orderBy: {
+            createAt: 'desc',
+          },
+          take: 10,
+        },
+      },
+    });
+
+    if (!response) {
+      return { message: 'Worker not found', status: 404 };
+    }
+
+    if (id_site !== undefined && response.id_site !== id_site) {
+      return { message: 'Not authorized to access this worker', status: 403 };
+    }
+
+    return response;
+  } catch (error) {
+    console.error('[WorkerService] Error finding worker by ID:', error);
+    throw new Error(error.message);
+  }
+}
   /**
    * actualizar un trabajador
    * @param id id del trabajador a actualizar
@@ -338,6 +463,81 @@ export class WorkerService {
           status: 409,
         };
       }
+
+      // Obtener el trabajador actual para verificar cambio de estado
+      const currentWorker = await this.prisma.worker.findUnique({
+        where: { id, id_site },
+        select: { status: true, code: true, payroll_code: true }
+      });
+
+      if (!currentWorker) {
+        return { message: 'Worker not found', status: 404 };
+      }
+
+      // Validar códigos si se están actualizando
+      if (updateWorkerDto.code && updateWorkerDto.code !== currentWorker.code) {
+        const codeValidation = await this.validationService.validateCodeForUpdate(updateWorkerDto.code, id);
+        if (!codeValidation.available) {
+          return {
+            message: codeValidation.message,
+            status: 409
+          };
+        }
+      }
+
+      if (updateWorkerDto.payroll_code && updateWorkerDto.payroll_code !== currentWorker.payroll_code) {
+        const payrollCodeValidation = await this.validationService.validatePayrollCodeForUpdate(updateWorkerDto.payroll_code, id);
+        if (!payrollCodeValidation.available) {
+          return {
+            message: payrollCodeValidation.message,
+            status: 409
+          };
+        }
+      }
+
+      // Si cambia de DEACTIVATED a AVALIABLE, verificar que el código no esté en uso
+      if (currentWorker.status === 'DEACTIVATED' && updateWorkerDto.status === 'AVALIABLE') {
+        console.log(`[WorkerService] Detectado cambio de DEACTIVATED a AVALIABLE para worker ${id}`);
+        
+        // Verificar si el código ya está siendo usado por otro trabajador activo
+        const codeToCheck = updateWorkerDto.code || currentWorker.code;
+        if (codeToCheck) {
+          const codeValidation = await this.validationService.validateCodeForUpdate(codeToCheck, id);
+          
+          if (!codeValidation.available) {
+            console.log(`[WorkerService] ❌ Código ${codeToCheck} ya está en uso por otro trabajador activo`);
+            return {
+              message: `Cannot activate worker. ${codeValidation.message}. Please assign a new code first.`,
+              status: 409
+            };
+          }
+        }
+
+        // Verificar lo mismo para el código de nómina
+        const payrollCodeToCheck = updateWorkerDto.payroll_code || currentWorker.payroll_code;
+        if (payrollCodeToCheck) {
+          // Para el código de nómina, siempre validar que sea único (sin importar estado)
+          const existingPayrollWorker = await this.prisma.worker.findFirst({
+            where: {
+              payroll_code: payrollCodeToCheck,
+              id: {
+                not: id // Excluir el trabajador actual
+              }
+            }
+          });
+          
+          if (existingPayrollWorker) {
+            console.log(`[WorkerService] ❌ Código de nómina ${payrollCodeToCheck} ya está en uso por trabajador ${existingPayrollWorker.id}`);
+            return {
+              message: `Cannot activate worker. Payroll code ${payrollCodeToCheck} is already in use by another worker. Payroll codes must be unique.`,
+              status: 409
+            };
+          }
+        }
+
+        console.log(`[WorkerService] ✅ Códigos disponibles, permitiendo activación del worker ${id}`);
+      }
+
       const response = await this.prisma.worker.update({
         where: { id, id_site },
         data: updateWorkerDto,
@@ -452,33 +652,52 @@ export class WorkerService {
   // }
 
   async addWorkedHoursOnOperationEnd(operationId: number) {
-  const operationWorkers = await this.prisma.operation_Worker.findMany({
-    where: { id_operation: operationId },
-    select: { id_worker: true, dateStart: true, dateEnd: true, timeStart: true, timeEnd: true },
-  });
+    console.log(`[WorkerService] Iniciando cálculo de horas trabajadas para operación ${operationId}`);
+    
+    const operationWorkers = await this.prisma.operation_Worker.findMany({
+      where: { 
+        id_operation: operationId,
+        id_worker: { not: -1 } // ✅ EXCLUIR PLACEHOLDERS
+      },
+      select: { id_worker: true, dateStart: true, dateEnd: true, timeStart: true, timeEnd: true },
+    });
 
-  for (const { id_worker, dateStart, dateEnd, timeStart, timeEnd } of operationWorkers) {
-     if (!dateStart || !dateEnd || !timeStart || !timeEnd) {
-    console.log(`Datos incompletos para worker ${id_worker}`);
-    continue;
-  }
+    console.log(`[WorkerService] Encontrados ${operationWorkers.length} trabajadores en la operación`);
 
-    const start = new Date(dateStart);
-    const end = new Date(dateEnd);
-    const [sh, sm] = timeStart.split(':').map(Number);
-    const [eh, em] = timeEnd.split(':').map(Number);
-    start.setHours(sh, sm, 0, 0);
-    end.setHours(eh, em, 0, 0);
-
-    const diffHours = (end.getTime() - start.getTime()) / 3_600_000;
-    console.log(`diffHours para worker ${id_worker}:`, diffHours);
-    if (diffHours > 0) {
-       console.log(`Sumando ${diffHours} horas a worker ${id_worker}`);
-      await this.prisma.worker.update({
-        where: { id: id_worker },
-        data: { hoursWorked: { increment: diffHours } },
+    for (const { id_worker, dateStart, dateEnd, timeStart, timeEnd } of operationWorkers) {
+      console.log(`[WorkerService] Procesando worker ${id_worker}:`, {
+        dateStart: dateStart?.toISOString(),
+        dateEnd: dateEnd?.toISOString(),
+        timeStart,
+        timeEnd
       });
+
+      if (!dateStart || !dateEnd || !timeStart || !timeEnd) {
+        console.log(`[WorkerService] ❌ Datos incompletos para worker ${id_worker} - saltando`);
+        continue;
+      }
+
+      const start = new Date(dateStart);
+      const end = new Date(dateEnd);
+      const [sh, sm] = timeStart.split(':').map(Number);
+      const [eh, em] = timeEnd.split(':').map(Number);
+      start.setHours(sh, sm, 0, 0);
+      end.setHours(eh, em, 0, 0);
+
+      const diffHours = Math.round(((end.getTime() - start.getTime()) / 3_600_000) * 100) / 100;
+      console.log(`[WorkerService] diffHours calculadas para worker ${id_worker}:`, diffHours);
+      
+      if (diffHours > 0) {
+        console.log(`[WorkerService] ✅ Sumando ${diffHours} horas a worker ${id_worker}`);
+        await this.prisma.worker.update({
+          where: { id: id_worker },
+          data: { hoursWorked: { increment: diffHours } },
+        });
+      } else {
+        console.log(`[WorkerService] ⚠️ Horas calculadas no válidas (${diffHours}) para worker ${id_worker}`);
+      }
     }
+    
+    console.log(`[WorkerService] ✅ Finalizado cálculo de horas para operación ${operationId}`);
   }
-}
 }
