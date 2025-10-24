@@ -11,6 +11,8 @@
           "introspectComments": true
         }
       }
-    ]
+    ],
+    "deleteOutDir": true,
+    "tsConfigPath": "tsconfig.build.json"
   }
 }
