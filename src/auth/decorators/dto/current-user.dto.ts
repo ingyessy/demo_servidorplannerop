@@ -2,8 +2,8 @@ import { Role } from '@prisma/client';
 
 export class CurrentUserDto {
   userId: number;
-  siteId: number;
-  subsiteId: number;
+  siteId: number | null;
+  subsiteId: number | null;
   role: Role;
   isAdmin: boolean;
   isSupervisor: boolean;

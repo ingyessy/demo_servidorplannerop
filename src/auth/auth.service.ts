@@ -260,16 +260,19 @@ export class AuthService {
 
         if (newSubsiteId) {
           // Verificar que el subsite existe y pertenece al site
-          const subsiteExists = await this.validationUser.validateUserSubsite(
-            userId,
-            newSiteId || user.id_site,
-            newSubsiteId,
-          );
-          if (!subsiteExists) {
-            return {
-              message: `User does not have access to site ID ${newSiteId}`,
-              statusCode: HttpStatus.FORBIDDEN,
-            };
+          const siteIdForValidation = newSiteId || user.id_site;
+          if (siteIdForValidation) {
+            const subsiteExists = await this.validationUser.validateUserSubsite(
+              userId,
+              siteIdForValidation,
+              newSubsiteId,
+            );
+            if (!subsiteExists) {
+              return {
+                message: `User does not have access to subsite ID ${newSubsiteId}`,
+                statusCode: HttpStatus.FORBIDDEN,
+              };
+            }
           }
         }
       }
@@ -287,7 +290,7 @@ export class AuthService {
         id_site: newSiteId || user.id_site,
         site: newSiteId
           ? await this.getSiteName(newSiteId)
-          : await this.getSiteName(user.id_site),
+          : user.id_site ? await this.getSiteName(user.id_site) : null,
         id_subsite: this.determineSubsiteId(user, newSubsiteId, explicitParams),
       };
 
