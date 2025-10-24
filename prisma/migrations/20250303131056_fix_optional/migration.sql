@@ -1,3 +1,0 @@
--- AlterTable
-ALTER TABLE "Operation" ALTER COLUMN "dateEnd" DROP NOT NULL,
-ALTER COLUMN "timeEnd" DROP NOT NULL;

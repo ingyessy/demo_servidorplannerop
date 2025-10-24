@@ -27,9 +27,9 @@ model User {
   operation         Operation[]
   task              Task[]
   worker            Worker[]
-  Site              Site                @relation(fields: [id_site], references: [id])
-  id_site           Int                 @default(1)
-  cretedSites       Site[]              @relation("SiteCreator")
+  Site              Site?                @relation(fields: [id_site], references: [id])
+  id_site           Int?                 @default(1)
+  createdSites      Site[]               @relation("SiteCreator")
   id_subsite        Int?
   subSite           SubSite?            @relation(fields: [id_subsite], references: [id])
   CostCenter        CostCenter[]
@@ -266,8 +266,7 @@ model Site {
   status            StatusActivation    @default(ACTIVE)
   createAt          DateTime            @default(now())
   updateAt          DateTime            @updatedAt
-  id_user           Int                 @default(36)
-  user              User                @relation("SiteCreator", fields: [id_user], references: [id])
+  
   users             User[]
   workers           Worker[]
   operations        Operation[]
@@ -275,6 +274,8 @@ model Site {
   tasks             Task[]
   ClientProgramming ClientProgramming[]
   SubSite           SubSite[]
+  id_user           Int?                 @default(36)
+  user              User?                @relation("SiteCreator", fields: [id_user], references: [id])
 }
 
 model SubSite {
