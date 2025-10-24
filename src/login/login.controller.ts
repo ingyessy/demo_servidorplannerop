@@ -72,16 +72,29 @@ export class LoginController {
   @ApiResponse({ status: 404, description: 'Site o subsite no encontrados' })
   async refreshToken(
     @Request() req,
-    @Body(new ValidationPipe({ transform: true }))
+    @Body(new ValidationPipe({ 
+      transform: true,
+      transformOptions: {
+        enableImplicitConversion: false
+      }
+    }))
     refreshTokenDto: RefreshTokenDto,
   ) {
     const authHeader = req.headers.authorization;
     const token = authHeader.split(' ')[1];
 
+    // Verificar qué propiedades fueron enviadas en el body original
+    const originalBody = req.body;
+    const explicitParams = {
+      siteProvided: 'id_site' in originalBody,
+      subsiteProvided: 'id_subsite' in originalBody,
+    };
+
     const response = await this.loginService.refreshToken(
       token,
       refreshTokenDto.id_site,
       refreshTokenDto.id_subsite,
+      explicitParams,
     );
 
      if ('statusCode' in response) {

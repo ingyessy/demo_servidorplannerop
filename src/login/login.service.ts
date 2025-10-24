@@ -60,9 +60,15 @@ export class LoginService {
    * @param token Token actual
    * @param newSiteId Nuevo ID de site (opcional)
    * @param newSubsiteId Nuevo ID de subsite (opcional)
+   * @param explicitParams Indica qué parámetros fueron proporcionados explícitamente
    * @returns Nuevo token de acceso
    */
-  async refreshToken(token: string, newSiteId?: number, newSubsiteId?: number) {
+  async refreshToken(
+    token: string, 
+    newSiteId?: number, 
+    newSubsiteId?: number | null,
+    explicitParams?: { siteProvided: boolean; subsiteProvided: boolean }
+  ) {
     try {
       // Extraer ID de usuario del token
       const userId = this.authService.extractUserIdFromToken(token);
@@ -90,6 +96,7 @@ export class LoginService {
         userId,
         newSiteId,
         newSubsiteId,
+        explicitParams
       );
 
       return newToken;
