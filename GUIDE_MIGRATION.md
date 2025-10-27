@@ -74,12 +74,14 @@ npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma 
 ```bash
 # Crear directorio de migración con ID único
 mkdir -p prisma/migrations/d996a8e0-fa7b-4347-86f5-4d3885206d01_baseline_production
+mkdir -p prisma/migrations/eb1a4896-39b5-463e-a673-64187a91a89e_baseline_production
+
 
 #SI NO SE CREA LA CARPETA 20250805144819_baseline_production Y DENTRO DE ESTA EL ARCHIVO migration.sql, se debe crear:
-mkdir -p prisma/migrations/d996a8e0-fa7b-4347-86f5-4d3885206d01_baseline_production
+mkdir -p prisma/migrations/eb1a4896-39b5-463e-a673-64187a91a89e_baseline_production
 
 # Mover script a directorio de migración
-mv baseline.sql prisma/migrations/d996a8e0-fa7b-4347-86f5-4d3885206d01_baseline_production/migration.sql
+mv baseline.sql prisma/migrations/eb1a4896-39b5-463e-a673-64187a91a89e_baseline_production/migration.sql
 ```
 
 ### Paso 4: Marcar Migración Como Aplicada
@@ -88,7 +90,7 @@ mv baseline.sql prisma/migrations/d996a8e0-fa7b-4347-86f5-4d3885206d01_baseline_
 # Registrar migración sin ejecutarla (ya está aplicada)
 
 # validar primero en la carpeta 20250805144819_baseline_production --------------------------------
-npx prisma migrate resolve --applied d996a8e0-fa7b-4347-86f5-4d3885206d01_baseline_production
+npx prisma migrate resolve --applied eb1a4896-39b5-463e-a673-64187a91a89e_baseline_production
 ```
 
 ### Paso 5: Ejecutar Script de Datos Iniciales
