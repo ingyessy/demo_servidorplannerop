@@ -9,6 +9,7 @@ import {
   NotFoundException,
   UseInterceptors,
   ForbiddenException,
+  Query
 } from '@nestjs/common';
 import { AreaService } from './area.service';
 import { CreateAreaDto } from './dto/create-area.dto';
@@ -16,7 +17,7 @@ import { UpdateAreaDto } from './dto/update-area.dto';
 import { ParseIntPipe } from 'src/pipes/parse-int/parse-int.pipe';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { UseGuards } from '@nestjs/common';
-import { ApiBearerAuth } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { SiteInterceptor } from 'src/common/interceptors/site.interceptor';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
@@ -60,13 +61,45 @@ if (typeof createAreaDto.id_subsite === 'undefined' || createAreaDto.id_subsite 
     return response;
   }
 
-  @Get()
-  @Roles(Role.SUPERADMIN, Role.SUPERVISOR, Role.ADMIN, Role.GH, Role.SUPERVISOR)
+ @Get()
+  @Roles(Role.SUPERADMIN, Role.SUPERVISOR, Role.ADMIN, Role.GH)
+  @ApiQuery({ 
+    name: 'id_subsite', 
+    required: false, 
+    type: Number,
+    description: 'ID de la subsede específica (opcional). GH y SUPERADMIN pueden seleccionar cualquier subsede.'
+  })
   async findAll(
     @CurrentUser('siteId') siteId: number,
     @CurrentUser('subsiteId') subsiteId: number,
+    @CurrentUser('role') userRole: Role,
+    @Query('id_subsite') querySubsiteId?: number,
   ) {
-    const response = await this.areaService.findAll(siteId, subsiteId);
+    // Determinar qué subsede usar basado en el rol y parámetros
+    let effectiveSubsiteId: number | undefined = subsiteId;
+    let effectiveSiteId: number | undefined = siteId;
+    
+    // Para SUPERADMIN y GH: permitir seleccionar cualquier subsede
+    if (userRole === Role.SUPERADMIN || userRole === Role.GH || userRole === Role.SUPERVISOR) {
+      if (querySubsiteId !== undefined && querySubsiteId !== null) {
+        // Si especifican una subsede diferente, usarla
+        effectiveSubsiteId = querySubsiteId;
+        // GH y SUPERADMIN pueden ver cualquier subsede sin restricción de sede
+        effectiveSiteId = undefined;
+      } else if (userRole === Role.SUPERADMIN) {
+        // SUPERADMIN sin query específica ve todas las áreas
+        effectiveSiteId = undefined;
+        effectiveSubsiteId = undefined;
+      } else if (userRole === Role.SUPERVISOR) {
+        // SUPERVISOR sin query específica mantiene su sede actual pero puede ver todas sus subsedes
+        effectiveSiteId = undefined;
+        effectiveSubsiteId = undefined;
+      }
+      // Para GH sin query específica, mantener su subsede actual
+    }
+    // Para otros roles, mantener restricciones originales (su sede/subsede)
+    
+    const response = await this.areaService.findAll(effectiveSiteId, effectiveSubsiteId);
     return response;
   }
 

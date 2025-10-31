@@ -8,6 +8,14 @@ export class CancelledOperationsCleanupService {
   private readonly logger = new Logger(CancelledOperationsCleanupService.name);
 
   constructor(private prisma: PrismaService) {}
+ /**
+   * Cron job que se ejecuta el primer día de cada mes a las 00:01
+   * Reinicia el contador de horas trabajadas para todos los workers
+   */
+  @Cron('1 0 1 * *', {
+    name: 'monthly-hours-reset',
+    timeZone: 'America/Bogota',
+  })
 
   /**
    * Ejecuta cada día a las 00:00 para limpiar operaciones canceladas y desactivadas
@@ -305,4 +313,254 @@ export class CancelledOperationsCleanupService {
       }
     };
   }
+async resetMonthlyWorkedHours() {
+    this.logger.log('🔄 Iniciando reinicio mensual de horas trabajadas...');
+    
+    try {
+      const currentDate = new Date();
+      const currentMonth = currentDate.getMonth() + 1;
+      const currentYear = currentDate.getFullYear();
+      
+      this.logger.log(`📅 Reiniciando horas para ${currentMonth}/${currentYear}`);
+
+      // Obtener todos los workers con horas trabajadas > 0
+      const workersWithHours = await this.prisma.worker.findMany({
+        where: {
+          hoursWorked: {
+            gt: 0
+          }
+        },
+        select: {
+          id: true,
+          name: true,
+          hoursWorked: true,
+          updateAt: true
+        }
+      });
+
+      this.logger.log(`👥 Encontrados ${workersWithHours.length} workers con horas registradas`);
+
+      if (workersWithHours.length === 0) {
+        this.logger.log('ℹ️ No hay workers con horas para reiniciar');
+        return {
+          success: true,
+          workersReset: 0,
+          message: 'No hay workers con horas para reiniciar'
+        };
+      }
+
+      // Crear registro histórico antes de reiniciar
+      await this.createMonthlyReport(workersWithHours, currentDate);
+
+      // Reiniciar horas trabajadas para todos los workers
+      const updateResult = await this.prisma.worker.updateMany({
+        where: {
+          hoursWorked: {
+            gt: 0
+          }
+        },
+        data: {
+          hoursWorked: 0,
+          updateAt: currentDate
+        }
+      });
+
+      this.logger.log(`✅ Reinicio completado: ${updateResult.count} workers actualizados`);
+      
+      return {
+        success: true,
+        workersReset: updateResult.count,
+        month: currentMonth,
+        year: currentYear,
+        reportCreated: true
+      };
+
+    } catch (error) {
+      this.logger.error('❌ Error durante el reinicio mensual de horas:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Crear reporte histórico mensual de horas trabajadas
+   */
+  private async createMonthlyReport(workers: any[], resetDate: Date) {
+    try {
+      const previousMonth = new Date(resetDate);
+      previousMonth.setMonth(previousMonth.getMonth() - 1);
+      
+      // Crear tabla de reporte si no existe
+      await this.prisma.$executeRaw`
+        CREATE TABLE IF NOT EXISTS monthly_hours_report (
+          id SERIAL PRIMARY KEY,
+          id_worker INTEGER NOT NULL,
+          worker_name VARCHAR(255) NOT NULL,
+          total_hours DECIMAL(8,2) NOT NULL DEFAULT 0,
+          month INTEGER NOT NULL,
+          year INTEGER NOT NULL,
+          created_at TIMESTAMP NOT NULL,
+          last_update TIMESTAMP,
+          UNIQUE(id_worker, month, year)
+        );
+      `;
+
+      // Insertar reportes
+      for (const worker of workers) {
+        await this.prisma.$executeRaw`
+          INSERT INTO monthly_hours_report 
+          (id_worker, worker_name, total_hours, month, year, created_at, last_update)
+          VALUES (${worker.id}, ${worker.name}, ${worker.hoursWorked}, 
+                  ${previousMonth.getMonth() + 1}, ${previousMonth.getFullYear()}, 
+                  ${resetDate}, ${worker.updateAt})
+          ON CONFLICT (id_worker, month, year) 
+          DO UPDATE SET 
+            total_hours = EXCLUDED.total_hours,
+            created_at = EXCLUDED.created_at,
+            last_update = EXCLUDED.last_update;
+        `;
+      }
+
+      this.logger.log(`📋 Reporte histórico guardado para ${workers.length} workers`);
+
+    } catch (error) {
+      this.logger.error('❌ Error creando reporte mensual:', error);
+    }
+  }
+
+  /**
+   * Ejecutar reinicio manual de horas trabajadas
+   */
+  async manualReset(dryRun: boolean = false) {
+    this.logger.log(`🔧 Reinicio manual iniciado ${dryRun ? '(SIMULACIÓN)' : '(REAL)'}`);
+    
+    try {
+      const workersWithHours = await this.prisma.worker.findMany({
+        where: {
+          hoursWorked: {
+            gt: 0
+          }
+        },
+        select: {
+          id: true,
+          name: true,
+          hoursWorked: true,
+          updateAt: true
+        }
+      });
+
+      
+
+      this.logger.log(`📊 Workers encontrados con horas: ${workersWithHours.length}`);
+      
+      const summary = workersWithHours.map(worker => ({
+        id: worker.id,
+        name: worker.name,
+        hoursWorked: worker.hoursWorked,
+        lastUpdate: worker.updateAt
+      }));
+
+      if (!dryRun && workersWithHours.length > 0) {
+        // Crear reporte histórico
+        await this.createMonthlyReport(workersWithHours, new Date());
+        
+        // Reiniciar horas
+        const result = await this.prisma.worker.updateMany({
+          where: {
+            hoursWorked: {
+              gt: 0
+            }
+          },
+          data: {
+            hoursWorked: 0,
+            updateAt: new Date()
+          }
+        });
+
+        this.logger.log(`✅ Reinicio manual completado: ${result.count} workers actualizados`);
+        
+        return {
+          success: true,
+          dryRun: false,
+          workersReset: result.count,
+          workersDetails: summary,
+          message: `Se reiniciaron las horas de ${result.count} trabajadores`
+        };
+      }
+
+      return {
+        success: true,
+        dryRun: true,
+        workersFound: workersWithHours.length,
+        workersDetails: summary,
+        message: `Simulación: Se reiniciarían las horas de ${workersWithHours.length} trabajadores`
+      };
+
+    } catch (error) {
+      this.logger.error('❌ Error en reinicio manual:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Obtener estadísticas actuales de horas trabajadas
+   */
+  async getCurrentMonthStats() {
+    try {
+      const stats = await this.prisma.worker.aggregate({
+        _count: {
+          id: true
+        },
+        _sum: {
+          hoursWorked: true
+        },
+        _avg: {
+          hoursWorked: true
+        },
+        _max: {
+          hoursWorked: true
+        },
+        where: {
+          hoursWorked: {
+            gt: 0
+          }
+        }
+      });
+
+      const topWorkers = await this.prisma.worker.findMany({
+        where: {
+          hoursWorked: {
+            gt: 0
+          }
+        },
+        select: {
+          id: true,
+          name: true,
+          hoursWorked: true,
+          updateAt: true
+        },
+        orderBy: {
+          hoursWorked: 'desc'
+        },
+        take: 10
+      });
+
+      return {
+        summary: {
+          totalWorkersWithHours: stats._count.id || 0,
+          totalHours: Number(stats._sum.hoursWorked) || 0,
+          averageHours: Number(stats._avg.hoursWorked) || 0,
+          maxHours: Number(stats._max.hoursWorked) || 0
+        },
+        topWorkers,
+        generatedAt: new Date(),
+        currentMonth: new Date().getMonth() + 1,
+        currentYear: new Date().getFullYear()
+      };
+
+    } catch (error) {
+      this.logger.error('❌ Error obteniendo estadísticas:', error);
+      throw error;
+    }
+  }
+
 }

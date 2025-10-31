@@ -17,76 +17,185 @@ export class FeedingService {
   /**
    * Determina qué comidas están disponibles basado en la fecha de inicio de la operación y la fecha actual
    */
-  private getAvailableMealTypes(operationDateStart: Date, operationTimeStart: string): string[] {
-    const now = new Date();
+  // private getAvailableMealTypes(operationDateStart: Date, operationTimeStart: string): string[] {
+  //   const now = new Date();
     
-    // Crear la fecha y hora de inicio de la operación combinando dateStart y timeStrat
-    const [hours, minutes] = operationTimeStart.split(':').map(Number);
-    const operationStart = new Date(operationDateStart);
-    operationStart.setHours(hours, minutes, 0, 0);
+  //   // Crear la fecha y hora de inicio de la operación combinando dateStart y timeStrat
+  //   const [hours, minutes] = operationTimeStart.split(':').map(Number);
+  //   const operationStart = new Date(operationDateStart);
+  //   operationStart.setHours(hours, minutes, 0, 0);
     
-    // Obtener solo la fecha (sin hora) para comparar días
-    const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const operationStartDate = new Date(operationStart.getFullYear(), operationStart.getMonth(), operationStart.getDate());
+  //   // Obtener solo la fecha (sin hora) para comparar días
+  //   const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  //   const operationStartDate = new Date(operationStart.getFullYear(), operationStart.getMonth(), operationStart.getDate());
     
-    const availableMeals: string[] = [];
+  //   const availableMeals: string[] = [];
     
-    // Si es el mismo día que inició la operación, usar la hora de inicio
-    if (todayDate.getTime() === operationStartDate.getTime()) {
-      const startHour = operationStart.getHours();
-      const startMinutes = operationStart.getMinutes();
-      const startTotalMinutes = startHour * 60 + startMinutes;
+  //   // Si es el mismo día que inició la operación, usar la hora de inicio
+  //   if (todayDate.getTime() === operationStartDate.getTime()) {
+  //     const startHour = operationStart.getHours();
+  //     const startMinutes = operationStart.getMinutes();
+  //     const startTotalMinutes = startHour * 60 + startMinutes;
       
-      // Horarios de comidas en minutos desde medianoche
-      const breakfastEnd = 10 * 60; // 10:00 AM
-      const lunchEnd = 15 * 60; // 3:00 PM
-      const dinnerEnd = 21 * 60; // 9:00 PM
+  //     // Horarios de comidas en minutos desde medianoche
+  //     const breakfastEnd = 10 * 60; // 10:00 AM
+  //     const lunchEnd = 15 * 60; // 3:00 PM
+  //     const dinnerEnd = 21 * 60; // 9:00 PM
       
-      if (startTotalMinutes <= breakfastEnd) {
-        availableMeals.push('BREAKFAST');
-      }
-      if (startTotalMinutes <= lunchEnd) {
-        availableMeals.push('LUNCH');
-      }
-      if (startTotalMinutes <= dinnerEnd) {
-        availableMeals.push('DINNER');
-      }
+  //     if (startTotalMinutes <= breakfastEnd) {
+  //       availableMeals.push('BREAKFAST');
+  //     }
+  //     if (startTotalMinutes <= lunchEnd) {
+  //       availableMeals.push('LUNCH');
+  //     }
+  //     if (startTotalMinutes <= dinnerEnd) {
+  //       availableMeals.push('DINNER');
+  //     }
       
-      // Snack siempre disponible
-      availableMeals.push('SNACK');
+  //     // Snack siempre disponible
+  //     availableMeals.push('SNACK');
       
-    } else if (todayDate.getTime() > operationStartDate.getTime()) {
-      // Para días posteriores al inicio, usar la hora actual
-      const currentHour = now.getHours();
-      const currentMinutes = now.getMinutes();
-      const currentTotalMinutes = currentHour * 60 + currentMinutes;
+  //   } else if (todayDate.getTime() > operationStartDate.getTime()) {
+  //     // Para días posteriores al inicio, usar la hora actual
+  //     const currentHour = now.getHours();
+  //     const currentMinutes = now.getMinutes();
+  //     const currentTotalMinutes = currentHour * 60 + currentMinutes;
       
-      // Horarios de comidas en minutos desde medianoche
-      const breakfastStart = 6 * 60; // 6:00 AM
-      const breakfastEnd = 10 * 60; // 10:00 AM
-      const lunchStart = 12 * 60; // 12:00 AM
-      const lunchEnd = 15 * 60; // 3:00 PM
-      const dinnerStart = 17 * 60; // 5:00 PM
-      const dinnerEnd = 21 * 60; // 9:00 PM
+  //     // Horarios de comidas en minutos desde medianoche
+  //     // const breakfastStart = 6 * 60; // 6:00 AM
+  //     // const breakfastEnd = 10 * 60; // 10:00 AM
+  //     // const lunchStart = 12 * 60; // 12:00 AM
+  //     // const lunchEnd = 15 * 60; // 3:00 PM
+  //     // const dinnerStart = 17 * 60; // 5:00 PM
+  //     // const dinnerEnd = 21 * 60; // 9:00 PM
+  //     const breakfastStart = 6 * 60; // 6:00 AM
+  //     const breakfastEnd = 7 * 60; // 10:00 AM
+  //     const lunchStart = 12 * 60; // 12:00 AM
+  //     const lunchEnd = 13 * 60; // 3:00 PM
+  //     const dinnerStart = 18 * 60; // 5:00 PM
+  //     const dinnerEnd = 19 * 60; // 9:00 PM
       
-      if (currentTotalMinutes >= breakfastStart && currentTotalMinutes <= breakfastEnd) {
-        availableMeals.push('BREAKFAST');
-      }
-      if (currentTotalMinutes >= lunchStart && currentTotalMinutes <= lunchEnd) {
-        availableMeals.push('LUNCH');
-      }
-      if (currentTotalMinutes >= dinnerStart && currentTotalMinutes <= dinnerEnd) {
-        availableMeals.push('DINNER');
-      }
+  //     if (currentTotalMinutes >= breakfastStart && currentTotalMinutes <= breakfastEnd) {
+  //       availableMeals.push('BREAKFAST');
+  //     }
+  //     if (currentTotalMinutes >= lunchStart && currentTotalMinutes <= lunchEnd) {
+  //       availableMeals.push('LUNCH');
+  //     }
+  //     if (currentTotalMinutes >= dinnerStart && currentTotalMinutes <= dinnerEnd) {
+  //       availableMeals.push('DINNER');
+  //     }
       
-      // Snack siempre disponible durante horas laborales
-      if (currentTotalMinutes >= breakfastStart && currentTotalMinutes <= dinnerEnd) {
-        availableMeals.push('SNACK');
-      }
+  //     // Snack siempre disponible durante horas laborales
+  //     if (currentTotalMinutes >= breakfastStart && currentTotalMinutes <= dinnerEnd) {
+  //       availableMeals.push('SNACK');
+  //     }
+  //   }
+    
+  //   return availableMeals;
+  // }
+
+  /**
+ * Determina qué comidas están disponibles basado en la fecha de inicio de la operación y la fecha actual
+ */
+private getAvailableMealTypes(operationDateStart: Date, operationTimeStart: string): string[] {
+  const now = new Date();
+  
+  // Crear la fecha y hora de inicio de la operación combinando dateStart y timeStart
+  const [hours, minutes] = operationTimeStart.split(':').map(Number);
+  const operationStart = new Date(operationDateStart);
+  operationStart.setHours(hours, minutes, 0, 0);
+  
+  // Obtener solo la fecha (sin hora) para comparar días
+  const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const operationStartDate = new Date(operationStart.getFullYear(), operationStart.getMonth(), operationStart.getDate());
+  
+  const availableMeals: string[] = [];
+  
+  // ✅ CORREGIDO: Si es el mismo día que inició la operación
+  if (todayDate.getTime() === operationStartDate.getTime()) {
+    // ✅ USAR LA HORA ACTUAL, NO LA DE INICIO DE OPERACIÓN
+    const currentHour = now.getHours();
+    const currentMinutes = now.getMinutes();
+    const currentTotalMinutes = currentHour * 60 + currentMinutes;
+    
+    // ✅ TAMBIÉN considerar la hora de inicio para comidas futuras
+    const startHour = operationStart.getHours();
+    const startMinutes = operationStart.getMinutes();
+    const startTotalMinutes = startHour * 60 + startMinutes;
+    
+    // Horarios de comidas en minutos desde medianoche
+     const breakfastStart = 6 * 60;   // 6:00 AM
+    const breakfastEnd = 7 * 60;     // 7:00 AM
+    const lunchStart = 12 * 60;      // 12:00 PM
+    const lunchEnd = 13 * 60;        // 1:00 PM
+    const dinnerStart = 18 * 60;     // 6:00 PM
+    const dinnerEnd = 19 * 60;       // 7:00 PM
+    const snackStart = 23 * 60;      // 11:00 PM
+    const snackEnd = 24 * 60;        // 12:00 AM (medianoche)
+
+    // ✅ DESAYUNO: Disponible si la operación empezó antes del fin del desayuno
+    if (startTotalMinutes <= breakfastEnd) {
+      availableMeals.push('BREAKFAST');
     }
     
-    return availableMeals;
+    // ✅ ALMUERZO: Disponible si la operación empezó antes del fin del almuerzo
+    if (startTotalMinutes <= lunchEnd) {
+      availableMeals.push('LUNCH');
+    }
+    
+    // ✅ CENA: Disponible si la operación empezó antes del fin de la cena
+    if (startTotalMinutes <= dinnerEnd) {
+      availableMeals.push('DINNER');
+    }
+    
+    // ✅ SNACK (MEDIANOCHE): Disponible entre 11:00 PM - 12:00 AM
+    if (
+      (currentTotalMinutes >= snackStart && currentTotalMinutes <= snackEnd) ||
+      (startTotalMinutes <= snackEnd)
+    ) {
+      availableMeals.push('SNACK');
+    }
+    
+  } else if (todayDate.getTime() > operationStartDate.getTime()) {
+    // Para días posteriores al inicio, usar la hora actual
+    const currentHour = now.getHours();
+    const currentMinutes = now.getMinutes();
+    const currentTotalMinutes = currentHour * 60 + currentMinutes;
+    
+     
+    // ✅ HORARIOS CORREGIDOS para días posteriores
+    const breakfastStart = 6 * 60;   // 6:00 AM
+    const breakfastEnd = 7 * 60;     // 7:00 AM
+    const lunchStart = 12 * 60;      // 12:00 PM
+    const lunchEnd = 13 * 60;        // 1:00 PM
+    const dinnerStart = 18 * 60;     // 6:00 PM
+    const dinnerEnd = 19 * 60;       // 7:00 PM
+    const snackStart = 23 * 60;      // 11:00 PM
+    const snackEnd = 24 * 60;        // 12:00 AM (medianoche)
+    
+       if (currentTotalMinutes >= breakfastStart && currentTotalMinutes <= breakfastEnd) {
+      availableMeals.push('BREAKFAST');
+    }
+    if (currentTotalMinutes >= lunchStart && currentTotalMinutes <= lunchEnd) {
+      availableMeals.push('LUNCH');
+    }
+    if (currentTotalMinutes >= dinnerStart && currentTotalMinutes <= dinnerEnd) {
+      availableMeals.push('DINNER');
+    }
+    
+    // ✅ SNACK (MEDIANOCHE): Solo disponible entre 11:00 PM - 12:00 AM
+    if (currentTotalMinutes >= snackStart && currentTotalMinutes <= snackEnd) {
+      availableMeals.push('SNACK');
+    }
   }
+  
+  return availableMeals;
+}
+
+  /**
+ * Determina qué comidas están disponibles basado en la fecha de inicio de la operación y la fecha actual
+ */
+
 
   async create(createFeedingDto: CreateFeedingDto, id_site?: number) {
     try {
