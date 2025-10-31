@@ -18,13 +18,21 @@ import { ValidationModule } from 'src/common/validation/validation.module';
       ttl: 60 * 60 * 24,
       max: 100,
     }),
-    JwtModule.registerAsync({
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        secret: configService.get<string>('SECRET_JWT'),
-        signOptions: { expiresIn: configService.get<string>('EXPIRES_IN') },
-      }),
-    }),
+ JwtModule.registerAsync({
+  inject: [ConfigService],
+  useFactory: (configService: ConfigService) => {
+    const expires = configService.get<string>('EXPIRES_IN') || '3600';
+
+    return {
+      secret: configService.get<string>('SECRET_JWT'),
+      signOptions: {
+        // acepta "3600" o "1h" sin romper el tipado
+        expiresIn: /^\d+$/.test(expires) ? parseInt(expires, 10) : expires,
+      },
+    };
+  },
+}),
+
   ],
   providers: [
     AuthService,
