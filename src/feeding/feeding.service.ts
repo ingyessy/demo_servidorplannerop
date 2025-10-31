@@ -650,10 +650,10 @@ async getMissingMealsForOperation(operationId: number) {
         const operationStartedBeforeEnd = startTotalMinutes < schedule.end;
         const currentTimePassedEnd = currentTotalMinutes > schedule.end;
         
-        console.log(`🍽️ [DEBUG] ${mealType}:`);
-        console.log(`   - Horario: ${Math.floor(schedule.start/60)}:${(schedule.start%60).toString().padStart(2,'0')} - ${Math.floor(schedule.end/60)}:${(schedule.end%60).toString().padStart(2,'0')}`);
-        console.log(`   - Operación empezó antes del final (${startTotalMinutes} < ${schedule.end}): ${operationStartedBeforeEnd}`);
-        console.log(`   - Tiempo actual pasó el final (${currentTotalMinutes} > ${schedule.end}): ${currentTimePassedEnd}`);
+        // console.log(`🍽️ [DEBUG] ${mealType}:`);
+        // console.log(`   - Horario: ${Math.floor(schedule.start/60)}:${(schedule.start%60).toString().padStart(2,'0')} - ${Math.floor(schedule.end/60)}:${(schedule.end%60).toString().padStart(2,'0')}`);
+        // console.log(`   - Operación empezó antes del final (${startTotalMinutes} < ${schedule.end}): ${operationStartedBeforeEnd}`);
+        // console.log(`   - Tiempo actual pasó el final (${currentTotalMinutes} > ${schedule.end}): ${currentTimePassedEnd}`);
         
         // ✅ LÓGICA CORREGIDA: Solo es faltante si:
         // 1. La operación empezó antes del final de esa comida Y
