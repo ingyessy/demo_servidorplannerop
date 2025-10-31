@@ -23,37 +23,83 @@ export class FeedingService {
     // Crear la fecha y hora de inicio de la operación combinando dateStart y timeStrat
     const [hours, minutes] = operationTimeStart.split(':').map(Number);
     const operationStart = new Date(operationDateStart);
-    operationStart.setHours(hours, minutes, 0, 0);
+    // ✅ Usar setUTCHours para evitar problemas de zona horaria
+    operationStart.setUTCHours(hours, minutes, 0, 0);
     
     // Obtener solo la fecha (sin hora) para comparar días
     const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const operationStartDate = new Date(operationStart.getFullYear(), operationStart.getMonth(), operationStart.getDate());
+    const operationStartDate = new Date(operationStart.getUTCFullYear(), operationStart.getUTCMonth(), operationStart.getUTCDate());
     
     const availableMeals: string[] = [];
     
-    // Si es el mismo día que inició la operación, usar la hora de inicio
+    // Si es el mismo día que inició la operación, considerar TANTO la hora de inicio COMO la hora actual
     if (todayDate.getTime() === operationStartDate.getTime()) {
-      const startHour = operationStart.getHours();
-      const startMinutes = operationStart.getMinutes();
+      console.log('🔍 ES PRIMER DÍA - evaluando disponibilidad de comidas');
+      
+      const startHour = operationStart.getUTCHours();
+      const startMinutes = operationStart.getUTCMinutes();
       const startTotalMinutes = startHour * 60 + startMinutes;
       
-      // Horarios de comidas en minutos desde medianoche
-      const breakfastEnd = 7 * 60; // 10:00 AM
-      const lunchEnd = 13 * 60; // 3:00 PM
-      const dinnerEnd = 19 * 60; // 9:00 PM
+      const currentHour = now.getUTCHours();
+      const currentMinutes = now.getUTCMinutes();
+      const currentTotalMinutes = currentHour * 60 + currentMinutes;
       
-      if (startTotalMinutes <= breakfastEnd) {
+      console.log(`⏰ Hora inicio operación: ${startHour}:${String(startMinutes).padStart(2, '0')} (${startTotalMinutes} min)`);
+      console.log(`⏰ Hora actual: ${currentHour}:${String(currentMinutes).padStart(2, '0')} (${currentTotalMinutes} min)`);
+      
+      // Horarios de comidas en minutos desde medianoche (Colombia UTC-5)
+      const breakfastStart = 6 * 60; // 6:00 AM
+      const breakfastEnd = 7 * 60; // 7:00 AM
+      const lunchStart = 12 * 60; // 12:00 PM
+      const lunchEnd = 13 * 60; // 1:00 PM
+      const dinnerStart = 18 * 60; // 6:00 PM
+      const dinnerEnd = 19 * 60; // 7:00 PM
+      const snackStart = 23 * 60; // 11:00 PM
+      const snackEnd = 24 * 60; // 12:00 AM (medianoche)
+      
+      // BREAKFAST: disponible solo si la operación inició antes del fin del breakfast Y aún estamos en horario
+      if (startTotalMinutes < breakfastEnd && currentTotalMinutes >= breakfastStart && currentTotalMinutes < breakfastEnd) {
+        console.log('✅ BREAKFAST disponible (operación inició antes del fin Y estamos en horario)');
         availableMeals.push('BREAKFAST');
-      }
-      if (startTotalMinutes <= lunchEnd) {
-        availableMeals.push('LUNCH');
-      }
-      if (startTotalMinutes <= dinnerEnd) {
-        availableMeals.push('DINNER');
+      } else {
+        console.log('❌ BREAKFAST NO disponible:', {
+          operacionInicioAntesDeFin: startTotalMinutes < breakfastEnd,
+          estamosEnHorario: currentTotalMinutes >= breakfastStart && currentTotalMinutes < breakfastEnd
+        });
       }
       
-      // Snack siempre disponible
-      availableMeals.push('SNACK');
+      // LUNCH: disponible solo si la operación inició antes del fin del lunch Y aún estamos en horario
+      if (startTotalMinutes < lunchEnd && currentTotalMinutes >= lunchStart && currentTotalMinutes < lunchEnd) {
+        console.log('✅ LUNCH disponible (operación inició antes del fin Y estamos en horario)');
+        availableMeals.push('LUNCH');
+      } else {
+        console.log('❌ LUNCH NO disponible:', {
+          operacionInicioAntesDeFin: startTotalMinutes < lunchEnd,
+          estamosEnHorario: currentTotalMinutes >= lunchStart && currentTotalMinutes < lunchEnd
+        });
+      }
+      
+      // DINNER: disponible solo si la operación inició antes del fin del dinner Y aún estamos en horario
+      if (startTotalMinutes < dinnerEnd && currentTotalMinutes >= dinnerStart && currentTotalMinutes < dinnerEnd) {
+        console.log('✅ DINNER disponible (operación inició antes del fin Y estamos en horario)');
+        availableMeals.push('DINNER');
+      } else {
+        console.log('❌ DINNER NO disponible:', {
+          operacionInicioAntesDeFin: startTotalMinutes < dinnerEnd,
+          estamosEnHorario: currentTotalMinutes >= dinnerStart && currentTotalMinutes < dinnerEnd
+        });
+      }
+      
+      // SNACK: disponible solo si la operación inició antes del fin del snack Y aún estamos en horario
+      if (startTotalMinutes < snackEnd && currentTotalMinutes >= snackStart && currentTotalMinutes < snackEnd) {
+        console.log('✅ SNACK disponible (operación inició antes del fin Y estamos en horario)');
+        availableMeals.push('SNACK');
+      } else {
+        console.log('❌ SNACK NO disponible:', {
+          operacionInicioAntesDeFin: startTotalMinutes < snackEnd,
+          estamosEnHorario: currentTotalMinutes >= snackStart && currentTotalMinutes < snackEnd
+        });
+      }
       
     } else if (todayDate.getTime() > operationStartDate.getTime()) {
       // Para días posteriores al inicio, usar la hora actual
@@ -576,7 +622,7 @@ export class FeedingService {
  * Retorna las alimentaciones faltantes por trabajador en una operación para el día actual
  */
 async getMissingMealsForOperation(operationId: number) {
-  // console.log(`🔍 [DEBUG] getMissingMealsForOperation - Operación ID: ${operationId}`);
+  console.log(`🔍 [DEBUG] getMissingMealsForOperation - Operación ID: ${operationId}`);
   
   // Obtener la operación y sus trabajadores
   const operation = await this.prisma.operation.findUnique({
@@ -608,22 +654,22 @@ async getMissingMealsForOperation(operationId: number) {
   const operationDateOnly = new Date(operation.dateStart);
   const operationStartDate = new Date(operationDateOnly.getUTCFullYear(), operationDateOnly.getUTCMonth(), operationDateOnly.getUTCDate());
   
-  // console.log(`📅 [DEBUG] Fecha inicio operación: ${operation.dateStart.toISOString().split('T')[0]}`);
-  // console.log(`🕐 [DEBUG] Hora inicio operación: ${operation.timeStrat}`);
-  // console.log(`📅 [DEBUG] Fecha actual: ${todayDate.toISOString().split('T')[0]}`);
-  // console.log(`🕐 [DEBUG] Hora actual: ${currentHour}:${currentMinutes} (${currentTotalMinutes} minutos)`);
+  console.log(`📅 [DEBUG] Fecha inicio operación: ${operation.dateStart.toISOString().split('T')[0]}`);
+  console.log(`🕐 [DEBUG] Hora inicio operación: ${operation.timeStrat}`);
+  console.log(`📅 [DEBUG] Fecha actual: ${todayDate.toISOString().split('T')[0]}`);
+  console.log(`🕐 [DEBUG] Hora actual: ${currentHour}:${currentMinutes} (${currentTotalMinutes} minutos)`);
   
   // ✅ DEBUG ADICIONAL para fechas
-  // console.log(`🔍 [DEBUG] operationStart completo: ${operationStart.toISOString()}`);
-  // console.log(`🔍 [DEBUG] operation.dateStart original: ${operation.dateStart.toISOString()}`);
-  // console.log(`🔍 [DEBUG] todayDate timestamp: ${todayDate.getTime()}`);
-  // console.log(`🔍 [DEBUG] operationStartDate timestamp: ${operationStartDate.getTime()}`);
-  // console.log(`🔍 [DEBUG] Diferencia en ms: ${todayDate.getTime() - operationStartDate.getTime()}`);
+  console.log(`🔍 [DEBUG] operationStart completo: ${operationStart.toISOString()}`);
+  console.log(`🔍 [DEBUG] operation.dateStart original: ${operation.dateStart.toISOString()}`);
+  console.log(`🔍 [DEBUG] todayDate timestamp: ${todayDate.getTime()}`);
+  console.log(`🔍 [DEBUG] operationStartDate timestamp: ${operationStartDate.getTime()}`);
+  console.log(`🔍 [DEBUG] Diferencia en ms: ${todayDate.getTime() - operationStartDate.getTime()}`);
   
   const isFirstDay = todayDate.getTime() === operationStartDate.getTime();
   const daysFromStart = Math.floor((todayDate.getTime() - operationStartDate.getTime()) / (24 * 60 * 60 * 1000));
-  // console.log(`🎯 [DEBUG] ¿Es primer día?: ${isFirstDay}`);
-  // console.log(`📊 [DEBUG] Días desde inicio: ${daysFromStart}`);
+  console.log(`🎯 [DEBUG] ¿Es primer día?: ${isFirstDay}`);
+  console.log(`📊 [DEBUG] Días desde inicio: ${daysFromStart}`);
 
   // Horarios de comidas (deben coincidir con getAvailableMealTypes)
   const mealSchedule = {
@@ -639,7 +685,7 @@ async getMissingMealsForOperation(operationId: number) {
   // ✅ Si es el mismo día que empezó la operación
   if (isFirstDay) {
     const startTotalMinutes = operationStart.getHours() * 60 + operationStart.getMinutes();
-    // console.log(`🕐 [DEBUG] PRIMER DÍA - Minutos inicio operación: ${startTotalMinutes}`);
+    console.log(`🕐 [DEBUG] PRIMER DÍA - Minutos inicio operación: ${startTotalMinutes}`);
     
     for (const mealType of mealTypes) {
       const schedule = mealSchedule[mealType];
@@ -650,10 +696,10 @@ async getMissingMealsForOperation(operationId: number) {
         const operationStartedBeforeEnd = startTotalMinutes < schedule.end;
         const currentTimePassedEnd = currentTotalMinutes > schedule.end;
         
-        // console.log(`🍽️ [DEBUG] ${mealType}:`);
-        // console.log(`   - Horario: ${Math.floor(schedule.start/60)}:${(schedule.start%60).toString().padStart(2,'0')} - ${Math.floor(schedule.end/60)}:${(schedule.end%60).toString().padStart(2,'0')}`);
-        // console.log(`   - Operación empezó antes del final (${startTotalMinutes} < ${schedule.end}): ${operationStartedBeforeEnd}`);
-        // console.log(`   - Tiempo actual pasó el final (${currentTotalMinutes} > ${schedule.end}): ${currentTimePassedEnd}`);
+        console.log(`🍽️ [DEBUG] ${mealType}:`);
+        console.log(`   - Horario: ${Math.floor(schedule.start/60)}:${(schedule.start%60).toString().padStart(2,'0')} - ${Math.floor(schedule.end/60)}:${(schedule.end%60).toString().padStart(2,'0')}`);
+        console.log(`   - Operación empezó antes del final (${startTotalMinutes} < ${schedule.end}): ${operationStartedBeforeEnd}`);
+        console.log(`   - Tiempo actual pasó el final (${currentTotalMinutes} > ${schedule.end}): ${currentTimePassedEnd}`);
         
         // ✅ LÓGICA CORREGIDA: Solo es faltante si:
         // 1. La operación empezó antes del final de esa comida Y
@@ -677,8 +723,8 @@ async getMissingMealsForOperation(operationId: number) {
             shouldHaveAccess = startTotalMinutes < schedule.end && startTotalMinutes >= (18 * 60);
           }
           
-          // console.log(`   - ¿Debería tener acceso? ${shouldHaveAccess}`);
-          // console.log(`   - ¿Tiempo actual (${currentTotalMinutes}) > final comida (${schedule.end})? ${currentTimePassedEnd}`);
+          console.log(`   - ¿Debería tener acceso? ${shouldHaveAccess}`);
+          console.log(`   - ¿Tiempo actual (${currentTotalMinutes}) > final comida (${schedule.end})? ${currentTimePassedEnd}`);
           
           if (shouldHaveAccess) {
             passedMeals.push(mealType);
@@ -698,28 +744,28 @@ async getMissingMealsForOperation(operationId: number) {
       }
     }
   } else if (todayDate.getTime() > operationStartDate.getTime()) {
-    // console.log(`🕐 [DEBUG] DÍAS POSTERIORES (${daysFromStart} días después)`);
+    console.log(`🕐 [DEBUG] DÍAS POSTERIORES (${daysFromStart} días después)`);
     
     // ✅ Para días posteriores: TODAS las comidas que ya pasaron hoy
     for (const mealType of mealTypes) {
       const schedule = mealSchedule[mealType];
       if (schedule) {
         const hasPassedToday = currentTotalMinutes > schedule.end;
-        // console.log(`🍽️ [DEBUG] ${mealType}: actual(${currentTotalMinutes}) > fin(${schedule.end}) = ${hasPassedToday}`);
+        console.log(`🍽️ [DEBUG] ${mealType}: actual(${currentTotalMinutes}) > fin(${schedule.end}) = ${hasPassedToday}`);
         
         if (hasPassedToday) {
           passedMeals.push(mealType);
-          // console.log(`✅ [DEBUG] ${mealType} agregado como faltante (días posteriores)`);
+          console.log(`✅ [DEBUG] ${mealType} agregado como faltante (días posteriores)`);
         }
       }
     }
   }
 
-  // console.log(`📋 [DEBUG] Comidas que deberían haber pasado HOY: [${passedMeals.join(', ')}]`);
+  console.log(`📋 [DEBUG] Comidas que deberían haber pasado HOY: [${passedMeals.join(', ')}]`);
 
   // ✅ Si no han pasado comidas aún, no hay comidas faltantes
   if (passedMeals.length === 0) {
-    // console.log(`🚫 [DEBUG] No hay comidas faltantes`);
+    console.log(`🚫 [DEBUG] No hay comidas faltantes`);
     return [];
   }
 
@@ -741,13 +787,13 @@ async getMissingMealsForOperation(operationId: number) {
     });
     
     const registeredMeals = feedings.map(f => `${f.type}(${f.dateFeeding.toISOString().split('T')[0]})`);
-    // console.log(`👤 [DEBUG] Trabajador ${opWorker.worker.name} - Comidas registradas desde inicio: [${registeredMeals.join(', ')}]`);
+    console.log(`👤 [DEBUG] Trabajador ${opWorker.worker.name} - Comidas registradas desde inicio: [${registeredMeals.join(', ')}]`);
     
     let allMissing: string[] = [];
     
     if (isFirstDay) {
       // ✅ PRIMER DÍA: Solo comidas que ya pasaron HOY
-      // console.log(`🎯 [DEBUG] Procesando PRIMER DÍA para ${opWorker.worker.name}`);
+      console.log(`🎯 [DEBUG] Procesando PRIMER DÍA para ${opWorker.worker.name}`);
       
       const todayMissing = passedMeals.filter(type => !feedings.some(f => {
         const feedingDate = new Date(f.dateFeeding);
@@ -756,11 +802,11 @@ async getMissingMealsForOperation(operationId: number) {
       }));
       
       allMissing = todayMissing;
-      // console.log(`📊 [DEBUG] Primer día - Solo comidas faltantes de HOY: [${allMissing.join(', ')}]`);
+      console.log(`📊 [DEBUG] Primer día - Solo comidas faltantes de HOY: [${allMissing.join(', ')}]`);
       
     } else {
       // ✅ DÍAS POSTERIORES: Comidas faltantes de hoy + días anteriores
-      // console.log(`🎯 [DEBUG] Procesando DÍAS POSTERIORES para ${opWorker.worker.name}`);
+      console.log(`🎯 [DEBUG] Procesando DÍAS POSTERIORES para ${opWorker.worker.name}`);
       
       // Solo las comidas faltantes de hoy
       const todayMissing = passedMeals.filter(type => !feedings.some(f => {
@@ -801,13 +847,13 @@ async getMissingMealsForOperation(operationId: number) {
       }
       
       allMissing = [...new Set([...todayMissing, ...previousDaysMissing])];
-      // console.log(`📊 [DEBUG] Días posteriores - Faltantes HOY: [${todayMissing.join(', ')}]`);
-      // console.log(`📊 [DEBUG] Días posteriores - Faltantes ANTERIORES: [${previousDaysMissing.join(', ')}]`);
-      // console.log(`📊 [DEBUG] Días posteriores - TOTAL: [${allMissing.join(', ')}]`);
+      console.log(`📊 [DEBUG] Días posteriores - Faltantes HOY: [${todayMissing.join(', ')}]`);
+      console.log(`📊 [DEBUG] Días posteriores - Faltantes ANTERIORES: [${previousDaysMissing.join(', ')}]`);
+      console.log(`📊 [DEBUG] Días posteriores - TOTAL: [${allMissing.join(', ')}]`);
     }
     
     if (allMissing.length > 0) {
-      // console.log(`🍽️ [DEBUG] Trabajador ${opWorker.worker.name} - Comidas faltantes TOTAL: [${allMissing.join(', ')}]`);
+      console.log(`🍽️ [DEBUG] Trabajador ${opWorker.worker.name} - Comidas faltantes TOTAL: [${allMissing.join(', ')}]`);
       
       result.push({
         workerId: opWorker.id_worker,
@@ -815,7 +861,7 @@ async getMissingMealsForOperation(operationId: number) {
         missingMeals: allMissing,
       });
     } else {
-      // console.log(`✅ [DEBUG] Trabajador ${opWorker.worker.name} - Sin comidas faltantes`);
+      console.log(`✅ [DEBUG] Trabajador ${opWorker.worker.name} - Sin comidas faltantes`);
     }
   }
   
