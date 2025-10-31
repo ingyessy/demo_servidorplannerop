@@ -27,7 +27,7 @@ import { ParseIntPipe } from 'src/pipes/parse-int/parse-int.pipe';
 @Controller('tariff')
 @UseInterceptors(SiteInterceptor)
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.SUPERADMIN, Role.ADMIN)
+@Roles(Role.SUPERADMIN, Role.ADMIN, Role.SUPERVISOR)
 @ApiBearerAuth('access-token')
 export class TariffController {
   constructor(private readonly tariffService: TariffService) {}
