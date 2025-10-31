@@ -7,7 +7,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "prebuild": "npx rimraf dist",
-    "build": "npx prisma generate && npx prisma migrate deploy && nest build",
+    "build": "nest build",
     "postbuild": "npm run doc && npm run copy-docs",
     "copy-docs": "copyfiles -u 1 \"docs/**/*\" dist/",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
@@ -88,6 +88,7 @@
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.20.0"
   },
+  "engines": { "node": "22.x", "npm": "10.x" },
   "jest": {
     "moduleFileExtensions": [
       "js",
