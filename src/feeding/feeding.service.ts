@@ -576,7 +576,7 @@ export class FeedingService {
  * Retorna las alimentaciones faltantes por trabajador en una operación para el día actual
  */
 async getMissingMealsForOperation(operationId: number) {
-  console.log(`🔍 [DEBUG] getMissingMealsForOperation - Operación ID: ${operationId}`);
+  // console.log(`🔍 [DEBUG] getMissingMealsForOperation - Operación ID: ${operationId}`);
   
   // Obtener la operación y sus trabajadores
   const operation = await this.prisma.operation.findUnique({
@@ -622,8 +622,8 @@ async getMissingMealsForOperation(operationId: number) {
   
   const isFirstDay = todayDate.getTime() === operationStartDate.getTime();
   const daysFromStart = Math.floor((todayDate.getTime() - operationStartDate.getTime()) / (24 * 60 * 60 * 1000));
-  console.log(`🎯 [DEBUG] ¿Es primer día?: ${isFirstDay}`);
-  console.log(`📊 [DEBUG] Días desde inicio: ${daysFromStart}`);
+  // console.log(`🎯 [DEBUG] ¿Es primer día?: ${isFirstDay}`);
+  // console.log(`📊 [DEBUG] Días desde inicio: ${daysFromStart}`);
 
   // Horarios de comidas (deben coincidir con getAvailableMealTypes)
   const mealSchedule = {
@@ -639,7 +639,7 @@ async getMissingMealsForOperation(operationId: number) {
   // ✅ Si es el mismo día que empezó la operación
   if (isFirstDay) {
     const startTotalMinutes = operationStart.getHours() * 60 + operationStart.getMinutes();
-    console.log(`🕐 [DEBUG] PRIMER DÍA - Minutos inicio operación: ${startTotalMinutes}`);
+    // console.log(`🕐 [DEBUG] PRIMER DÍA - Minutos inicio operación: ${startTotalMinutes}`);
     
     for (const mealType of mealTypes) {
       const schedule = mealSchedule[mealType];
@@ -677,8 +677,8 @@ async getMissingMealsForOperation(operationId: number) {
             shouldHaveAccess = startTotalMinutes < schedule.end && startTotalMinutes >= (18 * 60);
           }
           
-          console.log(`   - ¿Debería tener acceso? ${shouldHaveAccess}`);
-          console.log(`   - ¿Tiempo actual (${currentTotalMinutes}) > final comida (${schedule.end})? ${currentTimePassedEnd}`);
+          // console.log(`   - ¿Debería tener acceso? ${shouldHaveAccess}`);
+          // console.log(`   - ¿Tiempo actual (${currentTotalMinutes}) > final comida (${schedule.end})? ${currentTimePassedEnd}`);
           
           if (shouldHaveAccess) {
             passedMeals.push(mealType);
@@ -698,28 +698,28 @@ async getMissingMealsForOperation(operationId: number) {
       }
     }
   } else if (todayDate.getTime() > operationStartDate.getTime()) {
-    console.log(`🕐 [DEBUG] DÍAS POSTERIORES (${daysFromStart} días después)`);
+    // console.log(`🕐 [DEBUG] DÍAS POSTERIORES (${daysFromStart} días después)`);
     
     // ✅ Para días posteriores: TODAS las comidas que ya pasaron hoy
     for (const mealType of mealTypes) {
       const schedule = mealSchedule[mealType];
       if (schedule) {
         const hasPassedToday = currentTotalMinutes > schedule.end;
-        console.log(`🍽️ [DEBUG] ${mealType}: actual(${currentTotalMinutes}) > fin(${schedule.end}) = ${hasPassedToday}`);
+        // console.log(`🍽️ [DEBUG] ${mealType}: actual(${currentTotalMinutes}) > fin(${schedule.end}) = ${hasPassedToday}`);
         
         if (hasPassedToday) {
           passedMeals.push(mealType);
-          console.log(`✅ [DEBUG] ${mealType} agregado como faltante (días posteriores)`);
+          // console.log(`✅ [DEBUG] ${mealType} agregado como faltante (días posteriores)`);
         }
       }
     }
   }
 
-  console.log(`📋 [DEBUG] Comidas que deberían haber pasado HOY: [${passedMeals.join(', ')}]`);
+  // console.log(`📋 [DEBUG] Comidas que deberían haber pasado HOY: [${passedMeals.join(', ')}]`);
 
   // ✅ Si no han pasado comidas aún, no hay comidas faltantes
   if (passedMeals.length === 0) {
-    console.log(`🚫 [DEBUG] No hay comidas faltantes`);
+    // console.log(`🚫 [DEBUG] No hay comidas faltantes`);
     return [];
   }
 
@@ -741,13 +741,13 @@ async getMissingMealsForOperation(operationId: number) {
     });
     
     const registeredMeals = feedings.map(f => `${f.type}(${f.dateFeeding.toISOString().split('T')[0]})`);
-    console.log(`👤 [DEBUG] Trabajador ${opWorker.worker.name} - Comidas registradas desde inicio: [${registeredMeals.join(', ')}]`);
+    // console.log(`👤 [DEBUG] Trabajador ${opWorker.worker.name} - Comidas registradas desde inicio: [${registeredMeals.join(', ')}]`);
     
     let allMissing: string[] = [];
     
     if (isFirstDay) {
       // ✅ PRIMER DÍA: Solo comidas que ya pasaron HOY
-      console.log(`🎯 [DEBUG] Procesando PRIMER DÍA para ${opWorker.worker.name}`);
+      // console.log(`🎯 [DEBUG] Procesando PRIMER DÍA para ${opWorker.worker.name}`);
       
       const todayMissing = passedMeals.filter(type => !feedings.some(f => {
         const feedingDate = new Date(f.dateFeeding);
@@ -756,11 +756,11 @@ async getMissingMealsForOperation(operationId: number) {
       }));
       
       allMissing = todayMissing;
-      console.log(`📊 [DEBUG] Primer día - Solo comidas faltantes de HOY: [${allMissing.join(', ')}]`);
+      // console.log(`📊 [DEBUG] Primer día - Solo comidas faltantes de HOY: [${allMissing.join(', ')}]`);
       
     } else {
       // ✅ DÍAS POSTERIORES: Comidas faltantes de hoy + días anteriores
-      console.log(`🎯 [DEBUG] Procesando DÍAS POSTERIORES para ${opWorker.worker.name}`);
+      // console.log(`🎯 [DEBUG] Procesando DÍAS POSTERIORES para ${opWorker.worker.name}`);
       
       // Solo las comidas faltantes de hoy
       const todayMissing = passedMeals.filter(type => !feedings.some(f => {
@@ -801,13 +801,13 @@ async getMissingMealsForOperation(operationId: number) {
       }
       
       allMissing = [...new Set([...todayMissing, ...previousDaysMissing])];
-      console.log(`📊 [DEBUG] Días posteriores - Faltantes HOY: [${todayMissing.join(', ')}]`);
-      console.log(`📊 [DEBUG] Días posteriores - Faltantes ANTERIORES: [${previousDaysMissing.join(', ')}]`);
-      console.log(`📊 [DEBUG] Días posteriores - TOTAL: [${allMissing.join(', ')}]`);
+      // console.log(`📊 [DEBUG] Días posteriores - Faltantes HOY: [${todayMissing.join(', ')}]`);
+      // console.log(`📊 [DEBUG] Días posteriores - Faltantes ANTERIORES: [${previousDaysMissing.join(', ')}]`);
+      // console.log(`📊 [DEBUG] Días posteriores - TOTAL: [${allMissing.join(', ')}]`);
     }
     
     if (allMissing.length > 0) {
-      console.log(`🍽️ [DEBUG] Trabajador ${opWorker.worker.name} - Comidas faltantes TOTAL: [${allMissing.join(', ')}]`);
+      // console.log(`🍽️ [DEBUG] Trabajador ${opWorker.worker.name} - Comidas faltantes TOTAL: [${allMissing.join(', ')}]`);
       
       result.push({
         workerId: opWorker.id_worker,
@@ -815,7 +815,7 @@ async getMissingMealsForOperation(operationId: number) {
         missingMeals: allMissing,
       });
     } else {
-      console.log(`✅ [DEBUG] Trabajador ${opWorker.worker.name} - Sin comidas faltantes`);
+      // console.log(`✅ [DEBUG] Trabajador ${opWorker.worker.name} - Sin comidas faltantes`);
     }
   }
   
