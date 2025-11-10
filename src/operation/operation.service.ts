@@ -285,10 +285,10 @@ export class OperationService {
         ...restOperationData,
         id_user: operationData.id_user as number,
         id_clientProgramming: id_clientProgramming || null,
-        id_task: mainTaskId ? Number(mainTaskId) : null,
-        dateStart: dateStart ? new Date(dateStart) : '',
+        id_task: mainTaskId,
+        dateStart: dateStart,
         dateEnd: dateEnd ? new Date(dateEnd) : null,
-        timeStrat: timeStrat || '',
+        timeStrat: timeStrat,
         timeEnd: timeEnd || null,
         id_subsite: id_subsite || null,
       },
@@ -335,6 +335,7 @@ export class OperationService {
     const {
       workers,
       inCharged,
+      groups,
       dateStart,
       dateEnd,
       timeStrat,
@@ -346,6 +347,12 @@ export class OperationService {
     if (workers) {
       console.log('[OperationService] Procesando workers con nuevo flujo V2');
       await this.processWorkersOperationsV2(id, workers);
+    }
+
+    // ✅ PROCESAR GRUPOS (FINALIZACIÓN DE GRUPOS)
+    if (groups && Array.isArray(groups) && groups.length > 0) {
+      console.log('[OperationService] Procesando finalización de grupos:', groups);
+      await this.processGroupsCompletion(id, groups);
     }
 
     // Process inCharged
@@ -476,7 +483,7 @@ export class OperationService {
   if (timeEnd) {
     // ✅ SI EL USUARIO ENVÍA timeEnd, USARLA SIEMPRE
     updateData.timeEnd = timeEnd;
-    console.log(`[OperationService] Usando hora de fin enviada por el usuario: ${timeEnd}`);
+    // console.log(`[OperationService] Usando hora de fin enviada por el usuario: ${timeEnd}`);
   } else if (updateData.status === StatusOperation.COMPLETED) {
     // ✅ SOLO SI NO VIENE timeEnd Y SE ESTÁ COMPLETANDO, USAR HORA ACTUAL
     const now = new Date();
@@ -573,7 +580,7 @@ export class OperationService {
 
   // 1. DESCONECTAR/ELIMINAR TRABAJADORES (mantener igual)
   if (workersOps.disconnect && Array.isArray(workersOps.disconnect) && workersOps.disconnect.length > 0) {
-    console.log('[OperationService] Eliminando trabajadores:', workersOps.disconnect);
+    // console.log('[OperationService] Eliminando trabajadores:', workersOps.disconnect);
     
     for (const disconnectOp of workersOps.disconnect) {
       console.log('[OperationService] Procesando eliminación individual:', disconnectOp);
@@ -611,7 +618,110 @@ export class OperationService {
   }
 
   // 2. CONECTAR/AGREGAR NUEVOS TRABAJADORES - ✅ CORREGIR AQUÍ
-  if (workersOps.connect && workersOps.connect.length > 0) {
+  // if (workersOps.connect && workersOps.connect.length > 0) {
+  //   console.log('[OperationService] Agregando trabajadores:', workersOps.connect);
+    
+  //   for (const connectOp of workersOps.connect) {
+  //     console.log('[OperationService] Procesando conexión:', connectOp);
+      
+  //     // ✅ VERIFICAR QUE workerIds EXISTE Y ES UN ARRAY
+  //     if (!connectOp.workerIds || !Array.isArray(connectOp.workerIds)) {
+  //       console.error('[OperationService] workerIds no encontrado o no es array:', connectOp);
+  //       throw new BadRequestException('workerIds debe ser un array válido en la operación connect');
+  //     }
+
+  //     // ✅ PROCESAR CADA WORKER ID EN EL ARRAY
+  //     // for (const workerId of connectOp.workerIds) {
+  //     //   // ✅ VALIDAR QUE EL ID SEA VÁLIDO
+  //     //   if (!workerId || isNaN(Number(workerId))) {
+  //     //     console.error('[OperationService] ID de trabajador inválido:', workerId);
+  //     //     throw new BadRequestException(`ID de trabajador inválido: ${workerId}`);
+  //     //   }
+
+  //     //   console.log(`[OperationService] Procesando trabajador ID: ${workerId}`);
+
+  //     //   try {
+  //     //     // ✅ CREAR EL OBJETO PARA ASIGNAR TRABAJADOR
+  //     //     const assignData = {
+  //     //       id_operation: operationId,
+  //     //       id_worker: Number(workerId),
+  //     //       dateStart: connectOp.dateStart || null,
+  //     //       dateEnd: connectOp.dateEnd || null,
+  //     //       timeStart: connectOp.timeStart || null,
+  //     //       timeEnd: connectOp.timeEnd || null,
+  //     //       id_task: connectOp.id_task || null,
+  //     //       id_subtask: connectOp.id_subtask || null,
+  //     //       id_tariff: connectOp.id_tariff || null,
+  //     //     };
+
+  //     //     console.log(`[OperationService] Datos para asignar trabajador ${workerId}:`, assignData);
+
+  //     //     // ✅ USAR EL SERVICIO DE ASIGNACIÓN EXISTENTE
+  //     //     const assignResult = await this.operationWorkerService.assignWorkersToOperation(assignData);
+  //     //     console.log(`[OperationService] Trabajador ${workerId} asignado exitosamente:`, assignResult);
+  //     //   } catch (error) {
+  //     //     console.error(`[OperationService] Error asignando trabajador ${workerId}:`, error);
+  //     //     throw new BadRequestException(`Error asignando trabajador ${workerId}: ${error.message}`);
+  //     //   }
+  //     // }
+  //      try {
+  //       // ✅ VERIFICAR SI ES UN NUEVO GRUPO O ASIGNACIÓN SIMPLE
+  //       if (connectOp.isNewGroup) {
+  //         console.log('[OperationService] Creando NUEVO GRUPO para trabajadores:', connectOp.workerIds);
+          
+  //         // ✅ USAR EL FORMATO CORRECTO PARA GRUPOS CON PROGRAMACIÓN
+  //         const assignData = {
+  //           id_operation: operationId,
+  //           workersWithSchedule: [{
+  //             workerIds: connectOp.workerIds.map(id => Number(id)),
+  //             dateStart: connectOp.dateStart || null,
+  //             dateEnd: connectOp.dateEnd || null,
+  //             timeStart: connectOp.timeStart || null,
+  //             timeEnd: connectOp.timeEnd || null,
+  //             id_task: connectOp.id_task || null,
+  //             id_subtask: connectOp.id_subtask || null,
+  //             id_tariff: connectOp.id_tariff || null,
+  //             // ✅ NO incluir id_group para que se genere uno nuevo automáticamente
+  //           }]
+  //         };
+
+  //         console.log('[OperationService] Datos para crear nuevo grupo:', assignData);
+  //         const assignResult = await this.operationWorkerService.assignWorkersToOperation(assignData);
+  //         console.log('[OperationService] Nuevo grupo creado exitosamente:', assignResult);
+          
+  //       } else {
+  //         console.log('[OperationService] Asignando trabajadores SIN grupo específico:', connectOp.workerIds);
+          
+  //         // ✅ ASIGNACIÓN SIMPLE (SIN GRUPO) - PROCESAR CADA TRABAJADOR INDIVIDUALMENTE
+  //         for (const workerId of connectOp.workerIds) {
+  //           // ✅ VALIDAR QUE EL ID SEA VÁLIDO
+  //           if (!workerId || isNaN(Number(workerId))) {
+  //             console.error('[OperationService] ID de trabajador inválido:', workerId);
+  //             throw new BadRequestException(`ID de trabajador inválido: ${workerId}`);
+  //           }
+
+  //           console.log(`[OperationService] Procesando trabajador ID: ${workerId}`);
+
+  //           // ✅ CREAR EL OBJETO PARA ASIGNAR TRABAJADOR SIMPLE
+  //           const assignData = {
+  //             id_operation: operationId,
+  //             workerIds: [Number(workerId)], // ✅ Usar array de IDs para asignación simple
+  //           };
+
+  //           console.log(`[OperationService] Datos para asignar trabajador ${workerId}:`, assignData);
+  //           const assignResult = await this.operationWorkerService.assignWorkersToOperation(assignData);
+  //           console.log(`[OperationService] Trabajador ${workerId} asignado exitosamente:`, assignResult);
+  //         }
+  //       }
+  //     } catch (error) {
+  //       console.error(`[OperationService] Error procesando conexión:`, error);
+  //       throw new BadRequestException(`Error procesando conexión: ${error.message}`);
+  //     }
+  //   }
+  // }
+
+  // 2. CONECTAR/AGREGAR NUEVOS TRABAJADORES - ✅ CORREGIR AQUÍ
+  if (workersOps.connect && workersOps.connect.length > 0) { 
     console.log('[OperationService] Agregando trabajadores:', workersOps.connect);
     
     for (const connectOp of workersOps.connect) {
@@ -623,43 +733,61 @@ export class OperationService {
         throw new BadRequestException('workerIds debe ser un array válido en la operación connect');
       }
 
-      // ✅ PROCESAR CADA WORKER ID EN EL ARRAY
-      for (const workerId of connectOp.workerIds) {
-        // ✅ VALIDAR QUE EL ID SEA VÁLIDO
-        if (!workerId || isNaN(Number(workerId))) {
-          console.error('[OperationService] ID de trabajador inválido:', workerId);
-          throw new BadRequestException(`ID de trabajador inválido: ${workerId}`);
-        }
-
-        console.log(`[OperationService] Procesando trabajador ID: ${workerId}`);
-
-        try {
-          // ✅ CREAR EL OBJETO PARA ASIGNAR TRABAJADOR
+      try {
+        // ✅ VERIFICAR SI ES UN NUEVO GRUPO O ASIGNACIÓN SIMPLE
+        if (connectOp.isNewGroup) {
+          console.log('[OperationService] Creando NUEVO GRUPO para trabajadores:', connectOp.workerIds);
+          
+          // ✅ USAR EL FORMATO CORRECTO PARA GRUPOS CON PROGRAMACIÓN
           const assignData = {
             id_operation: operationId,
-            id_worker: Number(workerId),
-            dateStart: connectOp.dateStart || null,
-            dateEnd: connectOp.dateEnd || null,
-            timeStart: connectOp.timeStart || null,
-            timeEnd: connectOp.timeEnd || null,
-            id_task: connectOp.id_task || null,
-            id_subtask: connectOp.id_subtask || null,
-            id_tariff: connectOp.id_tariff || null,
+            workersWithSchedule: [{
+              workerIds: connectOp.workerIds.map(id => Number(id)),
+              dateStart: connectOp.dateStart,
+              dateEnd: connectOp.dateEnd || null,
+              timeStart: connectOp.timeStart,
+              timeEnd: connectOp.timeEnd || null,
+              id_task: connectOp.id_task,
+              id_subtask: connectOp.id_subtask,
+              id_tariff: connectOp.id_tariff,
+              // ✅ NO incluir id_group para que se genere uno nuevo automáticamente
+            }]
           };
 
-          console.log(`[OperationService] Datos para asignar trabajador ${workerId}:`, assignData);
-
-          // ✅ USAR EL SERVICIO DE ASIGNACIÓN EXISTENTE
+          console.log('[OperationService] Datos para crear nuevo grupo:', assignData);
           const assignResult = await this.operationWorkerService.assignWorkersToOperation(assignData);
-          console.log(`[OperationService] Trabajador ${workerId} asignado exitosamente:`, assignResult);
-        } catch (error) {
-          console.error(`[OperationService] Error asignando trabajador ${workerId}:`, error);
-          throw new BadRequestException(`Error asignando trabajador ${workerId}: ${error.message}`);
+          console.log('[OperationService] Nuevo grupo creado exitosamente:', assignResult);
+          
+        } else {
+          console.log('[OperationService] Asignando trabajadores SIN grupo específico:', connectOp.workerIds);
+          
+          // ✅ ASIGNACIÓN SIMPLE (SIN GRUPO) - PROCESAR CADA TRABAJADOR INDIVIDUALMENTE
+          for (const workerId of connectOp.workerIds) {
+            // ✅ VALIDAR QUE EL ID SEA VÁLIDO
+            if (!workerId || isNaN(Number(workerId))) {
+              console.error('[OperationService] ID de trabajador inválido:', workerId);
+              throw new BadRequestException(`ID de trabajador inválido: ${workerId}`);
+            }
+
+            console.log(`[OperationService] Procesando trabajador ID: ${workerId}`);
+
+            // ✅ CREAR EL OBJETO PARA ASIGNAR TRABAJADOR SIMPLE
+            const assignData = {
+              id_operation: operationId,
+              workerIds: [Number(workerId)], // ✅ Usar array de IDs para asignación simple
+            };
+
+            console.log(`[OperationService] Datos para asignar trabajador ${workerId}:`, assignData);
+            const assignResult = await this.operationWorkerService.assignWorkersToOperation(assignData);
+            console.log(`[OperationService] Trabajador ${workerId} asignado exitosamente:`, assignResult);
+          }
         }
+      } catch (error) {
+        console.error(`[OperationService] Error procesando conexión:`, error);
+        throw new BadRequestException(`Error procesando conexión: ${error.message}`);
       }
     }
   }
-
   // 3. ACTUALIZAR TRABAJADORES EXISTENTES
   if (workersOps.update && workersOps.update.length > 0) {
     console.log('[OperationService] ===== PROCESANDO UPDATE WORKERS =====');
@@ -757,5 +885,61 @@ export class OperationService {
 
     // ✅ NO PROCESAR DISCONNECT PORQUE YA ELIMINAMOS TODOS AL INICIO
     // Esto simplifica la lógica y evita conflictos
+  }
+  /**
+   * Procesa la finalización de grupos actualizando fechas y horas de finalización
+   * @param operationId - ID de la operación
+   * @param groups - Array de grupos con información de finalización
+   */
+  private async processGroupsCompletion(operationId: number, groups: any[]) {
+    console.log('[OperationService] ===== PROCESANDO FINALIZACIÓN DE GRUPOS =====');
+    console.log('[OperationService] Grupos a procesar:', JSON.stringify(groups, null, 2));
+
+    for (const group of groups) {
+      const { groupId, dateEnd, timeEnd } = group;
+      
+      if (!groupId) {
+        console.warn('[OperationService] Grupo sin groupId, saltando:', group);
+        continue;
+      }
+
+      console.log(`[OperationService] Procesando finalización de grupo: ${groupId}`);
+      console.log(`[OperationService] Datos de finalización: dateEnd=${dateEnd}, timeEnd=${timeEnd}`);
+
+      try {
+        // Preparar datos de actualización
+        const updateData: any = {};
+        
+        if (dateEnd) {
+          updateData.dateEnd = new Date(dateEnd);
+          console.log(`[OperationService] Estableciendo dateEnd: ${updateData.dateEnd}`);
+        }
+        
+        if (timeEnd) {
+          updateData.timeEnd = timeEnd;
+          console.log(`[OperationService] Estableciendo timeEnd: ${timeEnd}`);
+        }
+
+        // Solo actualizar si hay datos para actualizar
+        if (Object.keys(updateData).length > 0) {
+          const result = await this.prisma.operation_Worker.updateMany({
+            where: {
+              id_operation: operationId,
+              id_group: groupId,
+            },
+            data: updateData,
+          });
+
+          console.log(`[OperationService] Grupo ${groupId} finalizado. Trabajadores afectados: ${result.count}`);
+        } else {
+          console.log(`[OperationService] No hay datos de finalización para grupo ${groupId}`);
+        }
+      } catch (error) {
+        console.error(`[OperationService] Error finalizando grupo ${groupId}:`, error);
+        throw new BadRequestException(`Error finalizando grupo ${groupId}: ${error.message}`);
+      }
+    }
+    
+    console.log('[OperationService] ===== FINALIZACIÓN DE GRUPOS COMPLETADA =====');
   }
 }

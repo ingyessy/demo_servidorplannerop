@@ -109,9 +109,9 @@ export class ValidationService {
           select: { id: true, status: true, name: true }
         });
         
-        console.log(`[ValidationService] ${validationId} - Trabajadores encontrados con código ${code_worker}:`, allWorkersWithCode);
+        // console.log(`[ValidationService] ${validationId} - Trabajadores encontrados con código ${code_worker}:`, allWorkersWithCode);
         
-        console.log(`[ValidationService] ${validationId} - Ejecutando consulta para trabajadores activos con código ${code_worker}...`);
+        // console.log(`[ValidationService] ${validationId} - Ejecutando consulta para trabajadores activos con código ${code_worker}...`);
         const existingWorkerWithCode = await this.prisma.worker.findFirst({
           where: { 
             code: code_worker,
@@ -224,7 +224,7 @@ export class ValidationService {
             throw new NotFoundException(`Trabajadores no encontrados con IDs: ${missingWorkerIds.join(', ')}`);
           }
 
-          console.log('[ValidationService] Todos los trabajadores válidos existen');
+          // console.log('[ValidationService] Todos los trabajadores válidos existen');
         } else {
           if (workerIds.length > 0) {
             throw new BadRequestException('No se proporcionaron IDs de trabajadores válidos');
@@ -366,7 +366,7 @@ export class ValidationService {
 
       //16. validar el codigo de nomina
        if (payroll_code_worker!== undefined) {
-        console.log(`[ValidationService] Validando código de nómina: ${payroll_code_worker}`);
+        // console.log(`[ValidationService] Validando código de nómina: ${payroll_code_worker}`);
         
         const existingWorkerWithCode = await this.prisma.worker.findFirst({
           where: { 
@@ -398,10 +398,10 @@ export class ValidationService {
         
       }
 
-      console.log(`[ValidationService] ✅ Todas las validaciones completadas exitosamente - ValidationId: ${Math.random().toString(36).substring(7)}`);
+      // console.log(`[ValidationService] ✅ Todas las validaciones completadas exitosamente - ValidationId: ${Math.random().toString(36).substring(7)}`);
       return response;
     } catch (error) {
-      console.error('Error validating IDs:', error);
+      // console.error('Error validating IDs:', error);
       throw new Error(`Error validating IDs: ${error.message}`);
     }
   }

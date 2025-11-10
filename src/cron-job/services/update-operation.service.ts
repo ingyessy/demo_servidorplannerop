@@ -44,7 +44,7 @@ export class UpdateOperationService {
       const pendingOperations = await this.prisma.operation.findMany({
         where: {
           dateStart: {
-            gte: startOfDay, // Mayor o igual que hoy a medianoche (hora colombiana)
+            //gte: startOfDay,  Mayor o igual que hoy a medianoche (hora colombiana)
             lt: endOfDay, // Menor que mañana a medianoche (hora colombiana)
           },
           status: 'PENDING',
@@ -55,41 +55,103 @@ export class UpdateOperationService {
 
       let updatedCount = 0;
 
-      for (const operation of pendingOperations) {
-        // Crear la fecha de inicio completa combinando dateStart y timeStrat
-        const dateStartStr = operation.dateStart.toISOString().split('T')[0];
-        const startDateTime = new Date(
-          `${dateStartStr}T${operation.timeStrat}`,
-        );
+//       for (const operation of pendingOperations) {
+//         // Crear la fecha de inicio completa combinando dateStart y timeStrat
+//         // const dateStartStr = operation.dateStart.toISOString().split('T')[0];
+//         // const startDateTime = new Date(`${dateStartStr}T${operation.timeStrat}`,);
+//         const [hours, minutes] = operation.timeStrat.split(':').map(Number);
+// const startDateTime = new Date(operation.dateStart);
+// startDateTime.setHours(hours, minutes, 0, 0);
 
-        // Verificar si han pasado 5 minutos desde la hora de inicio (usando hora colombiana)
-        const minutesDiff = differenceInMinutes(now, startDateTime);
-        this.logger.debug(
-          `Operation ${operation.id}: ${minutesDiff} minutes since start time (Colombian time)`,
-        );
+//         // Verificar si han pasado 5 minutos desde la hora de inicio (usando hora colombiana)
+//         const minutesDiff = differenceInMinutes(now, startDateTime);
+//         this.logger.debug(
+//           `Operation ${operation.id}: ${minutesDiff} minutes since start time (Colombian time)`,
+//         );
 
-        if (minutesDiff >= 5) {
-          // Actualizar el estado a INPROGRESS
-          await this.prisma.operation.update({
-            where: { id: operation.id },
-            data: { status: 'INPROGRESS' },
-          });
+//         if (minutesDiff >= 1) {
+//           // Actualizar el estado a INPROGRESS
+//           await this.prisma.operation.update({
+//             where: { id: operation.id },
+//             data: { status: 'INPROGRESS' },
+//           });
 
-          // Actualizar la fecha y hora de inicio en la tabla intermedia (con hora colombiana)
-          await this.prisma.operation_Worker.updateMany({
-            where: {
-              id_operation: operation.id,
-              dateEnd: null,
-              timeEnd: null,
-            },
-            data: {
-              dateStart: operation.dateStart,
-              timeStart: operation.timeStrat,
-            },
-          });
-          updatedCount++;
-        }
-      }
+//           // Actualizar la fecha y hora de inicio en la tabla intermedia (con hora colombiana)
+//           await this.prisma.operation_Worker.updateMany({
+//             where: {
+//               id_operation: operation.id,
+//               dateEnd: null,
+//               timeEnd: null,
+//             },
+//             data: {
+//               dateStart: operation.dateStart,
+//               timeStart: operation.timeStrat,
+//             },
+//           });
+//           updatedCount++;
+//         }
+//       }
+
+for (const operation of pendingOperations) {
+  const [hours, minutes] = operation.timeStrat.split(':').map(Number);
+  const startDateTime = new Date(operation.dateStart);
+  startDateTime.setHours(hours, minutes, 0, 0);
+
+  const minutesDiff = differenceInMinutes(now, startDateTime);
+  
+  // ✅ NUEVA LÓGICA: Determinar si debe cambiar a INPROGRESS
+  let shouldUpdate = false;
+  let reason = '';
+  
+  // Comparar fechas sin hora para determinar el día
+  const operationDate = new Date(operation.dateStart.getFullYear(), operation.dateStart.getMonth(), operation.dateStart.getDate());
+  const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  
+  if (operationDate.getTime() < todayDate.getTime()) {
+    // ✅ CASO 1: Operación de días anteriores - activar inmediatamente
+    shouldUpdate = true;
+    reason = 'previous day operation';
+    this.logger.debug(`✅ Operation ${operation.id} from previous day (${operation.dateStart.toISOString().split('T')[0]}) - updating immediately`);
+  } 
+  else if (operationDate.getTime() === todayDate.getTime()) {
+    // ✅ CASO 2: Operación de hoy - esperar 1 minuto después de la hora programada
+    if (minutesDiff >= 1) {
+      shouldUpdate = true;
+      reason = 'scheduled time passed';
+      this.logger.debug(`✅ Operation ${operation.id} from today - ${minutesDiff} minutes passed since scheduled time (${operation.timeStrat})`);
+    } else {
+      this.logger.debug(`⏳ Operation ${operation.id} scheduled for ${operation.timeStrat} - needs ${1 - minutesDiff} more minutes`);
+    }
+  }
+  else {
+    // ✅ CASO 3: Operación de días futuros - no activar
+    this.logger.debug(`📅 Operation ${operation.id} scheduled for future date (${operation.dateStart.toISOString().split('T')[0]}) - keeping PENDING`);
+  }
+
+  if (shouldUpdate) {
+    this.logger.debug(`🚀 Updating operation ${operation.id} to INPROGRESS (reason: ${reason})`);
+    
+    // Actualizar el estado a INPROGRESS
+    await this.prisma.operation.update({
+      where: { id: operation.id },
+      data: { status: 'INPROGRESS' },
+    });
+
+    // Actualizar la fecha y hora de inicio en la tabla intermedia
+    await this.prisma.operation_Worker.updateMany({
+      where: {
+        id_operation: operation.id,
+        dateEnd: null,
+        timeEnd: null,
+      },
+      data: {
+        dateStart: operation.dateStart,
+        timeStart: operation.timeStrat,
+      },
+    });
+    updatedCount++;
+  }
+}
 
       if (updatedCount > 0) {
         this.logger.debug(
@@ -154,8 +216,12 @@ export class UpdateOperationService {
         }
 
         // Crear la fecha de finalización completa combinando dateEnd y timeEnd
-        const dateEndStr = operation.dateEnd.toISOString().split('T')[0];
-        const endDateTime = new Date(`${dateEndStr}T${operation.timeEnd}`);
+        // const dateEndStr = operation.dateEnd.toISOString().split('T')[0];
+        // const endDateTime = new Date(`${dateEndStr}T${operation.timeEnd}`);
+
+        const [hours, minutes] = operation.timeEnd.split(':').map(Number);
+const endDateTime = new Date(operation.dateEnd);
+endDateTime.setHours(hours, minutes, 0, 0);
 
         // Verificar si han pasado 10 minutos desde la hora de finalización (usando hora colombiana)
         const minutesDiff = differenceInMinutes(now, endDateTime);
@@ -163,8 +229,8 @@ export class UpdateOperationService {
           `Operation ${operation.id}: ${minutesDiff} minutes since end time (Colombian time)`,
         );
 
-        // Si han pasado 10 minutos desde la hora de finalización
-        if (minutesDiff >= 10) {
+        // Si han pasado 1 minutos desde la hora de finalización
+        if (minutesDiff >= 1) {
           // Obtener fecha y hora de finalización en zona horaria colombiana
           const colombianEndTime = getColombianDateTime();
           const colombianTimeString = getColombianTimeString();

@@ -130,4 +130,26 @@ export class UpdateOperationDto extends PartialType(OperationUpdateBaseDto) {
     connect?: Array<{ id: number }>;
     disconnect?: Array<{ id: number }>;
   };
+  // ✅ AGREGAR CAMPO GROUPS PARA FINALIZACIÓN DE GRUPOS
+  @ApiProperty({
+    type: Array,
+    required: false,
+    description: 'Array de grupos para finalizar con fechas y horas de finalización',
+    example: [
+      {
+        groupId: "5ee050fd-85b7-4389-b2e6-cb07e3d56d37",
+        dateEnd: "2025-11-06",
+        timeEnd: "08:05",
+        isNewGroup: false
+      }
+    ]
+  })
+  @IsOptional()
+  @IsArray()
+  groups?: Array<{
+    groupId: string;
+    dateEnd?: string;
+    timeEnd?: string;
+    isNewGroup?: boolean;
+  }>;
 }
