@@ -538,9 +538,18 @@ async findById(id: number, id_site?: number) {
         console.log(`[WorkerService] ✅ Códigos disponibles, permitiendo activación del worker ${id}`);
       }
 
+        // ✅ Preparar datos de actualización
+      const dataToUpdate: any = { ...updateWorkerDto };
+      
+      // ✅ Si cambia de DEACTIVATED a AVAILABLE, actualizar createAt
+      if (currentWorker.status === 'DEACTIVATED' && updateWorkerDto.status === 'AVALIABLE') {
+        console.log(`[WorkerService] 📅 Actualizando createAt a fecha actual por reactivación`);
+        dataToUpdate.createAt = new Date();
+      }
+
       const response = await this.prisma.worker.update({
         where: { id, id_site },
-        data: updateWorkerDto,
+        data: dataToUpdate,
       });
       return response;
     } catch (error) {

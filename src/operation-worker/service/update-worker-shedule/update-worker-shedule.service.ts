@@ -106,7 +106,7 @@ export class UpdateWorkerSheduleService {
           id_group,
           workerIds,
           id_task,
-          id_subtask, // ✅ EXTRAER id_subtask
+          id_subtask, 
           id_tariff,
         } = group;
 
@@ -135,11 +135,16 @@ export class UpdateWorkerSheduleService {
             },
           });
 
+        // ✅ AGREGAR al inicio del bucle principal:
+        if (id_group && id_group.startsWith('temp_')) {
+          console.log(`[UpdateWorkerSheduleService] ⏭️ SALTANDO grupo temporal: ${id_group}`);
+          continue;
+        }
+
+        // ✅ CAMBIAR la validación de grupo no encontrado:
         if (existingGroupRecords.length === 0) {
-          return {
-            message: `Group with id_group ${id_group} not found in operation ${id_operation}`,
-            status: 404,
-          };
+          console.log(`[UpdateWorkerSheduleService] ⚠️ Grupo ${id_group} no encontrado, saltando...`);
+          continue; // ✅ CAMBIAR return por continue
         }
 
         // NUEVO: Agregar trabajadores si se proporcionaron workerIds
