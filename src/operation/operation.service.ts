@@ -261,8 +261,8 @@ export class OperationService {
       return { id: operation.id };
     } catch (error) {
       console.error('[OperationService] ==> ERROR en createWithWorkers:', error);
-      console.error('[OperationService] ==> Stack trace:', error.stack);
-      throw new Error(error.message);
+      console.error('[OperationService] ==> Stack trace:', (error as Error).stack);
+      throw new Error((error as Error).message);
     }
   }
 
@@ -371,7 +371,7 @@ export class OperationService {
       // }
     } catch (error) {
       // No lanzar error si falla el wake up, solo loggear
-      console.warn('[OperationService] ⚠️ No se pudo despertar el sistema automático:', error.message);
+      console.warn('[OperationService] ⚠️ No se pudo despertar el sistema automático:', (error as Error).message);
     }
 
     if (id_clientProgramming) {
@@ -471,7 +471,7 @@ export class OperationService {
           //   console.log('[OperationService] ⚠️ No se encontró factura para esta operación completada');
           // }
         } catch (error) {
-          console.error('[OperationService] ❌ Error recalculando factura por cambios en trabajadores:', error.message);
+          console.error('[OperationService] ❌ Error recalculando factura por cambios en trabajadores:', (error as Error).message);
           // No lanzar error para no bloquear la actualización de la operación
         }
       } else {
@@ -580,7 +580,7 @@ const hasDateTimeChanges = dateStart || dateEnd || timeStrat || timeEnd;
             //   console.log('[OperationService] ⚠️ No se encontró factura para esta operación');
             // }
           } catch (error) {
-            console.error('[OperationService] ❌ Error recalculando factura:', error.message);
+            console.error('[OperationService] ❌ Error recalculando factura:', (error as Error).message);
             // No lanzar error para no bloquear la actualización de la operación
           }
         }
@@ -614,7 +614,7 @@ const hasDateTimeChanges = dateStart || dateEnd || timeStrat || timeEnd;
     return updatedOperation;
   } catch (error) {
     console.error('Error updating operation:', error);
-    throw new Error(error.message);
+    throw new Error((error as Error).message);
   }
 
   
@@ -896,7 +896,7 @@ const hasDateTimeChanges = dateStart || dateEnd || timeStrat || timeEnd;
       });
     } catch (error) {
       console.error('[OperationService] Error eliminando grupo:', error);
-      throw new Error(error.message);
+      throw new Error((error as Error).message);
     }
   }
 
@@ -1040,7 +1040,7 @@ const hasDateTimeChanges = dateStart || dateEnd || timeStrat || timeEnd;
           return {
             ...groupResult,
             warning: 'El grupo se eliminó pero hubo un error al eliminar la operación completa',
-            error: error.message,
+            error: (error as Error).message,
           };
         }
       } else {
@@ -1091,7 +1091,7 @@ const hasDateTimeChanges = dateStart || dateEnd || timeStrat || timeEnd;
         };
       }
     } catch (error) {
-      throw new Error(error.message);
+      throw new Error((error as Error).message);
     }
   }
 
@@ -1175,7 +1175,7 @@ const hasDateTimeChanges = dateStart || dateEnd || timeStrat || timeEnd;
           console.error(`[OperationService] Error eliminando grupo ${id_group}:`, error);
           results.failed.push({
             id_group,
-            reason: error.message,
+            reason: (error as Error).message,
             status: 500,
           });
         }
@@ -1282,9 +1282,9 @@ const hasDateTimeChanges = dateStart || dateEnd || timeStrat || timeEnd;
     } catch (error) {
       console.error('[OperationService] ❌ Error crítico en eliminación múltiple:', error);
       return {
-        message: `Error crítico en eliminación múltiple: ${error.message}`,
+        message: `Error crítico en eliminación múltiple: ${(error as Error).message}`,
         status: 500,
-        error: error.message,
+        error: (error as Error).message,
       };
     }
   }
@@ -1377,7 +1377,7 @@ const hasDateTimeChanges = dateStart || dateEnd || timeStrat || timeEnd;
         return response;
       });
     } catch (error) {
-      throw new Error(error.message);
+      throw new Error((error as Error).message);
     }
   }
 
@@ -1767,7 +1767,7 @@ const hasDateTimeChanges = dateStart || dateEnd || timeStrat || timeEnd;
         }
       } catch (error) {
         console.error(`[OperationService] Error procesando conexión:`, error);
-        throw new BadRequestException(`Error procesando conexión: ${error.message}`);
+        throw new BadRequestException(`Error procesando conexión: ${(error as Error).message}`);
       }
     }
   }
@@ -1860,7 +1860,7 @@ const hasDateTimeChanges = dateStart || dateEnd || timeStrat || timeEnd;
       };
     } catch (error) {
       console.error('[OperationService] ❌ Error en inicialización manual:', error);
-      throw new Error(`Error inicializando operaciones: ${error.message}`);
+      throw new Error(`Error inicializando operaciones: ${(error as Error).message}`);
     }
   }
 
@@ -1962,7 +1962,7 @@ const hasDateTimeChanges = dateStart || dateEnd || timeStrat || timeEnd;
         }
       } catch (error) {
         console.error(`[OperationService] Error finalizando grupo ${groupId}:`, error);
-        throw new BadRequestException(`Error finalizando grupo ${groupId}: ${error.message}`);
+        throw new BadRequestException(`Error finalizando grupo ${groupId}: ${(error as Error).message}`);
       }
     }
     

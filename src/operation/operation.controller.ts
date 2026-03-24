@@ -148,7 +148,7 @@ console.log('Body crudo recibido:', arguments[0]);
       const result = await this.operationService.initializePendingOperations();
       return result;
     } catch (error) {
-      throw new BadRequestException(error.message);
+      throw new BadRequestException((error as Error).message);
     }
   }
 
@@ -178,7 +178,7 @@ console.log('Body crudo recibido:', arguments[0]);
         status: 200
       };
     } catch (error) {
-      throw new BadRequestException(error.message);
+      throw new BadRequestException((error as Error).message);
     }
   }
 
@@ -274,7 +274,7 @@ console.log('Body crudo recibido:', arguments[0]);
           : 'Usa POST /operation/initialize-pending para inicializar operaciones manualmente'
       };
     } catch (error) {
-      throw new BadRequestException(error.message);
+      throw new BadRequestException((error as Error).message);
     }
   }
   @Get('pending-status')
@@ -349,7 +349,7 @@ console.log('Body crudo recibido:', arguments[0]);
         status: 200
       };
     } catch (error) {
-      throw new BadRequestException(error.message);
+      throw new BadRequestException((error as Error).message);
     }
   }
 
@@ -715,7 +715,7 @@ console.log('Body crudo recibido:', arguments[0]);
       if (error instanceof BadRequestException) {
         throw error;
       }
-      throw new Error(`Error processing paginated request: ${error.message}`);
+      throw new Error(`Error processing paginated request: ${(error as Error).message}`);
     }
   }
 

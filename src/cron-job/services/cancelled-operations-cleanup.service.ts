@@ -8,6 +8,15 @@ export class CancelledOperationsCleanupService {
   private readonly logger = new Logger(CancelledOperationsCleanupService.name);
 
   constructor(private prisma: PrismaService) {}
+
+  private getErrorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
+  }
+
+  private getErrorStack(error: unknown): string | undefined {
+    return error instanceof Error ? error.stack : undefined;
+  }
+
  /**
    * Cron job que se ejecuta el primer día de cada mes a las 00:01
    * Reinicia el contador de horas trabajadas para todos los workers
@@ -70,13 +79,15 @@ export class CancelledOperationsCleanupService {
           await this.deleteOperationWithDependencies(operation.id);
           deletedCount++;
           // this.logger.log(` Operación eliminada: ID ${operation.id} (Estado: ${operation.status})`);
-        } catch (error) {
-          if (error.message.includes('no se puede eliminar porque tiene')) {
+        } catch (error: unknown) {
+          const errorMessage = this.getErrorMessage(error);
+
+          if (errorMessage.includes('no se puede eliminar porque tiene')) {
             skippedCount++;
-            this.logger.warn(`Operación omitida: ID ${operation.id} - ${error.message}`);
+            this.logger.warn(`Operación omitida: ID ${operation.id} - ${errorMessage}`);
           } else {
             errorCount++;
-            this.logger.error(` Error eliminando operación ID ${operation.id} (Estado: ${operation.status}):`, error.message);
+            this.logger.error(` Error eliminando operación ID ${operation.id} (Estado: ${operation.status}):`, errorMessage);
           }
         }
       }
@@ -87,9 +98,14 @@ export class CancelledOperationsCleanupService {
       // this.logger.log(`    ${errorCount} errores`);
       // this.logger.log(`    ${operationsToDelete.length} total procesadas`);
 
-    } catch (error) {
-      this.logger.error(' Error durante la limpieza de operaciones:', error.message);
-      this.logger.error('Stack trace:', error.stack);
+    } catch (error: unknown) {
+      const errorMessage = this.getErrorMessage(error);
+      const errorStack = this.getErrorStack(error);
+
+      this.logger.error(' Error durante la limpieza de operaciones:', errorMessage);
+      if (errorStack) {
+        this.logger.error('Stack trace:', errorStack);
+      }
     }
   }
 
@@ -164,7 +180,7 @@ export class CancelledOperationsCleanupService {
           await tx.clientProgramming.delete({
             where: { id: operation.id_clientProgramming }
           });
-        } catch (error) {
+        } catch {
           // No es crítico si falla
         }
       }
@@ -221,12 +237,14 @@ export class CancelledOperationsCleanupService {
       try {
         await this.deleteOperationWithDependencies(operation.id);
         deletedCount++;
-      } catch (error) {
-        if (error.message.includes('no se puede eliminar porque tiene')) {
+      } catch (error: unknown) {
+        const errorMessage = this.getErrorMessage(error);
+
+        if (errorMessage.includes('no se puede eliminar porque tiene')) {
           skippedCount++;
         } else {
           errorCount++;
-          this.logger.error(`Error eliminando operación ID ${operation.id}:`, error.message);
+          this.logger.error(`Error eliminando operación ID ${operation.id}:`, errorMessage);
         }
       }
     }
