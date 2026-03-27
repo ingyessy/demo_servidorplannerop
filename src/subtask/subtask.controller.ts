@@ -71,6 +71,13 @@ async create(
   return response;
 }
 
+  @Get(':id/is-special')
+  async isSpecial(
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.subtaskService.isSpecial(id);
+  }
+
   @Get()
   async findAll(
     @CurrentUser('siteId') siteId: number,

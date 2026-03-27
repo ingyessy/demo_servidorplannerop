@@ -1,10 +1,16 @@
-import { BadRequestException, ConflictException, HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateOperationDto } from './dto/create-operation.dto';
 import { UpdateOperationDto } from './dto/update-operation.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { OperationWorkerService } from 'src/operation-worker/operation-worker.service';
 // import { BillService } from 'src/bill/bill.service';
-import { StatusComplete, StatusOperation } from '@prisma/client';
+import { StatusComplete, StatusOperation, YES_NO } from '@prisma/client';
 import { OperationFinderService } from './services/operation-finder.service';
 import { OperationRelationService } from './services/operation-relation.service';
 import { OperationFilterDto } from './dto/fliter-operation.dto';
@@ -12,6 +18,9 @@ import { WorkerService } from 'src/worker/worker.service';
 import { RemoveWorkerFromOperationService } from '../operation-worker/service/remove-worker-from-operation/remove-worker-from-operation.service';
 import { ModuleRef } from '@nestjs/core';
 import { getWeekNumber } from 'src/common/utils/dateType';
+import { OperationTokenService } from 'src/operation/services/operation-token.service';
+import { OperationNotFoundException } from './exceptions/operation-not-found.exception';
+import { TokenGenerationFailedException } from './exceptions/token-generation-failed.exception';
 // ... otras importaciones
 /**
  * Servicio para gestionar operaciones
@@ -19,6 +28,8 @@ import { getWeekNumber } from 'src/common/utils/dateType';
  */
 @Injectable()
 export class OperationService {
+  private readonly logger = new Logger(OperationService.name);
+
   constructor(
     private prisma: PrismaService,
     private operationWorkerService: OperationWorkerService,
@@ -27,6 +38,7 @@ export class OperationService {
     private workerService: WorkerService,
     private removeWorkerService: RemoveWorkerFromOperationService,
     private moduleRef: ModuleRef,
+    private operationTokenService: OperationTokenService,
     // private billService: BillService,
   ) {}
   /**
@@ -116,6 +128,297 @@ export class OperationService {
       activatePaginated,
     );
   }
+
+  /**
+   * Determina si una subtarea es especial.
+   * Se considera especial si tiene al menos una tarifa con isSpecial = YES.
+   */
+
+
+  // Determina si la operación tiene alguna tarifa especial (Tariff.isSpecial = YES).
+  async isOperationSpecial(
+    operationId: number,
+    operation?: { id: number } | null,
+  ): Promise<boolean> {
+    if (!operationId || operationId <= 0) {
+      throw new BadRequestException('operationId inválido');
+    }
+
+    const operationExists =
+      operation ||
+      (await this.prisma.operation.findUnique({
+        where: { id: operationId },
+        select: { id: true },
+      }));
+
+    if (!operationExists) {
+      throw new OperationNotFoundException(operationId);
+    }
+
+    const specialTariffCount = await this.prisma.operation_Worker.count({
+      where: {
+        id_operation: operationId,
+        tariff: {
+          isSpecial: YES_NO.YES,
+        },
+      },
+    });
+
+    return specialTariffCount > 0;
+  }
+
+  /**
+   * Completar una operación según si es especial o no.
+   * - No especial: COMPLETED
+   * - Especial: TO_APPROVED + creación de confirmación
+   */
+  async completeOperation(operationId: number) {
+    if (!operationId || operationId <= 0) {
+      throw new BadRequestException('operationId inválido');
+    }
+
+    const operation = await this.prisma.operation.findUnique({
+      where: { id: operationId },
+      select: { id: true, status: true },
+    });
+
+    if (!operation) {
+      throw new OperationNotFoundException(operationId);
+    }
+
+    const isSpecial = await this.isOperationSpecial(operationId, operation);
+
+    if (!isSpecial) {
+      const now = new Date();
+      const hh = now.getHours().toString().padStart(2, '0');
+      const mm = now.getMinutes().toString().padStart(2, '0');
+
+      const updatedOperation = await this.prisma.operation.update({
+        where: { id: operationId },
+        data: {
+          status: StatusOperation.COMPLETED,
+          dateEnd: now,
+          timeEnd: `${hh}:${mm}`,
+        },
+      });
+
+      await this.operationWorkerService.completeClientProgramming(operationId);
+      await this.operationWorkerService.releaseAllWorkersFromOperation(
+        operationId,
+      );
+      await this.workerService.addWorkedHoursOnOperationEnd(operationId);
+
+      this.logger.log(
+        `Operacion ${operationId} completada en estado ${StatusOperation.COMPLETED}`,
+      );
+
+      return {
+        operation: updatedOperation,
+        isSpecial: false,
+        movedTo: StatusOperation.COMPLETED,
+      };
+    }
+
+    const allGroupsCompleted =
+      await this.operationWorkerService.hasAllGroupsCompleted(operationId);
+
+    if (!allGroupsCompleted) {
+      throw new ConflictException(
+        'No se puede completar la operacion especial: todos los grupos deben tener fecha y hora de finalizacion',
+      );
+    }
+
+    const updatedOperation = await this.prisma.operation.update({
+      where: { id: operationId },
+      data: { status: StatusOperation.TO_APPROVED },
+    });
+
+    const confirmationData = await this.createConfirmation(operationId, operation);
+
+    this.logger.log(
+      `Operacion ${operationId} movida a ${StatusOperation.TO_APPROVED} y confirmacion ${confirmationData.confirmation.id} creada/reutilizada`,
+    );
+
+    return {
+      operation: updatedOperation,
+      confirmation: confirmationData.confirmation,
+      token: confirmationData.token,
+      link: confirmationData.link,
+      isSpecial: true,
+      movedTo: StatusOperation.TO_APPROVED,
+    };
+  }
+
+  //Crea o reutiliza la confirmación de una operación especial y genera token.
+  async createConfirmation(operationId: number, operation?: { id: number } | null) {
+    if (!operationId || operationId <= 0) {
+      throw new BadRequestException('operationId inválido');
+    }
+
+    const operationExists =
+      operation ||
+      (await this.prisma.operation.findUnique({
+        where: { id: operationId },
+        select: { id: true },
+      }));
+
+    if (!operationExists) {
+      throw new OperationNotFoundException(operationId);
+    }
+
+    const isSpecial = await this.isOperationSpecial(operationId, operationExists);
+    if (!isSpecial) {
+      throw new ConflictException(
+        'La operación no es especial y no requiere confirmación',
+      );
+    }
+
+    const confirmation = await this.prisma.operationConfirmation.upsert({
+      where: { id_operation: operationId },
+      update: {},
+      create: { id_operation: operationId },
+    });
+
+    this.logger.log(
+      `Confirmacion ${confirmation.id} creada/reutilizada para operacion ${operationId}`,
+    );
+
+    let createdToken: { id: number; token: string; createdAt: Date } | null =
+      null;
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const tokenValue = this.operationTokenService.generateTokenValue();
+
+      try {
+        createdToken = await this.prisma.token.create({
+          data: {
+            id_confirmation: confirmation.id,
+            token: tokenValue,
+          },
+          select: {
+            id: true,
+            token: true,
+            createdAt: true,
+          },
+        });
+        break;
+      } catch (error: any) {
+        const isUniqueTokenError = error?.code === 'P2002';
+        if (!isUniqueTokenError || attempt === 4) {
+          throw new TokenGenerationFailedException(
+            operationId,
+            'No se pudo persistir un token unico para la confirmacion',
+          );
+        }
+      }
+    }
+
+    if (!createdToken) {
+      throw new TokenGenerationFailedException(
+        operationId,
+        'No se pudo generar token de confirmacion',
+      );
+    }
+
+    this.logger.log(
+      `Token ${createdToken.id} creado para confirmacion ${confirmation.id} (operacion ${operationId})`,
+    );
+
+    const link = this.operationTokenService.buildConfirmationLink(
+      createdToken.token,
+    );
+
+    return {
+      operationId,
+      confirmation,
+      token: createdToken,
+      link,
+    };
+  }
+
+  /**
+   * Confirma una operación especial mediante token.
+   * - APPROVE -> APPROVED
+   * - REJECT -> REJECTED
+   */
+  async confirmOperation(
+    token: string,
+    action: 'APPROVE' | 'REJECT',
+    ipAddress?: string | null,
+    device?: string | null,
+    observation?: string | null,
+  ) {
+    if (!token || !token.trim()) {
+      throw new BadRequestException('Token de confirmacion requerido');
+    }
+
+    if (!['APPROVE', 'REJECT'].includes(action)) {
+      throw new BadRequestException('Accion invalida. Use APPROVE o REJECT');
+    }
+
+    const tokenRecord = await this.prisma.token.findUnique({
+      where: { token: token.trim() },
+      include: {
+        confirmation: {
+          include: {
+            operation: {
+              select: { id: true, status: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!tokenRecord) {
+      throw new BadRequestException('Token de confirmacion invalido');
+    }
+
+    const operation = tokenRecord.confirmation?.operation;
+    if (!operation) {
+      throw new OperationNotFoundException(-1);
+    }
+
+    if (operation.status !== StatusOperation.TO_APPROVED) {
+      throw new ConflictException(
+        `La operacion ${operation.id} no esta pendiente de confirmacion`,
+      );
+    }
+
+    const newStatus =
+      action === 'APPROVE' ? StatusOperation.APPROVED : StatusOperation.REJECTED;
+    const now = new Date();
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const updatedOperation = await tx.operation.update({
+        where: { id: operation.id },
+        data: { status: newStatus },
+      });
+
+      const updatedConfirmation = await tx.operationConfirmation.update({
+        where: { id: tokenRecord.id_confirmation },
+        data: {
+          confirmedAt: now,
+          ipAddress: ipAddress || null,
+          device: device || null,
+          observation: observation?.trim() ? observation.trim() : null,
+        },
+      });
+
+      return { updatedOperation, updatedConfirmation };
+    });
+
+    this.logger.log(
+      `Operacion ${operation.id} confirmada con accion ${action}. Nuevo estado: ${newStatus}`,
+    );
+
+    return {
+      operation: result.updatedOperation,
+      confirmation: result.updatedConfirmation,
+      action,
+      movedTo: newStatus,
+    };
+  }
+
   /**
    * Crea una nueva operación y asigna trabajadores
    * @param createOperationDto - Datos de la operación a crear
@@ -201,6 +504,8 @@ export class OperationService {
       console.log('[OperationService] ==> validateClientProgramming resultado:', validateClientProgramming);
 
       if (validateClientProgramming) return validateClientProgramming;
+
+      await this.validateSpecialTariffConsistency(groups || []);
 
       console.log('[OperationService] ==> Validando todos los IDs');
       // Validar todos los IDs
@@ -1453,6 +1758,27 @@ const hasDateTimeChanges = dateStart || dateEnd || timeStrat || timeEnd;
     }
   }
 
+  // Validar consistencia de tarifas especiales/no especiales para cambios de grupos.
+  const tariffIdsFromConnect = Array.isArray(workersOps.connect)
+    ? workersOps.connect
+        .map((item: any) => item?.id_tariff)
+        .filter((id: any) => typeof id === 'number')
+    : [];
+
+  const tariffIdsFromUpdate = Array.isArray(workersOps.update)
+    ? workersOps.update
+        .map((item: any) => item?.id_tariff)
+        .filter((id: any) => typeof id === 'number')
+    : [];
+
+  const incomingTariffIds = [...tariffIdsFromConnect, ...tariffIdsFromUpdate];
+  if (incomingTariffIds.length > 0) {
+    await this.validateSpecialTariffConsistencyByIds(
+      incomingTariffIds,
+      operationId,
+    );
+  }
+
   // 2. CONECTAR/AGREGAR NUEVOS TRABAJADORES - ✅ CORREGIR AQUÍ
   // if (workersOps.connect && workersOps.connect.length > 0) {
   //   console.log('[OperationService] Agregando trabajadores:', workersOps.connect);
@@ -1836,6 +2162,79 @@ const hasDateTimeChanges = dateStart || dateEnd || timeStrat || timeEnd;
 
   //------------------------------------- HASTA AQUÍ FUNCIONANDO CORRECTAMENTE -----------------------------
 }
+
+  private extractTariffIdsFromGroups(groups: any[] = []): number[] {
+    return groups
+      .map((group) => group?.id_tariff)
+      .filter((id) => typeof id === 'number');
+  }
+
+  private async validateSpecialTariffConsistency(groups: any[] = []) {
+    const tariffIds = this.extractTariffIdsFromGroups(groups);
+    if (tariffIds.length === 0) return;
+
+    await this.validateSpecialTariffConsistencyByIds(tariffIds);
+  }
+
+  private async validateSpecialTariffConsistencyByIds(
+    tariffIds: number[],
+    operationId?: number,
+  ) {
+    const uniqueTariffIds = [...new Set(tariffIds)];
+    if (uniqueTariffIds.length === 0) return;
+
+    const incomingTariffs = await this.prisma.tariff.findMany({
+      where: { id: { in: uniqueTariffIds } },
+      select: { id: true, isSpecial: true },
+    });
+
+    const incomingSpecialSet = new Set(
+      incomingTariffs.map((tariff) => tariff.isSpecial),
+    );
+
+    if (incomingSpecialSet.size > 1) {
+      throw new BadRequestException(
+        'No se permite mezclar grupos con tarifas especiales y no especiales en la misma operación.',
+      );
+    }
+
+    if (!operationId) return;
+
+    const existingOperationTariffs = await this.prisma.operation_Worker.findMany({
+      where: {
+        id_operation: operationId,
+        id_tariff: { not: null },
+      },
+      select: {
+        tariff: {
+          select: { isSpecial: true },
+        },
+      },
+    });
+
+    const existingSpecialSet = new Set(
+      existingOperationTariffs
+        .map((row) => row.tariff?.isSpecial)
+        .filter((value): value is YES_NO => !!value),
+    );
+
+    if (existingSpecialSet.size > 1) {
+      throw new BadRequestException(
+        `La operación ${operationId} ya tiene mezcla de tarifas especiales y no especiales. Corrija la operación antes de agregar más grupos.`,
+      );
+    }
+
+    if (existingSpecialSet.size === 0 || incomingSpecialSet.size === 0) return;
+
+    const existingType = [...existingSpecialSet][0];
+    const incomingType = [...incomingSpecialSet][0];
+
+    if (existingType !== incomingType) {
+      throw new BadRequestException(
+        'Esta operación solo admite grupos del mismo tipo de tarifa (todas especiales o todas no especiales).',
+      );
+    }
+  }
 
   /**
    * Inicializa manualmente las operaciones pendientes que ya deberían estar en progreso

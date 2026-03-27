@@ -1,8 +1,9 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { CreateSubtaskDto } from './dto/create-subtask.dto';
 import { UpdateSubtaskDto } from './dto/update-subtask.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ValidationService } from 'src/common/validation/validation.service';
+import { YES_NO } from '@prisma/client';
 
 @Injectable()
 export class SubtaskService {
@@ -237,5 +238,33 @@ export class SubtaskService {
     } catch (error) {
       throw new Error('Error deleting subtask');
     }
+  }
+
+  async isSpecial(subTaskId: number) {
+    if (!subTaskId || subTaskId <= 0) {
+      throw new BadRequestException('subTaskId inválido');
+    }
+
+    const subTask = await this.prisma.subTask.findUnique({
+      where: { id: subTaskId },
+      select: { id: true, name: true },
+    });
+
+    if (!subTask) {
+      throw new NotFoundException(`SubTask ${subTaskId} not found`);
+    }
+
+    const specialTariff = await this.prisma.tariff.count({
+      where: {
+        id_subtask: subTaskId,
+        isSpecial: YES_NO.YES,
+      },
+    });
+
+    return {
+      subTaskId: subTask.id,
+      subTaskName: subTask.name,
+      isSpecial: specialTariff > 0,
+    };
   }
 }

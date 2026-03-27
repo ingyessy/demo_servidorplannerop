@@ -11,6 +11,7 @@ import {
   UseGuards,
   Query,
   Res,
+  Req,
   BadRequestException,
   ValidationPipe,
   ConflictException,
@@ -18,12 +19,19 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { OperationService } from './operation.service';
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { CreateOperationDto } from './dto/create-operation.dto';
 import { UpdateOperationDto } from './dto/update-operation.dto';
 import { ParseIntPipe } from 'src/pipes/parse-int/parse-int.pipe';
 import { DateTransformPipe } from 'src/pipes/date-transform/date-transform.pipe';
-import { ApiBearerAuth, ApiBody, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiParam,
+  ApiOperation,
+  ApiQuery,
+  ApiResponse,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { Role, StatusOperation } from '@prisma/client';
@@ -35,9 +43,11 @@ import { WorkerAnalyticsService } from './services/workerAnalytics.service';
 import { SiteInterceptor } from 'src/common/interceptors/site.interceptor';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
+import { Public } from 'src/auth/decorators/public.decorator';
 import { WorkerDistributionQueryDto } from './dto/worker-distribution-query.dto';
 import { getColombianDateTime } from 'src/common/utils/dateColombia';
 import { WorkerHoursReportQueryDto } from './dto/worker-hours-report-query.dto';
+import { ConfirmOperationDto } from './dto/confirm-operation.dto';
 // import { OperationsCronService } from 'src/cron-job/cron-job.service';
 @Controller('operation')
 @UseInterceptors(SiteInterceptor)
@@ -52,76 +62,52 @@ export class OperationController {
     // private readonly cronService: OperationsCronService,
   ) {}
 
-  // @Post()
-  // @UsePipes(new DateTransformPipe())
-  // @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
-  // async create(
-  //   @Body() createOperationDto: CreateOperationDto,
-  //   @CurrentUser('siteId') siteId: number,
-  //   @CurrentUser('subsiteId') subsiteId: number,
-  //    @CurrentUser('userId') userId: number,
-  // ) {
-  //   createOperationDto.id_user = userId;
-  //   createOperationDto.id_site = siteId;
-  //   createOperationDto.id_subsite = subsiteId;
-  //   const response = await this.operationService.createWithWorkers(
-  //     createOperationDto,
-  //     subsiteId,
-  //     siteId,
-  //   );
-  //   if (response['status'] === 404) {
-  //     throw new NotFoundException(response['message']);
-  //   } else if (response['status'] === 409) {
-  //     throw new ConflictException(response['message']);
-  //   } else if (response['status'] === 400) {
-  //     throw new BadRequestException(response['message']);
-  //   } else if (response['status'] === 403) {
-  //     throw new ForbiddenException(response['message']);
-  //   }
-  //   return response;
-  // }
+  @Post()
+  @UsePipes(new DateTransformPipe())
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  async create(
+    @Body() createOperationDto: CreateOperationDto,
+    @CurrentUser('siteId') siteId: number,
+    @CurrentUser('subsiteId') subsiteId: number,
+    @CurrentUser('userId') userId: number,
+  ) {
+    console.log('Body crudo recibido:', arguments[0]);
+    // LOG para ver lo que llega del frontend
+    console.log('DTO recibido en controlador:', createOperationDto);
+    createOperationDto.id_user = userId;
 
-@Post()
-@UsePipes(new DateTransformPipe())
-@UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
-async create(
-  @Body() createOperationDto: CreateOperationDto,
-  @CurrentUser('siteId') siteId: number,
-  @CurrentUser('subsiteId') subsiteId: number,
-  @CurrentUser('userId') userId: number,
-) {
-  
-console.log('Body crudo recibido:', arguments[0]);
-  // LOG para ver lo que llega del frontend
-  console.log('DTO recibido en controlador:', createOperationDto);
-  createOperationDto.id_user = userId;
+    if (
+      typeof createOperationDto.id_site === 'undefined' ||
+      createOperationDto.id_site === null
+    ) {
+      createOperationDto.id_site = siteId;
+    }
 
-  if (typeof createOperationDto.id_site === 'undefined' || createOperationDto.id_site === null) {
-    createOperationDto.id_site = siteId;
+    // Si el frontend NO envía id_subsite, usa el del usuario (puede ser null)
+    if (
+      typeof createOperationDto.id_subsite === 'undefined' ||
+      createOperationDto.id_subsite === null
+    ) {
+      createOperationDto.id_subsite = subsiteId;
+    }
+
+    const response = await this.operationService.createWithWorkers(
+      createOperationDto,
+      createOperationDto.id_subsite,
+      createOperationDto.id_site,
+    );
+
+    if (response['status'] === 404) {
+      throw new NotFoundException(response['message']);
+    } else if (response['status'] === 409) {
+      throw new ConflictException(response['message']);
+    } else if (response['status'] === 400) {
+      throw new BadRequestException(response['message']);
+    } else if (response['status'] === 403) {
+      throw new ForbiddenException(response['message']);
+    }
+    return response;
   }
-
-  // Si el frontend NO envía id_subsite, usa el del usuario (puede ser null)
-  if (typeof createOperationDto.id_subsite === 'undefined' || createOperationDto.id_subsite === null) {
-    createOperationDto.id_subsite = subsiteId;
-  }
-
-  const response = await this.operationService.createWithWorkers(
-    createOperationDto,
-    createOperationDto.id_subsite,
-    createOperationDto.id_site,
-  );
-
-  if (response['status'] === 404) {
-    throw new NotFoundException(response['message']);
-  } else if (response['status'] === 409) {
-    throw new ConflictException(response['message']);
-  } else if (response['status'] === 400) {
-    throw new BadRequestException(response['message']);
-  } else if (response['status'] === 403) {
-    throw new ForbiddenException(response['message']);
-  }
-  return response;
-}
 
   /**
    * Inicializa manualmente las operaciones pendientes que ya deberían estar en progreso
@@ -129,7 +115,8 @@ console.log('Body crudo recibido:', arguments[0]);
   @Post('initialize-pending')
   @ApiOperation({
     summary: 'Inicializar operaciones pendientes',
-    description: 'Inicializa manualmente todas las operaciones que están en estado PENDING y ya deberían estar en INPROGRESS según su fecha y hora programada'
+    description:
+      'Inicializa manualmente todas las operaciones que están en estado PENDING y ya deberían estar en INPROGRESS según su fecha y hora programada',
   })
   @ApiResponse({
     status: 200,
@@ -139,9 +126,9 @@ console.log('Body crudo recibido:', arguments[0]);
       properties: {
         message: { type: 'string' },
         updatedCount: { type: 'number' },
-        status: { type: 'number' }
-      }
-    }
+        status: { type: 'number' },
+      },
+    },
   })
   async initializePendingOperations() {
     try {
@@ -158,87 +145,38 @@ console.log('Body crudo recibido:', arguments[0]);
   @Post('wake-up')
   @ApiOperation({
     summary: 'Despertar sistema automático',
-    description: 'Despierta manualmente el sistema del modo sueño profundo para que verifique operaciones inmediatamente'
+    description:
+      'Despierta manualmente el sistema del modo sueño profundo para que verifique operaciones inmediatamente',
   })
   async wakeUpSystem() {
     try {
-      const { UpdateOperationService } = await import('../cron-job/services/update-operation.service');
-      const updateService = this.operationService['moduleRef'].get(UpdateOperationService, { strict: false });
-      
+      const { UpdateOperationService } = await import(
+        '../cron-job/services/update-operation.service'
+      );
+      const updateService = this.operationService['moduleRef'].get(
+        UpdateOperationService,
+        { strict: false },
+      );
+
       const statusBefore = updateService.getSystemStatus();
-      updateService.wakeUpFromDeepSleep('Despertar manual solicitado por usuario');
-      
+      updateService.wakeUpFromDeepSleep(
+        'Despertar manual solicitado por usuario',
+      );
+
       return {
         message: 'Sistema despertado exitosamente',
         statusBefore: {
           wasInDeepSleep: statusBefore.isInDeepSleep,
-          consecutiveEmptyRuns: statusBefore.consecutiveEmptyRuns
+          consecutiveEmptyRuns: statusBefore.consecutiveEmptyRuns,
         },
-        recommendation: 'El sistema verificará operaciones en la próxima ejecución del cron job (máximo 5 minutos)',
-        status: 200
+        recommendation:
+          'El sistema verificará operaciones en la próxima ejecución del cron job (máximo 5 minutos)',
+        status: 200,
       };
     } catch (error) {
       throw new BadRequestException((error as Error).message);
     }
   }
-
-  // /**
-  //  * 🚀 Despierta y procesa inmediatamente - SOLUCIÓN PARA FLUTTER
-  //  */
-  // @Post('wake-up-immediate')
-  // @ApiOperation({
-  //   summary: 'Despertar y procesar inmediatamente',
-  //   description: 'Despierta el sistema del modo sueño profundo y ejecuta verificación inmediata. Ideal para apps móviles que necesitan respuesta rápida.'
-  // })
-  // async wakeUpAndProcessImmediate() {
-  //   try {
-  //     await this.cronService.wakeUpAndProcess('Despertar inmediato solicitado desde Flutter/App');
-      
-  //     const systemStatus = this.cronService.getSystemStatus();
-      
-  //     return {
-  //       message: '🚀 Sistema despertado y operaciones verificadas inmediatamente',
-  //       timestamp: new Date().toISOString(),
-  //       systemStatus: {
-  //         cronEnabled: systemStatus.isEnabled,
-  //         operationStatus: systemStatus.updateOperationStatus
-  //       },
-  //       recommendation: 'Las operaciones pendientes han sido verificadas al instante',
-  //       status: 200
-  //     };
-  //   } catch (error) {
-  //     throw new BadRequestException(`Error al despertar y procesar: ${error.message}`);
-  //   }
-  // }
-
-  // /**
-  //  * 🚨 Fuerza la activación de operaciones atascadas
-  //  */
-  // @Post('force-activate-stuck')
-  // @ApiOperation({
-  //   summary: 'Forzar activación de operaciones atascadas',
-  //   description: 'Fuerza la activación de operaciones que quedaron atoradas en PENDING por problemas de tiempo o período de gracia. Ignora completamente el período de gracia de 3 minutos.'
-  // })
-  // async forceActivateStuckOperations() {
-  //   try {
-  //     const { UpdateOperationService } = await import('../cron-job/services/update-operation.service');
-  //     const updateService = this.operationService['moduleRef'].get(UpdateOperationService, { strict: false });
-      
-  //     const result = await updateService.forceActivateStuckOperations();
-      
-  //     return {
-  //       message: '🚨 Operaciones atascadas procesadas forzadamente',
-  //       timestamp: new Date().toISOString(),
-  //       result: {
-  //         forceActivatedCount: result.forceUpdatedCount
-  //       },
-  //       warning: 'Este endpoint ignora el período de gracia y debe usarse solo para resolver problemas',
-  //       status: 200
-  //     };
-  //   } catch (error) {
-  //     throw new BadRequestException(`Error al forzar activación: ${error.message}`);
-  //   }
-  // }
 
   /**
    * Controla la activación del sistema automático de operaciones
@@ -246,41 +184,141 @@ console.log('Body crudo recibido:', arguments[0]);
   @Post('cron-control')
   @ApiOperation({
     summary: 'Controlar sistema automático',
-    description: 'Habilita o deshabilita el sistema automático de inicialización de operaciones'
+    description:
+      'Habilita o deshabilita el sistema automático de inicialización de operaciones',
   })
   @ApiBody({
     schema: {
       type: 'object',
       properties: {
-        enabled: { type: 'boolean', description: 'true para habilitar, false para deshabilitar' }
+        enabled: {
+          type: 'boolean',
+          description: 'true para habilitar, false para deshabilitar',
+        },
       },
-      required: ['enabled']
-    }
+      required: ['enabled'],
+    },
   })
   async controlCronJob(@Body() body: { enabled: boolean }) {
     try {
       // Importar dinámicamente para evitar dependencia circular
-      const { OperationsCronService } = await import('../cron-job/cron-job.service');
-      const cronService = this.operationService['moduleRef'].get(OperationsCronService, { strict: false });
-      
+      const { OperationsCronService } = await import(
+        '../cron-job/cron-job.service'
+      );
+      const cronService = this.operationService['moduleRef'].get(
+        OperationsCronService,
+        { strict: false },
+      );
+
       cronService.setOperationsCronEnabled(body.enabled);
-      
+
       return {
         message: `Sistema automático ${body.enabled ? 'habilitado' : 'deshabilitado'} exitosamente`,
         enabled: body.enabled,
         status: 200,
-        recommendation: body.enabled 
+        recommendation: body.enabled
           ? 'El sistema verificará operaciones automáticamente cada 5 minutos'
-          : 'Usa POST /operation/initialize-pending para inicializar operaciones manualmente'
+          : 'Usa POST /operation/initialize-pending para inicializar operaciones manualmente',
       };
     } catch (error) {
       throw new BadRequestException((error as Error).message);
     }
   }
+
+  @Post('complete/:id')
+  @ApiOperation({
+    summary: 'Completar operacion',
+    description:
+      'Completa una operacion. Si la operacion es especial, valida que todos sus grupos ya esten finalizados (dateEnd y timeEnd) para pasar a TO_APPROVED.',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'ID de la operacion',
+    example: 1792,
+  })
+  async complete(@Param('id', ParseIntPipe) operationId: number) {
+    return this.operationService.completeOperation(operationId);
+  }
+
+  @Post('confirm')
+  @Public()
+  @ApiOperation({
+    summary: 'Confirmar operacion especial',
+    description:
+      'Confirma una operacion especial con token. Use action=APPROVE para aprobar o action=REJECT para rechazar.',
+  })
+  @ApiBody({ type: ConfirmOperationDto })
+  @ApiResponse({ status: 200, description: 'Operacion confirmada exitosamente' })
+  @ApiResponse({ status: 400, description: 'Token o accion invalida' })
+  @ApiResponse({ status: 409, description: 'La operacion no esta pendiente de confirmacion' })
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  async confirm(@Body() body: ConfirmOperationDto, @Req() req: Request) {
+    const ipAddress = this.getClientIp(req);
+    const device = this.getSimplifiedDevice(req.get('user-agent'));
+
+    return this.operationService.confirmOperation(
+      body.token,
+      body.action,
+      ipAddress,
+      device,
+      body.observation,
+    );
+  }
+
+  private getClientIp(req: Request): string | null {
+    const forwardedFor = req.headers['x-forwarded-for'];
+
+    if (Array.isArray(forwardedFor) && forwardedFor.length > 0) {
+      return forwardedFor[0].split(',')[0].trim();
+    }
+
+    if (typeof forwardedFor === 'string' && forwardedFor.trim()) {
+      return forwardedFor.split(',')[0].trim();
+    }
+
+    return req.ip || null;
+  }
+
+  private getSimplifiedDevice(userAgent?: string): string | null {
+    if (!userAgent) {
+      return null;
+    }
+
+    const ua = userAgent.toLowerCase();
+
+    const browser = ua.includes('edg/')
+      ? 'Edge'
+      : ua.includes('opr/') || ua.includes('opera')
+        ? 'Opera'
+        : ua.includes('chrome/')
+          ? 'Chrome'
+          : ua.includes('firefox/')
+            ? 'Firefox'
+            : ua.includes('safari/') && !ua.includes('chrome/')
+              ? 'Safari'
+              : 'Unknown Browser';
+
+    const os = ua.includes('windows')
+      ? 'Windows'
+      : ua.includes('android')
+        ? 'Android'
+        : ua.includes('iphone') || ua.includes('ipad') || ua.includes('ios')
+          ? 'iOS'
+          : ua.includes('mac os') || ua.includes('macintosh')
+            ? 'macOS'
+            : ua.includes('linux')
+              ? 'Linux'
+              : 'Unknown OS';
+
+    return `${browser} on ${os}`;
+  }
+
   @Get('pending-status')
   @ApiOperation({
     summary: 'Estado de operaciones pendientes',
-    description: 'Obtiene información sobre operaciones pendientes y métricas del sistema de inicialización automática'
+    description:
+      'Obtiene información sobre operaciones pendientes y métricas del sistema de inicialización automática',
   })
   @ApiResponse({
     status: 200,
@@ -290,40 +328,51 @@ console.log('Body crudo recibido:', arguments[0]);
     try {
       const now = new Date();
       const threeMinutesAgo = new Date(now.getTime() - 3 * 60 * 1000);
-      
+
       // Importar dinámicamente para evitar dependencia circular
-      const { UpdateOperationService } = await import('../cron-job/services/update-operation.service');
-      const updateService = this.operationService['moduleRef'].get(UpdateOperationService, { strict: false });
+      const { UpdateOperationService } = await import(
+        '../cron-job/services/update-operation.service'
+      );
+      const updateService = this.operationService['moduleRef'].get(
+        UpdateOperationService,
+        { strict: false },
+      );
       const systemStatus = updateService.getSystemStatus();
-      
+
       // Obtener conteo de operaciones pendientes
-      const totalPending = await this.operationService['prisma'].operation.count({
+      const totalPending = await this.operationService[
+        'prisma'
+      ].operation.count({
         where: {
           status: 'PENDING',
           dateStart: {
             lte: new Date(), // Operaciones que ya deberían haber iniciado
-          }
-        }
+          },
+        },
       });
 
-      const todayPending = await this.operationService['prisma'].operation.count({
+      const todayPending = await this.operationService[
+        'prisma'
+      ].operation.count({
         where: {
           status: 'PENDING',
           dateStart: {
             gte: new Date(new Date().setHours(0, 0, 0, 0)),
-            lt: new Date(new Date().setHours(23, 59, 59, 999))
-          }
-        }
+            lt: new Date(new Date().setHours(23, 59, 59, 999)),
+          },
+        },
       });
 
       // 🛡️ Operaciones en período de gracia (creadas hace menos de 3 minutos)
-      const gracePeriodOperations = await this.operationService['prisma'].operation.count({
+      const gracePeriodOperations = await this.operationService[
+        'prisma'
+      ].operation.count({
         where: {
           status: 'PENDING',
           createAt: {
-            gte: threeMinutesAgo
-          }
-        }
+            gte: threeMinutesAgo,
+          },
+        },
       });
 
       return {
@@ -336,24 +385,37 @@ console.log('Body crudo recibido:', arguments[0]);
             isInDeepSleep: systemStatus.isInDeepSleep,
             consecutiveEmptyRuns: systemStatus.consecutiveEmptyRuns,
             lastProcessedTime: systemStatus.lastProcessedTime,
-            status: systemStatus.isInDeepSleep ? 'deep_sleep' : 'active'
+            status: systemStatus.isInDeepSleep ? 'deep_sleep' : 'active',
           },
-          systemStatus: totalPending > gracePeriodOperations ? 'needs_attention' : 'healthy',
+          systemStatus:
+            totalPending > gracePeriodOperations
+              ? 'needs_attention'
+              : 'healthy',
           lastChecked: new Date().toISOString(),
           gracePeriodInfo: {
-            description: 'Operaciones creadas en los últimos 3 minutos que no se activarán automáticamente',
-            purpose: 'Permite editar fechas/horas en operaciones duplicadas sin interferencia del sistema automático'
+            description:
+              'Operaciones creadas en los últimos 3 minutos que no se activarán automáticamente',
+            purpose:
+              'Permite editar fechas/horas en operaciones duplicadas sin interferencia del sistema automático',
           },
-          recommendation: this.getSystemRecommendation(totalPending, gracePeriodOperations, systemStatus.isInDeepSleep)
+          recommendation: this.getSystemRecommendation(
+            totalPending,
+            gracePeriodOperations,
+            systemStatus.isInDeepSleep,
+          ),
         },
-        status: 200
+        status: 200,
       };
     } catch (error) {
       throw new BadRequestException((error as Error).message);
     }
   }
 
-  private getSystemRecommendation(totalPending: number, gracePeriodOperations: number, isInDeepSleep: boolean): string {
+  private getSystemRecommendation(
+    totalPending: number,
+    gracePeriodOperations: number,
+    isInDeepSleep: boolean,
+  ): string {
     if (totalPending > gracePeriodOperations) {
       if (isInDeepSleep) {
         return 'Hay operaciones pendientes y el sistema está en sueño profundo. Usa POST /operation/wake-up para despertar el sistema o POST /operation/initialize-pending para procesamiento inmediato.';
@@ -474,7 +536,7 @@ console.log('Body crudo recibido:', arguments[0]);
     Búsqueda de texto:
     \`GET /operation/paginated?search=proyecto&limit=30\`
     `,
-    tags: ['Operations', 'Pagination']
+    tags: ['Operations', 'Pagination'],
   })
   @ApiQuery({
     name: 'page',
@@ -487,7 +549,8 @@ console.log('Body crudo recibido:', arguments[0]);
     name: 'limit',
     required: false,
     type: Number,
-    description: 'Elementos por página. Máximo: 500, Recomendado para datasets grandes: 100',
+    description:
+      'Elementos por página. Máximo: 500, Recomendado para datasets grandes: 100',
     example: 10,
   })
   @ApiQuery({
@@ -536,7 +599,8 @@ console.log('Body crudo recibido:', arguments[0]);
     name: 'activatePaginated',
     required: false,
     type: Boolean,
-    description: 'OBSOLETO: Siempre se aplica paginación para evitar saturación. Por defecto: true',
+    description:
+      'OBSOLETO: Siempre se aplica paginación para evitar saturación. Por defecto: true',
     example: true,
   })
   @ApiResponse({
@@ -550,8 +614,9 @@ console.log('Body crudo recibido:', arguments[0]);
           description: 'Lista de operaciones para la página actual',
           items: {
             type: 'object',
-            description: 'Datos completos de la operación con relaciones incluidas'
-          }
+            description:
+              'Datos completos de la operación con relaciones incluidas',
+          },
         },
         pagination: {
           type: 'object',
@@ -559,85 +624,89 @@ console.log('Body crudo recibido:', arguments[0]);
             totalItems: {
               type: 'number',
               description: 'Total de registros en la base de datos',
-              example: 2500
+              example: 2500,
             },
             currentPage: {
               type: 'number',
               description: 'Página actual',
-              example: 1
+              example: 1,
             },
             totalPages: {
               type: 'number',
               description: 'Total de páginas disponibles',
-              example: 25
+              example: 25,
             },
             itemsPerPage: {
               type: 'number',
               description: 'Elementos por página',
-              example: 100
+              example: 100,
             },
             hasNextPage: {
               type: 'boolean',
               description: 'Indica si hay página siguiente',
-              example: true
+              example: true,
             },
             hasPreviousPage: {
               type: 'boolean',
               description: 'Indica si hay página anterior',
-              example: false
+              example: false,
             },
             isLargeDataset: {
               type: 'boolean',
               description: 'Indica si es un dataset grande (>1000 registros)',
-              example: true
+              example: true,
             },
             recommendedPageSize: {
               type: 'number',
-              description: 'Tamaño de página recomendado para óptimo rendimiento',
-              example: 100
+              description:
+                'Tamaño de página recomendado para óptimo rendimiento',
+              example: 100,
             },
             performanceHint: {
               type: 'object',
-              description: 'Sugerencias de optimización (solo para datasets grandes)',
+              description:
+                'Sugerencias de optimización (solo para datasets grandes)',
               properties: {
                 message: {
                   type: 'string',
-                  example: 'Dataset grande detectado. Considera usar filtros para reducir el conjunto de datos.'
+                  example:
+                    'Dataset grande detectado. Considera usar filtros para reducir el conjunto de datos.',
                 },
                 recommendedPageSize: {
                   type: 'number',
-                  example: 100
+                  example: 100,
                 },
                 totalDataSizeCategory: {
                   type: 'string',
                   enum: ['large', 'very-large'],
-                  example: 'large'
-                }
-              }
-            }
-          }
+                  example: 'large',
+                },
+              },
+            },
+          },
         },
         nextPages: {
           type: 'array',
-          description: 'Páginas adicionales pre-cargadas (optimización deshabilitada para datasets grandes)',
+          description:
+            'Páginas adicionales pre-cargadas (optimización deshabilitada para datasets grandes)',
           items: {
-            type: 'object'
-          }
-        }
-      }
-    }
+            type: 'object',
+          },
+        },
+      },
+    },
   })
   @ApiResponse({
     status: 400,
-    description: 'Parámetros de consulta inválidos'
+    description: 'Parámetros de consulta inválidos',
   })
   @ApiResponse({
     status: 401,
-    description: 'Token de autenticación inválido o faltante'
+    description: 'Token de autenticación inválido o faltante',
   })
   @ApiResponse({
     status: 403,
-    description: 'Sin permisos para acceder a este recurso'
+    description: 'Sin permisos para acceder a este recurso',
   })
   async findAllPaginated(
     @CurrentUser('siteId') siteId: number,
@@ -687,10 +756,12 @@ console.log('Body crudo recibido:', arguments[0]);
 
       // Validar y ajustar límite para grandes datasets
       let adjustedLimit = queryParams.limit || 10;
-      
+
       // Para evitar sobrecarga, sugerir límites menores en requests grandes
       if (adjustedLimit > 200) {
-        console.warn(`Límite alto solicitado: ${adjustedLimit}. Considera usar límites menores para mejor rendimiento.`);
+        console.warn(
+          `Límite alto solicitado: ${adjustedLimit}. Considera usar límites menores para mejor rendimiento.`,
+        );
       }
 
       // Obtener los datos paginados con el valor transformado
@@ -700,22 +771,26 @@ console.log('Body crudo recibido:', arguments[0]);
         filters,
         activatePaginated, // Usar el valor transformado por el pipe
       );
-      
+
       // Agregar metadatos útiles para el frontend
       if (result.pagination && result.pagination.totalItems > 1000) {
         result.pagination['performanceHint'] = {
-          message: 'Dataset grande detectado. Considera usar filtros para reducir el conjunto de datos.',
+          message:
+            'Dataset grande detectado. Considera usar filtros para reducir el conjunto de datos.',
           recommendedPageSize: Math.min(100, adjustedLimit),
-          totalDataSizeCategory: result.pagination.totalItems > 5000 ? 'very-large' : 'large'
+          totalDataSizeCategory:
+            result.pagination.totalItems > 5000 ? 'very-large' : 'large',
         };
       }
-      
+
       return result;
     } catch (error) {
       if (error instanceof BadRequestException) {
         throw error;
       }
-      throw new Error(`Error processing paginated request: ${(error as Error).message}`);
+      throw new Error(
+        `Error processing paginated request: ${(error as Error).message}`,
+      );
     }
   }
 
@@ -914,7 +989,9 @@ console.log('Body crudo recibido:', arguments[0]);
     @CurrentUser('subsiteId') subsiteId: number,
   ) {
     if (!id_groups || !Array.isArray(id_groups) || id_groups.length === 0) {
-      throw new BadRequestException('Se requiere un array de id_groups con al menos un elemento');
+      throw new BadRequestException(
+        'Se requiere un array de id_groups con al menos un elemento',
+      );
     }
 
     const response = await this.operationService.removeMultipleGroups(

@@ -9,12 +9,14 @@ import {
   UseGuards,
   UsePipes,
   Patch,
+  ValidationPipe,
 } from '@nestjs/common';
 import { OperationWorkerService } from './operation-worker.service';
 import { AssignWorkersDto } from './dto/assign-workers.dto';
 import { RemoveWorkersDto } from './dto/remove-workers.dto';
 import {
   ApiTags,
+  ApiBody,
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
@@ -26,6 +28,7 @@ import { Roles } from 'src/auth/decorators/roles.decorator';
 import { Role } from '@prisma/client';
 import { WorkerScheduleDto } from './dto/worker-schedule.dto';
 import { UpdateWorkersScheduleDto } from './dto/update-workers-schedule.dto';
+import { FinalizeGroupDto } from './dto/finalize-group.dto';
 @ApiTags('Operation Workers')
 @Controller('operation-worker')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -113,6 +116,36 @@ export class OperationWorkerController {
       timeEnd: string;
     },
   ) {
+    const normalizedDateEnd =
+      body.dateEnd instanceof Date
+        ? body.dateEnd.toISOString().split('T')[0]
+        : String(body.dateEnd);
+
+    return this.operationWorkerService.finalizeGroup(
+      body.id_operation,
+      body.id_group.toString(),
+      normalizedDateEnd,
+      body.timeEnd,
+    );
+  }
+
+  @Patch('finalize-group-v2')
+  @ApiOperation({
+    summary: 'Finalizar un grupo de una operacion',
+    description:
+      'Actualiza dateEnd y timeEnd para todos los trabajadores del grupo (excluye placeholders).',
+  })
+  @ApiBody({ type: FinalizeGroupDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Grupo finalizado exitosamente',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Parametros invalidos o grupo no encontrado en la operacion',
+  })
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  async finalizeGroupV2(@Body() body: FinalizeGroupDto) {
     return this.operationWorkerService.finalizeGroup(
       body.id_operation,
       body.id_group,

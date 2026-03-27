@@ -51,7 +51,7 @@ export class OperationFinderService {
       );
     } catch (error) {
       console.error('Error getting all operations:', error);
-      throw new Error(error.message);
+      throw new Error((error as Error).message);
     }
   }
 
@@ -78,7 +78,7 @@ export class OperationFinderService {
       return this.transformer.transformOperationResponse(response);
     } catch (error) {
       console.error(`Error finding operation with ID ${id}:`, error);
-      throw new Error(error.message);
+      throw new Error((error as Error).message);
     }
   }
 
@@ -128,7 +128,9 @@ export class OperationFinderService {
       );
     } catch (error) {
       console.error('Error finding operations by status:', error);
-      throw new Error(`Error finding operations by status: ${error.message}`);
+      throw new Error(
+        `Error finding operations by status: ${(error as Error).message}`,
+      );
     }
   }
   /**
@@ -187,7 +189,7 @@ export class OperationFinderService {
       );
     } catch (error) {
       console.error('Error finding operations by date range:', error);
-      throw new Error(error.message);
+      throw new Error((error as Error).message);
     }
   }
   /**
@@ -216,7 +218,7 @@ export class OperationFinderService {
       });
     } catch (error) {
       console.error('Error finding operations:', error);
-      throw new Error(`Error finding operations: ${error.message}`);
+      throw new Error(`Error finding operations: ${(error as Error).message}`);
     }
   }
 
@@ -245,7 +247,7 @@ export class OperationFinderService {
       );
     } catch (error) {
       console.error(`Error finding operations for user ${id_user}:`, error);
-      throw new Error(error.message);
+      throw new Error((error as Error).message);
     }
   }
 
@@ -329,14 +331,22 @@ export class OperationFinderService {
                 facturation_tariff: Number(
                   (originalWorkers[0].tariff as any).facturation_tariff ?? 0,
                 ),
+                isSpecial: (originalWorkers[0].tariff as any).isSpecial ?? 'NO',
                 // ✅ AGREGAR ID ÚNICO PARA VERIFICAR INDEPENDENCIA
                 _uniqueId: `${group.groupId}_${correctTariffId}_${Date.now()}`,
               }
             : { 
               paysheet_tariff: 0, 
               facturation_tariff: 0,
+              isSpecial: 'NO',
               _uniqueId: `${group.groupId}_default_${Date.now()}`,
               };
+
+        // Exponer también el flag en schedule para facilitar consumo en frontend.
+        group.schedule = {
+          ...group.schedule,
+          isSpecial: group.tariffDetails?.isSpecial ?? 'NO',
+        };
 
         // ✅ PROPAGAR op_duration DE LA OPERACIÓN AL GRUPO
         group.op_duration = operation.op_duration;
@@ -360,10 +370,14 @@ export class OperationFinderService {
     ));
       console.log('=== FIN OPERATION FINDER ===');
 
+      transformedOperation.isOperationSpecial = transformedOperation.workerGroups.some(
+        (group) => group?.tariffDetails?.isSpecial === 'YES',
+      );
+
       return transformedOperation;
     } catch (error) {
       console.error(`Error finding operation with ID ${operationId}:`, error);
-      throw new Error(error.message);
+      throw new Error((error as Error).message);
     }
   }
 }

@@ -13,6 +13,7 @@ import { AuthModule } from 'src/auth/auth.module';
 import { OperationWorkerModule } from 'src/operation-worker/operation-worker.module';
 import { TariffModule } from 'src/tariff/tariff.module';
 import { WorkerModule } from 'src/worker/worker.module';
+import { OperationTokenService } from './services/operation-token.service';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { WorkerModule } from 'src/worker/worker.module';
     OperationTransformerService,
     OperationRelationService,
     WorkerAnalyticsService,
+    OperationTokenService,
   ],
   exports: [OperationFinderService]
 })
