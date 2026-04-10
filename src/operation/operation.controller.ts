@@ -48,6 +48,8 @@ import { WorkerDistributionQueryDto } from './dto/worker-distribution-query.dto'
 import { getColombianDateTime } from 'src/common/utils/dateColombia';
 import { WorkerHoursReportQueryDto } from './dto/worker-hours-report-query.dto';
 import { ConfirmOperationDto } from './dto/confirm-operation.dto';
+import { RegenerateConfirmationTokenDto } from './dto/regenerate-confirmation-token.dto';
+import { TokenPreviewDto } from './dto/token-preview.dto';
 // import { OperationsCronService } from 'src/cron-job/cron-job.service';
 @Controller('operation')
 @UseInterceptors(SiteInterceptor)
@@ -263,6 +265,99 @@ export class OperationController {
       ipAddress,
       device,
       body.observation,
+    );
+  }
+
+  @Post('confirm/preview')
+  @Public()
+  @ApiOperation({
+    summary: 'Obtener preview de operación por token',
+    description:
+      'Devuelve informacion minima para el portal de confirmacion y el estado del token sin requerir autenticacion.',
+  })
+  @ApiBody({ type: TokenPreviewDto })
+  @ApiResponse({ status: 200, description: 'Preview obtenido exitosamente' })
+  @ApiResponse({ status: 400, description: 'Token invalido o faltante' })
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  async confirmPreview(@Body() body: TokenPreviewDto) {
+    return this.operationService.getConfirmationPreviewByToken(body.token);
+  }
+
+  @Post('regenerate-confirmation-token')
+  @ApiOperation({
+    summary: 'Regenerar token de confirmacion',
+    description:
+      'Regenera un token de confirmación para una operación especial. Invalida tokens anteriores. Útil cuando el token ha expirado o no funciona.',
+  })
+  @ApiBody({ type: RegenerateConfirmationTokenDto })
+  @ApiResponse({
+    status: 201,
+    description: 'Token regenerado exitosamente',
+    schema: {
+      properties: {
+        operationId: { type: 'number' },
+        link: { type: 'string', description: 'URL completa con el nuevo token' },
+        tokenTtlMinutes: { type: 'number', description: 'Minutos de validez del token' },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'operationId inválido' })
+  @ApiResponse({ status: 404, description: 'Operación no encontrada' })
+  @ApiResponse({
+    status: 429,
+    description: 'Debe esperar antes de volver a regenerar el token',
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'La operación no está pendiente de confirmación o no es especial',
+  })
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  async regenerateConfirmationToken(
+    @Body() body: RegenerateConfirmationTokenDto,
+  ) {
+    const result = await this.operationService.regenerateConfirmationToken(
+      body.operationId,
+    );
+
+    return {
+      operationId: result.operationId,
+      link: result.link,
+      tokenTtlMinutes: result.tokenTtlMinutes,
+      message: `Token regenerado exitosamente. Los tokens activos anteriores fueron marcados como EXPIRED.`,
+    };
+  }
+
+  @Get(':id/confirmation-link')
+  @ApiOperation({
+    summary: 'Obtener link de confirmación para operación especial',
+    description:
+      'Retorna el link de confirmación para una operación especial que está en estado TO_APPROVED. Si la operación no tiene confirmación aún, la crea.',
+  })
+  @ApiParam({ name: 'id', description: 'ID de la operación especial' })
+  @ApiResponse({
+    status: 200,
+    description: 'Link de confirmación obtenido exitosamente',
+    schema: {
+      properties: {
+        operationId: { type: 'number' },
+        link: {
+          type: 'string',
+          description: 'Link con token embebido para confirmación',
+        },
+        status: { type: 'string', example: 'TO_APPROVED' },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'ID de operación inválido' })
+  @ApiResponse({ status: 404, description: 'Operación no encontrada' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'La operación no es especial o no está en estado TO_APPROVED. No tiene link de confirmación.',
+  })
+  async getConfirmationLink(@Param('id', ParseIntPipe) operationId: number) {
+    return await this.operationService.getConfirmationLinkForSpecialOperation(
+      operationId,
     );
   }
 

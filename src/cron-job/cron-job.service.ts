@@ -5,6 +5,8 @@ import { UpdateWorkerService } from './services/update-worker.service';
 import { UpdateOperationWorkerService } from './services/update-operation-worker.service';
 import { UpdatePermissionService } from 'src/permission/services/update-permission.service';
 import { UpdateInabilityService } from 'src/inability/service/update-inability.service';
+// Se inyecta el servicio de operaciones para reutilizar la lógica de expiración de tokens.
+import { OperationService } from 'src/operation/operation.service';
 
 /**
  * Servicio para gestionar Cron Jobs
@@ -30,6 +32,7 @@ export class OperationsCronService {
     private updateOperationWorker: UpdateOperationWorkerService,
     private updatePermission: UpdatePermissionService,
     private updateInability:UpdateInabilityService, 
+    private operationService: OperationService,
   ) {}
 
   /**
@@ -187,6 +190,20 @@ async handleUpdateWorkersWithExpiredInabilities() {
       await this.updateOperationWorker.updateWorkersScheduleState();
     } catch (error) {
       this.logger.error('Error in cron job:', error);
+    }
+  }
+
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async handleExpireConfirmationTokens() {
+    try {
+      // Ejecuta la limpieza periódica de tokens vencidos para que la base de datos no conserve estados obsoletos.
+      const expiredCount = await this.operationService.expireConfirmationTokens();
+
+      if (expiredCount > 0) {
+        this.logger.log(`✅ ${expiredCount} token(s) de confirmacion expirado(s) automaticamente`);
+      }
+    } catch (error) {
+      this.logger.error('Error in cron job expireConfirmationTokens:', error);
     }
   }
 

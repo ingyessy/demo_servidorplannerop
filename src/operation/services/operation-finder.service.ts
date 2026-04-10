@@ -370,10 +370,6 @@ export class OperationFinderService {
     ));
       console.log('=== FIN OPERATION FINDER ===');
 
-      transformedOperation.isOperationSpecial = transformedOperation.workerGroups.some(
-        (group) => group?.tariffDetails?.isSpecial === 'YES',
-      );
-
       return transformedOperation;
     } catch (error) {
       console.error(`Error finding operation with ID ${operationId}:`, error);

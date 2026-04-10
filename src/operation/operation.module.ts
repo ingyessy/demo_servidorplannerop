@@ -14,6 +14,9 @@ import { OperationWorkerModule } from 'src/operation-worker/operation-worker.mod
 import { TariffModule } from 'src/tariff/tariff.module';
 import { WorkerModule } from 'src/worker/worker.module';
 import { OperationTokenService } from './services/operation-token.service';
+import { OperationEmailService } from './services/operation-email.service';
+import { EtherealTestService } from './services/ethereal-test.service';
+import { OperationTestController } from './operation-test.controller';
 
 @Module({
   imports: [
@@ -24,7 +27,7 @@ import { OperationTokenService } from './services/operation-token.service';
     TariffModule,
     forwardRef(() => WorkerModule),
   ],
-  controllers: [OperationController],
+  controllers: [OperationController, OperationTestController],
   providers: [
     OperationService,
     OperationWorkerService,
@@ -34,7 +37,10 @@ import { OperationTokenService } from './services/operation-token.service';
     OperationRelationService,
     WorkerAnalyticsService,
     OperationTokenService,
+    OperationEmailService,
+    EtherealTestService,
   ],
-  exports: [OperationFinderService]
+  // Se exporta OperationService para que el módulo de cron pueda reutilizar la lógica de expiración de tokens.
+  exports: [OperationService, OperationFinderService]
 })
 export class OperationModule {}

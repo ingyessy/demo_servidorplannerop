@@ -80,7 +80,8 @@ export class OperationWorkerService {
       return updateResult;
     } catch (error) {
       console.error('Error completing client programming:', error);
-      throw new Error(error.message);
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(message);
     }
   }
   /**
@@ -145,7 +146,8 @@ export class OperationWorkerService {
       return workers;
     } catch (error) {
       console.error('Error getting workers from operation:', error);
-      throw new Error(error.message);
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(message);
     }
   }
   /**
@@ -181,11 +183,23 @@ export class OperationWorkerService {
     });
 
     // Llamar al servicio específico
-    return await this.updateWorkerSheduleService.updateWorkersSchedule(
+    const scheduleUpdateResult = await this.updateWorkerSheduleService.updateWorkersSchedule(
       id_operation,
       workersToUpdate,
       id_site,
     );
+
+    // Si al actualizar horarios se completó el último grupo, cerrar la operación automáticamente.
+    const completionInfo = await this.completeOperationIfAllGroupsFinished(
+      id_operation,
+    );
+
+    return {
+      ...(scheduleUpdateResult as object),
+      operationCompleted: completionInfo.completed,
+      isSpecial: completionInfo.isSpecial,
+      newStatus: completionInfo.newStatus,
+    };
   }
 
   /**
@@ -267,20 +281,20 @@ export class OperationWorkerService {
   }
 
   /**
-   * Actualiza una operación a estado COMPLETED cuando todos los grupos están terminados
+   * Actualiza una operación a estado COMPLETED o TO_APPROVED cuando todos los grupos están terminados
    * @param id_operation ID de la operación
+   * @returns {completed: boolean, isSpecial?: boolean, newStatus?: string}
    */
-  private async completeOperationIfAllGroupsFinished(id_operation: number): Promise<void> {
+  private async completeOperationIfAllGroupsFinished(
+    id_operation: number,
+  ): Promise<{completed: boolean; isSpecial?: boolean; newStatus?: string}> {
     try {
       // Verificar si todos los grupos están completados
       const allCompleted = await this.areAllGroupsCompleted(id_operation);
       
       if (!allCompleted) {
-        // console.log(`[OperationWorkerService] Operación ${id_operation}: No todos los grupos están completados aún`);
-        return;
+        return { completed: false };
       }
-
-      // console.log(`[OperationWorkerService] ✅ Todos los grupos de la operación ${id_operation} están completados. Actualizando a COMPLETED...`);
 
       // Obtener la operación actual para verificar estado
       const operation = await this.prisma.operation.findUnique({
@@ -295,13 +309,11 @@ export class OperationWorkerService {
       });
 
       if (!operation) {
-        // console.error(`[OperationWorkerService] Operación ${id_operation} no encontrada`);
-        return;
+        return { completed: false };
       }
 
-      if (operation.status === 'COMPLETED') {
-        // console.log(`[OperationWorkerService] Operación ${id_operation} ya está en estado COMPLETED`);
-        return;
+      if (operation.status === 'COMPLETED' || operation.status === 'TO_APPROVED') {
+        return { completed: false };
       }
 
       const specialTariffCount = await this.prisma.operation_Worker.count({
@@ -318,10 +330,6 @@ export class OperationWorkerService {
         ? StatusOperation.TO_APPROVED
         : StatusOperation.COMPLETED;
 
-      if (operation.status === targetStatus) {
-        return;
-      }
-
       // 🆕 OBTENER LA FECHA MÁS RECIENTE DE FINALIZACIÓN DE TODOS LOS GRUPOS
       const latestGroupEnd = await this.getLatestGroupEndDateTime(id_operation);
       
@@ -333,7 +341,6 @@ export class OperationWorkerService {
       if (latestGroupEnd) {
         finalDateEnd = latestGroupEnd.dateEnd;
         finalTimeEnd = latestGroupEnd.timeEnd;
-        // console.log(`[OperationWorkerService] 🕐 Fecha de finalización más reciente: ${latestGroupEnd.dateEnd.toISOString()} ${latestGroupEnd.timeEnd}`);
       }
 
       // Calcular duración basándose en fecha de inicio y la fecha de finalización más reciente
@@ -347,10 +354,8 @@ export class OperationWorkerService {
         end.setHours(eh, em, 0, 0);
 
         const diffMs = end.getTime() - start.getTime();
-        opDuration = Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100; // 2 decimales
+        opDuration = Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100;
         opDuration = opDuration > 0 ? opDuration : 0;
-        
-        // console.log(`[OperationWorkerService] 📊 Duración calculada: ${opDuration} horas (inicio: ${start.toISOString()}, fin: ${end.toISOString()})`);
       }
 
       // Actualizar operacion con fecha/hora de finalizacion y estado segun tipo
@@ -371,7 +376,7 @@ export class OperationWorkerService {
       }).then(async (operationWorkers) => {
         const workerIds = operationWorkers
           .map(ow => ow.id_worker)
-          .filter(id => id !== -1); // Excluir placeholders
+          .filter(id => id !== -1);
 
         if (workerIds.length > 0) {
           await this.prisma.worker.updateMany({
@@ -381,14 +386,24 @@ export class OperationWorkerService {
             },
             data: { status: 'AVALIABLE' },
           });
-          
-          // console.log(`[OperationWorkerService] ✅ Liberados ${workerIds.length} trabajadores de la operación ${id_operation}`);
         }
       });
 
-      // console.log(`[OperationWorkerService] ✅ Operación ${id_operation} completada exitosamente con duración: ${opDuration} horas, finalizada el ${finalDateEnd?.toISOString()} a las ${finalTimeEnd}`);
+      console.log(
+        `[OperationWorkerService] ✅ Operación ${id_operation} completada: ${targetStatus}, isSpecial: ${isSpecialOperation}`,
+      );
+
+      return {
+        completed: true,
+        isSpecial: isSpecialOperation,
+        newStatus: targetStatus,
+      };
     } catch (error) {
-      console.error(`[OperationWorkerService] Error al completar operación ${id_operation}:`, error);
+      console.error(
+        `[OperationWorkerService] Error al completar operación ${id_operation}:`,
+        error,
+      );
+      return { completed: false };
     }
   }
 
@@ -478,8 +493,10 @@ export class OperationWorkerService {
       throw new BadRequestException('dateEnd invalido para finalizar grupo');
     }
 
-    console.log(`[OperationWorkerService] Finalizando grupo ${id_group} con fecha/hora: ${parsedDateEnd.toISOString()} ${timeEnd}`);
-    
+    console.log(
+      `[OperationWorkerService] Finalizando grupo ${id_group} con fecha/hora: ${parsedDateEnd.toISOString()} ${timeEnd}`,
+    );
+
     // 1. Verificar que el grupo exista en la operacion (excluyendo placeholders)
     const groupWorkers = await this.prisma.operation_Worker.findMany({
       where: {
@@ -516,8 +533,13 @@ export class OperationWorkerService {
     }
 
     // 3. Verificar si todos los grupos están completados y actualizar operación si es necesario
-    await this.completeOperationIfAllGroupsFinished(id_operation);
+    const completionInfo = await this.completeOperationIfAllGroupsFinished(id_operation);
 
-    return updateResult;
+    return {
+      ...updateResult,
+      operationCompleted: completionInfo.completed,
+      isSpecial: completionInfo.isSpecial,
+      newStatus: completionInfo.newStatus,
+    };
   }
 }

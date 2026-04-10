@@ -454,8 +454,10 @@ model Token {
 
   confirmation     OperationConfirmation   @relation(fields: [id_confirmation], references: [id])
 
-  token            String                  @unique
+  tokenHash        String                  @unique
   createdAt        DateTime                @default(now())
+  status           TokenStatus             @default(ACTIVE)
+  usedAt           DateTime?
 }
 
 
@@ -515,6 +517,12 @@ enum StatusOperation {
   COMPLETED
   CANCELED
   DEACTIVATED
+}
+
+enum TokenStatus {
+  ACTIVE
+  USED
+  EXPIRED
 }
 
 enum Failures {

@@ -9,12 +9,8 @@ import { CacheModule } from '@nestjs/cache-manager';
 import { RolesGuard } from './guards/roles.guard';
 import { ValidationModule } from 'src/common/validation/validation.module';
 
-
-
 @Module({
-
   imports: [
-
     ValidationModule,
     PassportModule,
     CacheModule.register({
@@ -26,28 +22,18 @@ import { ValidationModule } from 'src/common/validation/validation.module';
       inject: [ConfigService],
       useFactory: (configService: ConfigService): JwtModuleOptions => {
         return {
-          secret: configService.get<string>('SECRET_JWT') || 'default-secret-key',
-          signOptions: { 
-            expiresIn: configService.get('EXPIRES_IN') || '24h'
+          secret:
+            configService.get<string>('SECRET_JWT') || 'default-secret-key',
+          signOptions: {
+            expiresIn: configService.get('EXPIRES_IN') || '24h',
           },
-
         };
-
       },
-
     }),
-
   ],
 
-  providers: [
-    AuthService,
-    JwtStrategy,
-    UserService,
-    RolesGuard,
-  ],
+  providers: [AuthService, JwtStrategy, UserService, RolesGuard],
 
   exports: [AuthService, JwtModule, RolesGuard],
-
 })
-
 export class AuthModule {}

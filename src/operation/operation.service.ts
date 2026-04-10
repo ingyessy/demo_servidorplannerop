@@ -1,6 +1,8 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
+  HttpStatus,
   Injectable,
   Logger,
   NotFoundException,
@@ -10,7 +12,7 @@ import { UpdateOperationDto } from './dto/update-operation.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { OperationWorkerService } from 'src/operation-worker/operation-worker.service';
 // import { BillService } from 'src/bill/bill.service';
-import { StatusComplete, StatusOperation, YES_NO } from '@prisma/client';
+import { StatusComplete, StatusOperation, TokenStatus, YES_NO } from '@prisma/client';
 import { OperationFinderService } from './services/operation-finder.service';
 import { OperationRelationService } from './services/operation-relation.service';
 import { OperationFilterDto } from './dto/fliter-operation.dto';
@@ -18,9 +20,15 @@ import { WorkerService } from 'src/worker/worker.service';
 import { RemoveWorkerFromOperationService } from '../operation-worker/service/remove-worker-from-operation/remove-worker-from-operation.service';
 import { ModuleRef } from '@nestjs/core';
 import { getWeekNumber } from 'src/common/utils/dateType';
+import {
+  formatColombianDate,
+  getColombianDateTime,
+  getColombianTimeString,
+} from 'src/common/utils/dateColombia';
 import { OperationTokenService } from 'src/operation/services/operation-token.service';
 import { OperationNotFoundException } from './exceptions/operation-not-found.exception';
 import { TokenGenerationFailedException } from './exceptions/token-generation-failed.exception';
+import { OperationEmailService } from './services/operation-email.service';
 // ... otras importaciones
 /**
  * Servicio para gestionar operaciones
@@ -29,6 +37,8 @@ import { TokenGenerationFailedException } from './exceptions/token-generation-fa
 @Injectable()
 export class OperationService {
   private readonly logger = new Logger(OperationService.name);
+  // Duración del token en minutos 
+  private static readonly TOKEN_VALIDITY_MINUTES = 480; // 8 horas
 
   constructor(
     private prisma: PrismaService,
@@ -39,6 +49,7 @@ export class OperationService {
     private removeWorkerService: RemoveWorkerFromOperationService,
     private moduleRef: ModuleRef,
     private operationTokenService: OperationTokenService,
+    private operationEmailService: OperationEmailService,
     // private billService: BillService,
   ) {}
   /**
@@ -189,9 +200,8 @@ export class OperationService {
     const isSpecial = await this.isOperationSpecial(operationId, operation);
 
     if (!isSpecial) {
-      const now = new Date();
-      const hh = now.getHours().toString().padStart(2, '0');
-      const mm = now.getMinutes().toString().padStart(2, '0');
+      const now = getColombianDateTime();
+      const [hh, mm] = getColombianTimeString().split(':');
 
       const updatedOperation = await this.prisma.operation.update({
         where: { id: operationId },
@@ -234,6 +244,44 @@ export class OperationService {
     });
 
     const confirmationData = await this.createConfirmation(operationId, operation);
+    const tokenTtlMinutes = this.getTokenValidityMinutes();
+    const emailTarget = await this.resolveClientConfirmationEmail(operationId);
+
+    let emailNotification: {
+      sent: boolean;
+      to: string | null;
+      reason?: string;
+      messageId?: string;
+    } = {
+      sent: false,
+      to: emailTarget,
+    };
+
+    if (emailTarget) {
+      const emailResult = await this.operationEmailService.sendSpecialOperationConfirmationEmail({
+        to: emailTarget,
+        operationId,
+        confirmationLink: confirmationData.link,
+        tokenTtlMinutes,
+      });
+
+      emailNotification = {
+        sent: emailResult.sent,
+        to: emailTarget,
+        reason: emailResult.reason,
+        messageId: emailResult.messageId,
+      };
+    } else {
+      emailNotification = {
+        sent: false,
+        to: null,
+        reason:
+          'No se encontro correo valido del cliente. Configure CONFIRMATION_DEFAULT_EMAIL o ajuste datos del cliente.',
+      };
+      this.logger.warn(
+        `Operacion ${operationId} no tiene correo destino valido para enviar confirmacion`,
+      );
+    }
 
     this.logger.log(
       `Operacion ${operationId} movida a ${StatusOperation.TO_APPROVED} y confirmacion ${confirmationData.confirmation.id} creada/reutilizada`,
@@ -244,6 +292,7 @@ export class OperationService {
       confirmation: confirmationData.confirmation,
       token: confirmationData.token,
       link: confirmationData.link,
+      emailNotification,
       isSpecial: true,
       movedTo: StatusOperation.TO_APPROVED,
     };
@@ -283,31 +332,52 @@ export class OperationService {
       `Confirmacion ${confirmation.id} creada/reutilizada para operacion ${operationId}`,
     );
 
-    let createdToken: { id: number; token: string; createdAt: Date } | null =
-      null;
+    // createdToken guarda metadatos persistidos; rawTokenValue es solo para responder el link.
+    let createdToken: {
+      id: number;
+      tokenHash: string;
+      createdAt: Date;
+      status: TokenStatus;
+    } | null = null;
+    let rawTokenValue: string | null = null;
 
     for (let attempt = 0; attempt < 5; attempt++) {
       const tokenValue = this.operationTokenService.generateTokenValue();
+      // Hash determinístico para búsqueda segura sin exponer token plano en BD.
+      const tokenHash = this.operationTokenService.hashTokenValue(tokenValue);
 
       try {
         createdToken = await this.prisma.token.create({
           data: {
             id_confirmation: confirmation.id,
-            token: tokenValue,
+            tokenHash,
+            status: TokenStatus.ACTIVE,
           },
           select: {
             id: true,
-            token: true,
+            tokenHash: true,
             createdAt: true,
+            status: true,
           },
         });
+        rawTokenValue = tokenValue;
         break;
       } catch (error: any) {
         const isUniqueTokenError = error?.code === 'P2002';
-        if (!isUniqueTokenError || attempt === 4) {
+        if (!isUniqueTokenError) {
+          this.logger.error(
+            `Error persistiendo token para operacion ${operationId}: ${error?.message || 'unknown error'} (code: ${error?.code || 'N/A'})`,
+          );
           throw new TokenGenerationFailedException(
             operationId,
-            'No se pudo persistir un token unico para la confirmacion',
+            `Error de base de datos al persistir token: ${error?.message || 'unknown error'}`,
+          );
+        }
+
+        if (attempt === 4) {
+          throw new TokenGenerationFailedException(
+            operationId,
+            'No se pudo persistir un token unico para la confirmacion tras multiples reintentos',
           );
         }
       }
@@ -320,12 +390,24 @@ export class OperationService {
       );
     }
 
+    // Defensa adicional: si por alguna razón no existe token plano, no devolvemos link inválido.
+    if (!rawTokenValue) {
+      throw new TokenGenerationFailedException(
+        operationId,
+        'No se pudo recuperar el token de confirmacion generado',
+      );
+    }
+
     this.logger.log(
       `Token ${createdToken.id} creado para confirmacion ${confirmation.id} (operacion ${operationId})`,
     );
 
     const link = this.operationTokenService.buildConfirmationLink(
-      createdToken.token,
+      rawTokenValue,
+    );
+
+    this.logger.warn(
+      `LINK_CONFIRMACION_PORTAL operacion=${operationId} confirmation=${confirmation.id} link=${link}`,
     );
 
     return {
@@ -333,6 +415,51 @@ export class OperationService {
       confirmation,
       token: createdToken,
       link,
+    };
+  }
+
+  /**
+   * Obtiene el link de confirmación para una operación especial
+   * Si no existe confirmación aún, la crea
+   */
+  async getConfirmationLinkForSpecialOperation(operationId: number) {
+    if (!operationId || operationId <= 0) {
+      throw new BadRequestException('operationId inválido');
+    }
+
+    const operation = await this.prisma.operation.findUnique({
+      where: { id: operationId },
+      select: { id: true, status: true },
+    });
+
+    if (!operation) {
+      throw new OperationNotFoundException(operationId);
+    }
+
+    const isSpecial = await this.isOperationSpecial(operationId, operation);
+
+    if (!isSpecial) {
+      throw new ConflictException(
+        'La operación no es especial y no tiene link de confirmación',
+      );
+    }
+
+    if (operation.status !== StatusOperation.TO_APPROVED) {
+      throw new ConflictException(
+        `La operación no está en estado TO_APPROVED (estado actual: ${operation.status}). No tiene link de confirmación.`,
+      );
+    }
+
+    // Obtener o crear la confirmación
+    const confirmationData = await this.createConfirmation(
+      operationId,
+      operation,
+    );
+
+    return {
+      operationId,
+      link: confirmationData.link,
+      status: operation.status,
     };
   }
 
@@ -348,6 +475,9 @@ export class OperationService {
     device?: string | null,
     observation?: string | null,
   ) {
+    // Sincroniza estado en BD: todo token ACTIVE vencido por tiempo pasa a EXPIRED.
+    await this.expireActiveTokensByTime();
+
     if (!token || !token.trim()) {
       throw new BadRequestException('Token de confirmacion requerido');
     }
@@ -357,7 +487,10 @@ export class OperationService {
     }
 
     const tokenRecord = await this.prisma.token.findUnique({
-      where: { token: token.trim() },
+      where: {
+        // El cliente envía token plano; en servidor siempre comparamos por hash.
+        tokenHash: this.operationTokenService.hashTokenValue(token.trim()),
+      },
       include: {
         confirmation: {
           include: {
@@ -373,6 +506,23 @@ export class OperationService {
       throw new BadRequestException('Token de confirmacion invalido');
     }
 
+    if (tokenRecord.status === TokenStatus.USED) {
+      throw new BadRequestException('Token de confirmacion ya utilizado');
+    }
+
+    if (tokenRecord.status === TokenStatus.EXPIRED) {
+      throw new BadRequestException('Token de confirmacion expirado');
+    }
+
+    // Expira por fecha de creación + 1 hora y persiste el estado EXPIRED.
+    if (this.isTokenExpired(tokenRecord.createdAt)) {
+      await this.prisma.token.update({
+        where: { id: tokenRecord.id },
+        data: { status: TokenStatus.EXPIRED },
+      });
+      throw new BadRequestException('Token de confirmacion expirado');
+    }
+
     const operation = tokenRecord.confirmation?.operation;
     if (!operation) {
       throw new OperationNotFoundException(-1);
@@ -386,7 +536,7 @@ export class OperationService {
 
     const newStatus =
       action === 'APPROVE' ? StatusOperation.APPROVED : StatusOperation.REJECTED;
-    const now = new Date();
+    const now = getColombianDateTime();
 
     const result = await this.prisma.$transaction(async (tx) => {
       const updatedOperation = await tx.operation.update({
@@ -404,6 +554,27 @@ export class OperationService {
         },
       });
 
+      await tx.token.update({
+        where: { id: tokenRecord.id },
+        data: {
+          // El token que confirma queda marcado como usado para evitar replay.
+          status: TokenStatus.USED,
+          usedAt: now,
+        },
+      });
+
+      await tx.token.updateMany({
+        where: {
+          id_confirmation: tokenRecord.id_confirmation,
+          id: { not: tokenRecord.id },
+          status: TokenStatus.ACTIVE,
+        },
+        data: {
+          // Cualquier token activo anterior para la misma confirmación queda invalidado.
+          status: TokenStatus.EXPIRED,
+        },
+      });
+
       return { updatedOperation, updatedConfirmation };
     });
 
@@ -417,6 +588,504 @@ export class OperationService {
       action,
       movedTo: newStatus,
     };
+  }
+
+  async getConfirmationPreviewByToken(token: string) {
+    // Sincroniza estado en BD: todo token ACTIVE vencido por tiempo pasa a EXPIRED.
+    await this.expireActiveTokensByTime();
+
+    const normalizedToken = token?.trim();
+    if (!normalizedToken) {
+      throw new BadRequestException('Token de confirmacion requerido');
+    }
+
+    const tokenRecord = await this.prisma.token.findUnique({
+      where: {
+        // En preview también se valida por hash para no consultar token plano.
+        tokenHash: this.operationTokenService.hashTokenValue(normalizedToken),
+      },
+      include: {
+        confirmation: {
+          include: {
+            operation: {
+              select: {
+                id: true,
+                status: true,
+                dateStart: true,
+                dateEnd: true,
+                timeStrat: true,
+                timeEnd: true,
+                motorShip: true,
+                zone: true,
+                jobArea: { select: { name: true } },
+                client: { select: { name: true } },
+                task: { select: { name: true } },
+                Site: { select: { name: true } },
+                subSite: { select: { name: true } },
+                workers: {
+                  select: {
+                    id_worker: true,
+                    id_group: true,
+                    dateStart: true,
+                    dateEnd: true,
+                    timeStart: true,
+                    timeEnd: true,
+                    SubTask: {
+                      select: {
+                        name: true,
+                      },
+                    },
+                    tariff: {
+                      select: {
+                        pay_units: true,
+                        unitOfMeasure: {
+                          select: {
+                            name: true,
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!tokenRecord || !tokenRecord.confirmation?.operation) {
+      throw new BadRequestException('Token de confirmacion invalido');
+    }
+
+    const tokenTtlMinutes = this.getTokenValidityMinutes();
+    const expiresAt = this.getTokenExpiresAt(tokenRecord.createdAt);
+    const nowMs = Date.now();
+
+    let tokenStatus = tokenRecord.status;
+    if (tokenStatus === TokenStatus.ACTIVE && expiresAt.getTime() <= nowMs) {
+      // Si venció durante preview, persistimos EXPIRED para mantener consistencia.
+      await this.prisma.token.update({
+        where: { id: tokenRecord.id },
+        data: { status: TokenStatus.EXPIRED },
+      });
+      tokenStatus = TokenStatus.EXPIRED;
+    }
+
+    const operation = tokenRecord.confirmation.operation;
+    const canConfirm =
+      tokenStatus === TokenStatus.ACTIVE &&
+      operation.status === StatusOperation.TO_APPROVED;
+
+    const groupMap = new Map<
+      string,
+      {
+        workerIds: Set<number>;
+        totalHoursWorked: number;
+        subservices: Set<string>;
+        unitNames: Set<string>;
+        totalQuantity: number;
+      }
+    >();
+
+    for (const row of operation.workers || []) {
+      const groupId = (row.id_group || 'SIN_GRUPO').trim();
+      if (!groupMap.has(groupId)) {
+        groupMap.set(groupId, {
+          workerIds: new Set<number>(),
+          totalHoursWorked: 0,
+          subservices: new Set<string>(),
+          unitNames: new Set<string>(),
+          totalQuantity: 0,
+        });
+      }
+
+      const group = groupMap.get(groupId)!;
+      group.workerIds.add(row.id_worker);
+
+      if (row.dateStart && row.timeStart && row.dateEnd && row.timeEnd) {
+        group.totalHoursWorked += this.calculateOperationDuration(
+          row.dateStart,
+          row.timeStart,
+          row.dateEnd,
+          row.timeEnd,
+        );
+      }
+
+      if (row.SubTask?.name?.trim()) {
+        group.subservices.add(row.SubTask.name.trim());
+      }
+
+      const unitName = row.tariff?.unitOfMeasure?.name?.trim();
+      if (unitName) {
+        group.unitNames.add(unitName);
+      }
+
+      const rowQuantity = Number(row.tariff?.pay_units ?? 0);
+      if (Number.isFinite(rowQuantity)) {
+        group.totalQuantity += rowQuantity;
+      }
+    }
+
+    const groups = Array.from(groupMap.entries()).map(([groupId, group]) => ({
+      groupId,
+      workersCount: group.workerIds.size,
+      totalHoursWorked: Math.round(group.totalHoursWorked * 100) / 100,
+      subservices: Array.from(group.subservices),
+      unitOfMeasure: Array.from(group.unitNames),
+      quantity: Math.round(group.totalQuantity * 1000) / 1000,
+    }));
+
+    // Se unifica salida en `operation` (general) y `groups` (detalle por grupo).
+    const previewGroups = groups.map((group) => ({
+      idGrupo: group.groupId,
+      subservicio: group.subservices,
+      cantTrabajadores: group.workersCount,
+      horasTrabajadas: group.totalHoursWorked,
+      unidadDeMedida: group.unitOfMeasure,
+      cantidad: group.quantity,
+    }));
+
+    const totalWorkers = new Set(
+      (operation.workers || []).map((w) => w.id_worker),
+    ).size;
+
+    const totalHoursWorked =
+      Math.round(
+        groups.reduce((acc, group) => acc + group.totalHoursWorked, 0) * 100,
+      ) / 100;
+
+    return {
+      token: {
+        status: tokenStatus,
+        createdAt: tokenRecord.createdAt,
+        expiresAt,
+        remainingSeconds: Math.max(
+          0,
+          Math.floor((expiresAt.getTime() - nowMs) / 1000),
+        ),
+      },
+      operation: {
+        id: operation.id,
+        status: operation.status,
+        cliente: operation.client?.name || null,
+        area: operation.jobArea?.name || null,
+        motonave: operation.motorShip || null,
+        servicio: operation.task?.name || null,
+        fechaInicio: operation.dateStart,
+        fechaFin: operation.dateEnd || null,
+        horaInicio: operation.timeStrat,
+        horaFin: operation.timeEnd || null,
+        dateStart: operation.dateStart,
+        dateStartFormatted: formatColombianDate(operation.dateStart),
+        timeStart: operation.timeStrat,
+        timeStartFormatted: this.formatTimeForDisplay(operation.timeStrat),
+        motorShip: operation.motorShip,
+        zone: operation.zone,
+        client: operation.client?.name || null,
+        site: operation.Site?.name || null,
+        subsite: operation.subSite?.name || null,
+      },
+      groups: previewGroups,
+      totals: {
+        totalGroups: groups.length,
+        totalWorkers,
+        totalHoursWorked,
+      },
+      canConfirm,
+    };
+  }
+
+  private formatTimeForDisplay(timeValue?: string | null): string | null {
+    if (!timeValue || !/^\d{1,2}:\d{2}$/.test(timeValue.trim())) {
+      return null;
+    }
+
+    const [hourText, minuteText] = timeValue.trim().split(':');
+    const hour = Number(hourText);
+    const minute = Number(minuteText);
+
+    if (!Number.isInteger(hour) || !Number.isInteger(minute)) {
+      return null;
+    }
+
+    const period = hour >= 12 ? 'PM' : 'AM';
+    const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+    return `${hour12.toString().padStart(2, '0')}:${minute
+      .toString()
+      .padStart(2, '0')} ${period}`;
+  }
+
+  /**
+   * Regenera un token de confirmación para una operación especial.
+   * - Valida que la operación exista
+   * - Verifica que pueda ser confirmada (no esté completada/cancelada)
+    * - Genera un nuevo token (tokens anteriores activos se marcan como EXPIRED)
+   * - Retorna el nuevo link
+   */
+  async regenerateConfirmationToken(operationId: number): Promise<{
+    operationId: number;
+    confirmation: any;
+    token: any;
+    link: string;
+    tokenTtlMinutes: number;
+  }> {
+    // Sincroniza estado en BD: todo token ACTIVE vencido por tiempo pasa a EXPIRED.
+    await this.expireActiveTokensByTime();
+
+    if (!operationId || operationId <= 0) {
+      throw new BadRequestException('operationId inválido');
+    }
+
+    // Validar que la operación existe
+    const operation = await this.prisma.operation.findUnique({
+      where: { id: operationId },
+      select: { id: true, status: true },
+    });
+
+    if (!operation) {
+      throw new OperationNotFoundException(operationId);
+    }
+
+    // Verificar que sea especial
+    const isSpecial = await this.isOperationSpecial(operationId, operation);
+    if (!isSpecial) {
+      throw new ConflictException(
+        'La operación no es especial y no requiere confirmación',
+      );
+    }
+
+    // Verificar que pueda ser confirmada (debe estar en TO_APPROVED)
+    if (operation.status !== StatusOperation.TO_APPROVED) {
+      throw new ConflictException(
+        `La operación ${operationId} no está pendiente de confirmación. Estado actual: ${operation.status}`,
+      );
+    }
+
+    // Obtener la confirmación existente
+    const confirmation = await this.prisma.operationConfirmation.findUnique({
+      where: { id_operation: operationId },
+    });
+
+    if (!confirmation) {
+      throw new NotFoundException(
+        `No existe confirmación para la operación ${operationId}`,
+      );
+    }
+
+    const latestToken = await this.prisma.token.findFirst({
+      where: { id_confirmation: confirmation.id },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, createdAt: true },
+    });
+
+    const cooldownMinutes = this.getTokenRegenerationCooldownMinutes();
+    if (latestToken && cooldownMinutes > 0) {
+      const elapsedMs = Date.now() - latestToken.createdAt.getTime();
+      const cooldownMs = cooldownMinutes * 60 * 1000;
+
+      if (elapsedMs < cooldownMs) {
+        const remainingSeconds = Math.ceil((cooldownMs - elapsedMs) / 1000);
+        throw new HttpException(
+          `Debe esperar ${remainingSeconds} segundos antes de regenerar un nuevo token para la operación ${operationId}`,
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+    }
+
+    await this.prisma.token.updateMany({
+      where: {
+        id_confirmation: confirmation.id,
+        status: TokenStatus.ACTIVE,
+      },
+      data: {
+        status: TokenStatus.EXPIRED,
+      },
+    });
+
+    this.logger.log(
+      `Regenerando token para confirmacion ${confirmation.id} (operacion ${operationId}). Tokens activos anteriores marcados como EXPIRED.`,
+    );
+
+    // Generar nuevo token
+    // En regeneración también se persiste únicamente el hash del nuevo token.
+    let createdToken: {
+      id: number;
+      tokenHash: string;
+      createdAt: Date;
+      status: TokenStatus;
+    } | null = null;
+    let rawTokenValue: string | null = null;
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const tokenValue = this.operationTokenService.generateTokenValue();
+      // Token plano para cliente + hash para persistencia segura.
+      const tokenHash = this.operationTokenService.hashTokenValue(tokenValue);
+
+      try {
+        createdToken = await this.prisma.token.create({
+          data: {
+            id_confirmation: confirmation.id,
+            tokenHash,
+            status: TokenStatus.ACTIVE,
+          },
+          select: {
+            id: true,
+            tokenHash: true,
+            createdAt: true,
+            status: true,
+          },
+        });
+        rawTokenValue = tokenValue;
+        break;
+      } catch (error: any) {
+        const isUniqueTokenError = error?.code === 'P2002';
+        if (!isUniqueTokenError) {
+          this.logger.error(
+            `Error persistiendo token regenerado para operacion ${operationId}: ${error?.message || 'unknown error'} (code: ${error?.code || 'N/A'})`,
+          );
+          throw new TokenGenerationFailedException(
+            operationId,
+            `Error de base de datos al persistir token regenerado: ${error?.message || 'unknown error'}`,
+          );
+        }
+
+        if (attempt === 4) {
+          throw new TokenGenerationFailedException(
+            operationId,
+            'No se pudo persistir un token único para la confirmación tras múltiples reintentos',
+          );
+        }
+      }
+    }
+
+    if (!createdToken) {
+      throw new TokenGenerationFailedException(
+        operationId,
+        'No se pudo generar nuevo token de confirmación',
+      );
+    }
+
+    // Garantiza que el link de respuesta siempre tenga token válido.
+    if (!rawTokenValue) {
+      throw new TokenGenerationFailedException(
+        operationId,
+        'No se pudo recuperar el nuevo token de confirmación generado',
+      );
+    }
+
+    const link = this.operationTokenService.buildConfirmationLink(
+      rawTokenValue,
+    );
+
+    // Solo para facilitar pruebas manuales: imprime el link completo de acceso al portal.
+    this.logger.warn(
+      `LINK_CONFIRMACION_PORTAL operacion=${operationId} confirmation=${confirmation.id} link=${link}`,
+    );
+
+    const tokenTtlMinutes = this.getTokenValidityMinutes();
+
+    this.logger.log(
+      `Token regenerado ${createdToken.id} para confirmacion ${confirmation.id} (operacion ${operationId})`,
+    );
+
+    return {
+      operationId,
+      confirmation,
+      token: createdToken,
+      link,
+      tokenTtlMinutes,
+    };
+  }
+
+  private getTokenValidityMinutes(): number {
+    // Se mantiene fijo por regla de negocio, sin depender de variables de entorno.
+    return OperationService.TOKEN_VALIDITY_MINUTES;
+  }
+
+  private getTokenExpiresAt(createdAt: Date): Date {
+    // La expiración siempre se calcula desde la fecha de creación del token.
+    const validityMs = this.getTokenValidityMinutes() * 60 * 1000;
+    return new Date(createdAt.getTime() + validityMs);
+  }
+
+  private isTokenExpired(createdAt: Date): boolean {
+    // Consideramos expirado si ya alcanzó o superó el límite de 1 hora.
+    return Date.now() >= this.getTokenExpiresAt(createdAt).getTime();
+  }
+
+  // Expone la expiración de tokens para que un cron externo pueda sincronizar el estado en BD.
+  async expireConfirmationTokens(): Promise<number> {
+    return await this.expireActiveTokensByTime();
+  }
+
+  private async expireActiveTokensByTime(): Promise<number> {
+    const expirationThreshold = new Date(
+      Date.now() - this.getTokenValidityMinutes() * 60 * 1000,
+    );
+
+    const expired = await this.prisma.token.updateMany({
+      where: {
+        status: TokenStatus.ACTIVE,
+        createdAt: {
+          lte: expirationThreshold,
+        },
+      },
+      data: {
+        status: TokenStatus.EXPIRED,
+      },
+    });
+
+    return expired.count;
+  }
+
+  private getTokenRegenerationCooldownMinutes(): number {
+    const configured = Number(
+      process.env.OPERATION_CONFIRMATION_TOKEN_REGEN_COOLDOWN_MINUTES || 5,
+    );
+
+    if (!Number.isFinite(configured) || configured < 0) {
+      return 5;
+    }
+
+    return Math.floor(configured);
+  }
+
+  private async resolveClientConfirmationEmail(operationId: number): Promise<string | null> {
+    const operationContact = await this.prisma.operation.findUnique({
+      where: { id: operationId },
+      select: {
+        client: {
+          select: {
+            name: true,
+          },
+        },
+        clientProgramming: {
+          select: {
+            client: true,
+          },
+        },
+      },
+    });
+
+    const candidates = [
+      operationContact?.clientProgramming?.client,
+      operationContact?.client?.name,
+      process.env.CONFIRMATION_DEFAULT_EMAIL,
+    ];
+
+    for (const candidate of candidates) {
+      const normalized = (candidate || '').trim();
+      if (this.isValidEmail(normalized)) {
+        return normalized;
+      }
+    }
+
+    return null;
+  }
+
+  private isValidEmail(value: string): boolean {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
   }
 
   /**

@@ -1,0 +1,16 @@
+{
+  "entryPoints": [
+    "./src/task/**/*.ts"
+  ],
+  "exclude": [
+    "**/node_modules/**",
+    "**/*.spec.ts",
+    "**/*.test.ts",
+    "**/dist/**"
+  ],
+  "out": "./docs/task",
+  "name": "Documentación Task",
+  "excludePrivate": true,
+  "entryPointStrategy": "expand",
+  "readme": "./temp-task-readme.md"
+}
