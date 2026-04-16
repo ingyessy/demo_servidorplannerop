@@ -544,6 +544,7 @@ enum StatusActivation {
 }
 
 enum BillStatus {
+  TO_APPROVED
   ACTIVE
   COMPLETED
 }

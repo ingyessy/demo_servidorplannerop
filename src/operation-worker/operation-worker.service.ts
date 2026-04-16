@@ -1,8 +1,10 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { PrismaService } from '../prisma/prisma.service';
 import { AssignWorkersDto } from './dto/assign-workers.dto';
 import { WorkerScheduleDto } from './dto/worker-schedule.dto';
-import { StatusComplete, StatusOperation, YES_NO } from '@prisma/client';
+import { BillStatus, StatusComplete, StatusOperation, YES_NO } from '@prisma/client';
+import { Decimal } from '@prisma/client/runtime/library';
 import { RemoveWorkerFromOperationService } from './service/remove-worker-from-operation/remove-worker-from-operation.service';
 import { UpdateWorkerSheduleService } from './service/update-worker-shedule/update-worker-shedule.service';
 import { AssignWorkerToOperationService } from './service/assign-worker-to-operation/assign-worker-to-operation.service';
@@ -11,6 +13,7 @@ import { AssignWorkerToOperationService } from './service/assign-worker-to-opera
 export class OperationWorkerService {
   constructor(
     private prisma: PrismaService,
+    private readonly moduleRef: ModuleRef,
     private readonly removerWorkerFromOperationService: RemoveWorkerFromOperationService,
     private readonly updateWorkerSheduleService: UpdateWorkerSheduleService,
     private readonly assingWorkerToOperationService: AssignWorkerToOperationService,
@@ -301,6 +304,7 @@ export class OperationWorkerService {
         where: { id: id_operation },
         select: { 
           status: true, 
+          id_user: true,
           dateStart: true, 
           timeStrat: true,
           dateEnd: true,
@@ -329,6 +333,13 @@ export class OperationWorkerService {
       const targetStatus = isSpecialOperation
         ? StatusOperation.TO_APPROVED
         : StatusOperation.COMPLETED;
+
+      if (isSpecialOperation) {
+        await this.ensurePreBillsForSpecialOperation(
+          id_operation,
+          operation.id_user ?? 1,
+        );
+      }
 
       // 🆕 OBTENER LA FECHA MÁS RECIENTE DE FINALIZACIÓN DE TODOS LOS GRUPOS
       const latestGroupEnd = await this.getLatestGroupEndDateTime(id_operation);
@@ -404,6 +415,139 @@ export class OperationWorkerService {
         error,
       );
       return { completed: false };
+    }
+  }
+
+  private async ensurePreBillsForSpecialOperation(
+    operationId: number,
+    userId: number,
+  ): Promise<void> {
+    const existingBills = await this.prisma.bill.count({
+      where: { id_operation: operationId },
+    });
+
+    if (existingBills > 0) {
+      return;
+    }
+
+    const operationWorkers = await this.prisma.operation_Worker.findMany({
+      where: {
+        id_operation: operationId,
+        id_worker: { not: -1 },
+      },
+      select: {
+        id_worker: true,
+        id_group: true,
+        dateStart: true,
+        timeStart: true,
+        dateEnd: true,
+        timeEnd: true,
+      },
+    });
+
+    if (!operationWorkers.length) {
+      throw new ConflictException(
+        `No se encontraron trabajadores/grupos para facturar la operación ${operationId}`,
+      );
+    }
+
+    const uniqueGroups = [
+      ...new Set(
+        operationWorkers
+          .map((ow) => ow.id_group)
+          .filter((groupId): groupId is string => !!groupId),
+      ),
+    ];
+
+    if (!uniqueGroups.length) {
+      throw new ConflictException(
+        `No se encontraron grupos válidos para facturar la operación ${operationId}`,
+      );
+    }
+
+    const billGroups = uniqueGroups.map((groupId) => {
+      const groupWorkers = operationWorkers.filter((ow) => ow.id_group === groupId);
+      const workerDurations = groupWorkers
+        .map((ow) => {
+          if (!ow.dateStart || !ow.timeStart || !ow.dateEnd || !ow.timeEnd) {
+            return 0;
+          }
+
+          const start = new Date(ow.dateStart);
+          const [sh, sm] = ow.timeStart.split(':').map(Number);
+          start.setHours(sh, sm, 0, 0);
+
+          const end = new Date(ow.dateEnd);
+          const [eh, em] = ow.timeEnd.split(':').map(Number);
+          end.setHours(eh, em, 0, 0);
+
+          const diffHours = (end.getTime() - start.getTime()) / 3_600_000;
+          return diffHours > 0 ? diffHours : 0;
+        })
+        .filter((hours) => hours > 0);
+
+      const groupHours =
+        workerDurations.length > 0
+          ? Math.round(
+              (workerDurations.reduce((sum, hours) => sum + hours, 0) /
+                workerDurations.length) *
+                100,
+            ) / 100
+          : 0;
+
+      const amountBase = groupHours > 0 ? groupHours : 1;
+
+      return {
+        id: groupId,
+        amount: amountBase,
+        group_hours: new Decimal(groupHours),
+        number_of_hours: groupHours,
+        pays: groupWorkers.map((ow) => ({
+          id_worker: ow.id_worker,
+          pay: 1,
+        })),
+        paysheetHoursDistribution: {
+          HOD: groupHours,
+          HON: 0,
+          HED: 0,
+          HEN: 0,
+          HFOD: 0,
+          HFON: 0,
+          HFED: 0,
+          HFEN: 0,
+        },
+        billHoursDistribution: {
+          HOD: groupHours,
+          HON: 0,
+          HED: 0,
+          HEN: 0,
+          HFOD: 0,
+          HFON: 0,
+          HFED: 0,
+          HFEN: 0,
+        },
+      };
+    });
+
+    try {
+      const { BillService } = await import('../bill/bill.service');
+      const billService = this.moduleRef.get(BillService, { strict: false });
+
+      await billService.create(
+        {
+          id_operation: operationId,
+          groups: billGroups,
+        },
+        userId,
+        {
+          billStatus: 'TO_APPROVED' as BillStatus,
+          skipOperationCompletion: true,
+        },
+      );
+    } catch (error) {
+      throw new ConflictException(
+        'No fue posible generar las prefacturas para la operación especial',
+      );
     }
   }
 

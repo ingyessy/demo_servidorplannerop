@@ -345,6 +345,24 @@ export class OperationController {
           description: 'Link con token embebido para confirmación',
         },
         status: { type: 'string', example: 'TO_APPROVED' },
+        tokenCreatedAt: {
+          type: 'string',
+          format: 'date-time',
+          description: 'Fecha de creación del token activo',
+        },
+        tokenExpiresAt: {
+          type: 'string',
+          format: 'date-time',
+          description: 'Fecha de expiración del token activo',
+        },
+        remainingSeconds: {
+          type: 'number',
+          description: 'Segundos restantes para que expire el token activo',
+        },
+        tokenStatus: {
+          type: 'string',
+          example: 'ACTIVE',
+        },
       },
     },
   })

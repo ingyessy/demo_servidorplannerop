@@ -12,7 +12,13 @@ import { UpdateOperationDto } from './dto/update-operation.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { OperationWorkerService } from 'src/operation-worker/operation-worker.service';
 // import { BillService } from 'src/bill/bill.service';
-import { StatusComplete, StatusOperation, TokenStatus, YES_NO } from '@prisma/client';
+import {
+  BillStatus,
+  StatusComplete,
+  StatusOperation,
+  TokenStatus,
+  YES_NO,
+} from '@prisma/client';
 import { OperationFinderService } from './services/operation-finder.service';
 import { OperationRelationService } from './services/operation-relation.service';
 import { OperationFilterDto } from './dto/fliter-operation.dto';
@@ -29,6 +35,7 @@ import { OperationTokenService } from 'src/operation/services/operation-token.se
 import { OperationNotFoundException } from './exceptions/operation-not-found.exception';
 import { TokenGenerationFailedException } from './exceptions/token-generation-failed.exception';
 import { OperationEmailService } from './services/operation-email.service';
+import { Decimal } from '@prisma/client/runtime/library';
 // ... otras importaciones
 /**
  * Servicio para gestionar operaciones
@@ -190,7 +197,7 @@ export class OperationService {
 
     const operation = await this.prisma.operation.findUnique({
       where: { id: operationId },
-      select: { id: true, status: true },
+      select: { id: true, status: true, id_user: true },
     });
 
     if (!operation) {
@@ -237,6 +244,11 @@ export class OperationService {
         'No se puede completar la operacion especial: todos los grupos deben tener fecha y hora de finalizacion',
       );
     }
+
+    await this.ensurePreBillsForSpecialOperation(
+      operationId,
+      operation.id_user ?? 1,
+    );
 
     const updatedOperation = await this.prisma.operation.update({
       where: { id: operationId },
@@ -331,6 +343,45 @@ export class OperationService {
     this.logger.log(
       `Confirmacion ${confirmation.id} creada/reutilizada para operacion ${operationId}`,
     );
+
+    // Si ya existe un token activo vigente, se reutiliza y no se crea uno nuevo.
+    const activeToken = await this.prisma.token.findFirst({
+      where: {
+        id_confirmation: confirmation.id,
+        status: TokenStatus.ACTIVE,
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        tokenHash: true,
+        createdAt: true,
+        status: true,
+      },
+    });
+
+    if (activeToken) {
+      if (this.isTokenExpired(activeToken.createdAt)) {
+        await this.prisma.token.update({
+          where: { id: activeToken.id },
+          data: { status: TokenStatus.EXPIRED },
+        });
+      } else {
+        const reusedLink = this.operationTokenService.buildConfirmationLink(
+          activeToken.tokenHash,
+        );
+
+        this.logger.log(
+          `Token activo ${activeToken.id} reutilizado para confirmacion ${confirmation.id} (operacion ${operationId})`,
+        );
+
+        return {
+          operationId,
+          confirmation,
+          token: activeToken,
+          link: reusedLink,
+        };
+      }
+    }
 
     // createdToken guarda metadatos persistidos; rawTokenValue es solo para responder el link.
     let createdToken: {
@@ -429,7 +480,7 @@ export class OperationService {
 
     const operation = await this.prisma.operation.findUnique({
       where: { id: operationId },
-      select: { id: true, status: true },
+      select: { id: true, status: true, id_user: true },
     });
 
     if (!operation) {
@@ -450,23 +501,39 @@ export class OperationService {
       );
     }
 
+    await this.ensurePreBillsForSpecialOperation(
+      operationId,
+      operation.id_user ?? 1,
+    );
+
     // Obtener o crear la confirmación
     const confirmationData = await this.createConfirmation(
       operationId,
       operation,
     );
 
+    const tokenCreatedAt = confirmationData.token.createdAt;
+    const tokenExpiresAt = this.getTokenExpiresAt(tokenCreatedAt);
+    const remainingSeconds = Math.max(
+      0,
+      Math.floor((tokenExpiresAt.getTime() - Date.now()) / 1000),
+    );
+
     return {
       operationId,
       link: confirmationData.link,
       status: operation.status,
+      tokenCreatedAt,
+      tokenExpiresAt,
+      remainingSeconds,
+      tokenStatus: confirmationData.token.status,
     };
   }
 
   /**
-   * Confirma una operación especial mediante token.
-   * - APPROVE -> APPROVED
-   * - REJECT -> REJECTED
+  * Confirma una operación especial mediante token.
+   * - APPROVE -> activa prefactura, mueve a APPROVED y luego a COMPLETED automáticamente
+    * - REJECT -> operación entra a REJECTED
    */
   async confirmOperation(
     token: string,
@@ -486,16 +553,12 @@ export class OperationService {
       throw new BadRequestException('Accion invalida. Use APPROVE o REJECT');
     }
 
-    const tokenRecord = await this.prisma.token.findUnique({
-      where: {
-        // El cliente envía token plano; en servidor siempre comparamos por hash.
-        tokenHash: this.operationTokenService.hashTokenValue(token.trim()),
-      },
+    const tokenRecord = await this.findTokenRecordByClientToken(token, {
       include: {
         confirmation: {
           include: {
             operation: {
-              select: { id: true, status: true },
+              select: { id: true, status: true, id_user: true },
             },
           },
         },
@@ -534,9 +597,28 @@ export class OperationService {
       );
     }
 
+    const approvedStatus = 'APPROVED' as StatusOperation;
     const newStatus =
-      action === 'APPROVE' ? StatusOperation.APPROVED : StatusOperation.REJECTED;
+      action === 'APPROVE' ? approvedStatus : StatusOperation.REJECTED;
     const now = getColombianDateTime();
+
+    if (action === 'APPROVE') {
+      await this.ensurePreBillsForSpecialOperation(
+        operation.id,
+        operation.id_user ?? 1,
+      );
+
+      await this.updateBillStatusesForOperation(
+        operation.id,
+        'TO_APPROVED' as BillStatus,
+        BillStatus.ACTIVE,
+      );
+    }
+
+    if (action === 'REJECT') {
+      // Cuando se rechaza, la bill NO cambia de estado
+      // Solo la operación va a REJECTED
+    }
 
     const result = await this.prisma.$transaction(async (tx) => {
       const updatedOperation = await tx.operation.update({
@@ -582,12 +664,318 @@ export class OperationService {
       `Operacion ${operation.id} confirmada con accion ${action}. Nuevo estado: ${newStatus}`,
     );
 
+    if (action === 'APPROVE') {
+      const completedOperation = await this.autoCompleteConfirmedSpecialOperation(
+        operation.id,
+      );
+
+      return {
+        operation: completedOperation,
+        confirmation: result.updatedConfirmation,
+        action,
+        movedTo: StatusOperation.COMPLETED,
+      };
+    }
+
     return {
       operation: result.updatedOperation,
       confirmation: result.updatedConfirmation,
       action,
       movedTo: newStatus,
     };
+  }
+
+  private async ensurePreBillsForSpecialOperation(
+    operationId: number,
+    userId: number,
+  ): Promise<void> {
+    const existingBills = await this.prisma.bill.count({
+      where: { id_operation: operationId },
+    });
+
+    if (existingBills > 0) {
+      this.logger.log(
+        `La operación ${operationId} ya tiene ${existingBills} factura(s). Se omite creación automática de prefactura.`,
+      );
+      return;
+    }
+
+    const operationWorkers = await this.prisma.operation_Worker.findMany({
+      where: {
+        id_operation: operationId,
+        id_worker: { not: -1 },
+      },
+      select: {
+        id_worker: true,
+        id_group: true,
+        dateStart: true,
+        timeStart: true,
+        dateEnd: true,
+        timeEnd: true,
+      },
+    });
+
+    if (!operationWorkers.length) {
+      throw new ConflictException(
+        `No se encontraron trabajadores/grupos para facturar la operación ${operationId}`,
+      );
+    }
+
+    const uniqueGroups = [
+      ...new Set(
+        operationWorkers
+          .map((ow) => ow.id_group)
+          .filter((groupId): groupId is string => !!groupId),
+      ),
+    ];
+
+    if (!uniqueGroups.length) {
+      throw new ConflictException(
+        `No se encontraron grupos válidos para facturar la operación ${operationId}`,
+      );
+    }
+
+    const billGroups = uniqueGroups.map((groupId) => {
+      const groupWorkers = operationWorkers.filter((ow) => ow.id_group === groupId);
+      const workerDurations = groupWorkers
+        .map((ow) => {
+          if (!ow.dateStart || !ow.timeStart || !ow.dateEnd || !ow.timeEnd) {
+            return 0;
+          }
+
+          const start = new Date(ow.dateStart);
+          const [sh, sm] = ow.timeStart.split(':').map(Number);
+          start.setHours(sh, sm, 0, 0);
+
+          const end = new Date(ow.dateEnd);
+          const [eh, em] = ow.timeEnd.split(':').map(Number);
+          end.setHours(eh, em, 0, 0);
+
+          const diffHours = (end.getTime() - start.getTime()) / 3_600_000;
+          return diffHours > 0 ? diffHours : 0;
+        })
+        .filter((hours) => hours > 0);
+
+      const groupHours =
+        workerDurations.length > 0
+          ? Math.round(
+              (workerDurations.reduce((sum, hours) => sum + hours, 0) /
+                workerDurations.length) *
+                100,
+            ) / 100
+          : 0;
+
+      const amountBase = groupHours > 0 ? groupHours : 1;
+
+      return {
+        id: groupId,
+        amount: amountBase,
+        group_hours: new Decimal(groupHours),
+        number_of_hours: groupHours,
+        pays: groupWorkers.map((ow) => ({
+          id_worker: ow.id_worker,
+          pay: 1,
+        })),
+        paysheetHoursDistribution: {
+          HOD: groupHours,
+          HON: 0,
+          HED: 0,
+          HEN: 0,
+          HFOD: 0,
+          HFON: 0,
+          HFED: 0,
+          HFEN: 0,
+        },
+        billHoursDistribution: {
+          HOD: groupHours,
+          HON: 0,
+          HED: 0,
+          HEN: 0,
+          HFOD: 0,
+          HFON: 0,
+          HFED: 0,
+          HFEN: 0,
+        },
+      };
+    });
+
+    try {
+      const { BillService } = await import('../bill/bill.service');
+      const billService = this.moduleRef.get(BillService, { strict: false });
+
+      await billService.create(
+        {
+          id_operation: operationId,
+          groups: billGroups,
+        },
+        userId,
+        {
+          billStatus: 'TO_APPROVED' as BillStatus,
+          skipOperationCompletion: true,
+        },
+      );
+    } catch (error) {
+      this.logger.error(
+        `Error generando prefacturas para operación especial ${operationId}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+      throw new ConflictException(
+        'No fue posible generar las prefacturas para la operación especial',
+      );
+    }
+  }
+
+  private async updateBillStatusesForOperation(
+    operationId: number,
+    fromStatus: BillStatus,
+    toStatus: BillStatus,
+  ): Promise<void> {
+    await this.prisma.bill.updateMany({
+      where: {
+        id_operation: operationId,
+        status: fromStatus,
+      },
+      data: {
+        status: toStatus,
+      },
+    });
+  }
+
+  private async autoCompleteConfirmedSpecialOperation(operationId: number) {
+    const operation = await this.prisma.operation.findUnique({
+      where: { id: operationId },
+      select: {
+        id: true,
+        status: true,
+        dateStart: true,
+        timeStrat: true,
+      },
+    });
+
+    if (!operation) {
+      throw new OperationNotFoundException(operationId);
+    }
+
+    const approvedStatus = 'APPROVED' as StatusOperation;
+
+    if (operation.status !== approvedStatus) {
+      throw new ConflictException(
+        `La operación ${operationId} no está en estado APPROVED`,
+      );
+    }
+
+    const confirmation = await this.prisma.operationConfirmation.findUnique({
+      where: { id_operation: operationId },
+      select: { confirmedAt: true },
+    });
+
+    if (!confirmation?.confirmedAt) {
+      throw new ConflictException(
+        `La operación ${operationId} no tiene confirmación registrada`,
+      );
+    }
+
+    const billCount = await this.prisma.bill.count({
+      where: { id_operation: operationId },
+    });
+
+    if (billCount === 0) {
+      throw new ConflictException(
+        `La operación ${operationId} no tiene prefacturas para completar`,
+      );
+    }
+
+    const nonActiveBills = await this.prisma.bill.count({
+      where: {
+        id_operation: operationId,
+        status: {
+          not: BillStatus.ACTIVE,
+        },
+      },
+    });
+
+    if (nonActiveBills > 0) {
+      throw new ConflictException(
+        `La operación ${operationId} tiene facturas sin activar`,
+      );
+    }
+
+    const latestEndDateTime = await this.getLatestGroupEndDateTime(operationId);
+
+    if (!latestEndDateTime) {
+      throw new ConflictException(
+        `No fue posible determinar la fecha de finalización de la operación ${operationId}`,
+      );
+    }
+
+    const opDuration =
+      operation.dateStart && operation.timeStrat
+        ? this.calculateOperationDuration(
+            operation.dateStart,
+            operation.timeStrat,
+            latestEndDateTime.date,
+            latestEndDateTime.time,
+          )
+        : 0;
+
+    const completedOperation = await this.prisma.operation.update({
+      where: { id: operationId },
+      data: {
+        status: StatusOperation.COMPLETED,
+        dateEnd: latestEndDateTime.date,
+        timeEnd: latestEndDateTime.time,
+        op_duration: opDuration,
+      },
+    });
+
+    await this.operationWorkerService.completeClientProgramming(operationId);
+    await this.operationWorkerService.releaseAllWorkersFromOperation(operationId);
+    await this.workerService.addWorkedHoursOnOperationEnd(operationId);
+
+    return completedOperation;
+  }
+
+  private async getLatestGroupEndDateTime(
+    operationId: number,
+  ): Promise<{ date: Date; time: string } | null> {
+    const workers = await this.prisma.operation_Worker.findMany({
+      where: {
+        id_operation: operationId,
+        dateEnd: { not: null },
+        timeEnd: { not: null },
+      },
+      select: {
+        dateEnd: true,
+        timeEnd: true,
+      },
+    });
+
+    if (!workers.length) {
+      return null;
+    }
+
+    let latestDateTime: Date | null = null;
+    let latestResult: { date: Date; time: string } | null = null;
+
+    for (const worker of workers) {
+      if (!worker.dateEnd || !worker.timeEnd) {
+        continue;
+      }
+
+      const [hours, minutes] = worker.timeEnd.split(':').map(Number);
+      const dateTime = new Date(worker.dateEnd);
+      dateTime.setHours(hours, minutes, 0, 0);
+
+      if (!latestDateTime || dateTime > latestDateTime) {
+        latestDateTime = dateTime;
+        latestResult = {
+          date: worker.dateEnd,
+          time: worker.timeEnd,
+        };
+      }
+    }
+
+    return latestResult;
   }
 
   async getConfirmationPreviewByToken(token: string) {
@@ -599,11 +987,7 @@ export class OperationService {
       throw new BadRequestException('Token de confirmacion requerido');
     }
 
-    const tokenRecord = await this.prisma.token.findUnique({
-      where: {
-        // En preview también se valida por hash para no consultar token plano.
-        tokenHash: this.operationTokenService.hashTokenValue(normalizedToken),
-      },
+    const tokenRecord = await this.findTokenRecordByClientToken(normalizedToken, {
       include: {
         confirmation: {
           include: {
@@ -1051,6 +1435,34 @@ export class OperationService {
     return Math.floor(configured);
   }
 
+  private async findTokenRecordByClientToken(
+    token: string,
+    args?: any,
+  ): Promise<any> {
+    const normalizedToken = token?.trim();
+    if (!normalizedToken) {
+      return null;
+    }
+
+    const tokenHashFromRaw =
+      this.operationTokenService.hashTokenValue(normalizedToken);
+
+    const findByRaw = await this.prisma.token.findUnique({
+      where: { tokenHash: tokenHashFromRaw },
+      ...(args || {}),
+    });
+
+    if (findByRaw) {
+      return findByRaw;
+    }
+
+    // Compatibilidad: también acepta tokenHash directo en links reutilizados.
+    return this.prisma.token.findUnique({
+      where: { tokenHash: normalizedToken },
+      ...(args || {}),
+    });
+  }
+
   private async resolveClientConfirmationEmail(operationId: number): Promise<string | null> {
     const operationContact = await this.prisma.operation.findUnique({
       where: { id: operationId },
@@ -1236,6 +1648,9 @@ export class OperationService {
     } catch (error) {
       console.error('[OperationService] ==> ERROR en createWithWorkers:', error);
       console.error('[OperationService] ==> Stack trace:', (error as Error).stack);
+      if (error instanceof HttpException) {
+        throw error;
+      }
       throw new Error((error as Error).message);
     }
   }

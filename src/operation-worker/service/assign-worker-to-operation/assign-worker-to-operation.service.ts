@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { ValidationWorkerService } from 'src/common/validation/services/validation-worker/validation-worker.service';
 import { ValidationService } from 'src/common/validation/validation.service';
 import { AssignWorkersDto } from 'src/operation-worker/dto/assign-workers.dto';
@@ -88,10 +88,18 @@ export class AssignWorkerToOperationService {
       // 5. Crear registros para trabajadores
       const assignmentPromises: Promise<any>[] = [];
 
-      // Función para convertir fechas
-      const parseDate = (dateString) => {
+      // Convierte a Date y valida que no sea Invalid Date.
+      const parseDate = (dateString: string | null | undefined, fieldName: string): Date | null => {
         if (!dateString) return null;
-        return new Date(dateString);
+
+        const parsedDate = new Date(dateString);
+        if (Number.isNaN(parsedDate.getTime())) {
+          throw new BadRequestException(
+            `Invalid date format for ${fieldName}: "${dateString}". Use ISO 8601 format.`,
+          );
+        }
+
+        return parsedDate;
       };
 
       // Asignar trabajadores simples (sin programación)
@@ -130,8 +138,8 @@ export class AssignWorkerToOperationService {
           }
           
           const groupSchedule = {
-            dateStart: group.dateStart ? parseDate(group.dateStart) : null,
-            dateEnd: group.dateEnd ? parseDate(group.dateEnd) : null,
+            dateStart: parseDate(group.dateStart, 'dateStart'),
+            dateEnd: parseDate(group.dateEnd, 'dateEnd'),
             timeStart: group.timeStart || null,
             timeEnd: group.timeEnd || null,
             ...(groupId && { id_group: groupId }), // Solo incluir si hay groupId
@@ -158,6 +166,9 @@ export class AssignWorkerToOperationService {
 
       // Ejecutar todas las asignaciones
       await Promise.all(assignmentPromises);
+      console.log(
+        `[AssignWorkerService] ✅ Inserciones de operation_Worker ejecutadas: ${assignmentPromises.length}`,
+      );
 
       // 6. Actualizar estado de los trabajadores asignados
       const allWorkersToUpdate = [
@@ -175,6 +186,7 @@ export class AssignWorkerToOperationService {
       // 7. Generar respuesta
       return {
         message: `${allWorkersToUpdate.length} workers assigned to operation ${id_operation}`,
+        createdRecords: assignmentPromises.length,
         assignedWorkers: {
           simple: allSimpleWorkerIds,
           scheduled: scheduledGroupsToProcess,
@@ -182,7 +194,12 @@ export class AssignWorkerToOperationService {
       };
     } catch (error) {
       console.error('Error assigning workers to operation:', error);
-      throw new Error(error.message);
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(message);
     }
   }
 }

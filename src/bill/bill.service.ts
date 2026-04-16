@@ -23,6 +23,11 @@ import {
 } from 'src/common/utils/dateColombia';
 import { FilterBillDto } from './dto/filter-bill.dto';
 
+type CreateBillOptions = {
+  billStatus?: BillStatus;
+  skipOperationCompletion?: boolean;
+};
+
 @Injectable()
 export class BillService {
   constructor(
@@ -34,7 +39,11 @@ export class BillService {
     private baseCalculationService: BaseCalculationService,
     private configurationService: ConfigurationService
   ) {}
-  async create(createBillDto: CreateBillDto, userId: number) {
+  async create(
+    createBillDto: CreateBillDto,
+    userId: number,
+    options: CreateBillOptions = {},
+  ) {
     // console.log('=== [BillService] Iniciando creación de factura ===');
     // console.log('[BillService] userId:', userId);
     // console.log('[BillService] createBillDto:', JSON.stringify(createBillDto, null, 2));
@@ -62,29 +71,47 @@ export class BillService {
 
     // console.log('[BillService] ✅ Operación validada correctamente');
 
+    const isSpecialOperation = await this.isSpecialOperationByTariff(
+      createBillDto.id_operation,
+    );
+    const targetBillStatus =
+      options.billStatus ??
+      (isSpecialOperation ? ('TO_APPROVED' as BillStatus) : undefined);
+    const shouldAutoCompleteOperation = !options.skipOperationCompletion;
+
     // Procesar todos los tipos de grupos
-    await this.processJornalGroups(createBillDto, userId, validateOperationID);
+    await this.processJornalGroups(
+      createBillDto,
+      userId,
+      validateOperationID,
+      targetBillStatus,
+    );
     await this.processSimpleHoursGroups(
       createBillDto,
       userId,
       validateOperationID,
+      targetBillStatus,
     );
     await this.processAlternativeServiceGroups(
       createBillDto,
       userId,
       validateOperationID,
+      targetBillStatus,
     );
     await this.processQuantityGroups(
       createBillDto,
       userId,
       validateOperationID,
       0,
+      targetBillStatus,
     );
 
     // console.log('[BillService] ✅ Factura creada exitosamente');
 
-    // ✅ COMPLETAR OPERACIÓN AUTOMÁTICAMENTE DESPUÉS DE GENERAR FACTURAS
-    await this.completeOperationAfterBillCreation(createBillDto.id_operation);
+    // ✅ COMPLETAR OPERACIÓN AUTOMÁTICAMENTE DESPUÉS DE GENERAR FACTURAS (flujo normal)
+    if (shouldAutoCompleteOperation) {
+      await this.completeOperationAfterBillCreation(createBillDto.id_operation);
+    }
 
     return {
       message: 'Cálculos y guardado de facturación realizados con éxito',
@@ -122,6 +149,7 @@ export class BillService {
     createBillDto: CreateBillDto,
     userId: number,
     validateOperationID: any,
+    billStatus?: BillStatus,
   ) {
     const jornalGroups =
       await this.workerGroupAnalysisService.findGroupsByCriteria(
@@ -171,7 +199,9 @@ export class BillService {
         userId,
         groupDto,
       );
-      const billSaved = await this.prisma.bill.create({ data: billData });
+      const billSaved = await this.prisma.bill.create({
+        data: this.withOptionalBillStatus(billData, billStatus),
+      });
       
       console.log(`Bill creada con ID: ${billSaved.id} para grupo: ${result.groupId}`);
 
@@ -196,6 +226,7 @@ export class BillService {
   createBillDto: CreateBillDto,
   userId: number,
   validateOperationID: any,
+  billStatus?: BillStatus,
 ) {
   const simpleHoursGroups =
     await this.workerGroupAnalysisService.findGroupsByCriteria(
@@ -240,9 +271,12 @@ export class BillService {
       matchingGroupSummary, // ✅ Agregar este parámetro
     );
     const billSaved = await this.prisma.bill.create({
-      data: {
-        ...billData,
-      },
+      data: this.withOptionalBillStatus(
+        {
+          ...billData,
+        },
+        billStatus,
+      ),
     });
 
     await this.processHoursBillDetails(
@@ -266,6 +300,7 @@ export class BillService {
     createBillDto: CreateBillDto,
     userId: number,
     validateOperationID: any,
+    billStatus?: BillStatus,
   ) {
     const twoUnitsGroups =
       await this.workerGroupAnalysisService.findGroupsByCriteria(
@@ -308,10 +343,13 @@ export class BillService {
       );
 
       const billSaved = await this.prisma.bill.create({
-        data: {
-          ...billData,
-          group_hours: group.group_hours ? Number(group.group_hours) : null,
-        },
+        data: this.withOptionalBillStatus(
+          {
+            ...billData,
+            group_hours: group.group_hours ? Number(group.group_hours) : null,
+          },
+          billStatus,
+        ),
       });
 
       await this.processAlternativeServiceBillDetails(
@@ -367,6 +405,7 @@ export class BillService {
     userId: number,
     validateOperationID: any,
     amountDb: number,
+    billStatus?: BillStatus,
   ) {
     // Si validateOperationID es un array de grupos, úsalo directamente
     const groupsSource = Array.isArray(validateOperationID.workerGroups)
@@ -419,9 +458,12 @@ export class BillService {
       );
 
       const billSaved = await this.prisma.bill.create({
-        data: {
-          ...billData,
-        },
+        data: this.withOptionalBillStatus(
+          {
+            ...billData,
+          },
+          billStatus,
+        ),
       });
 
       await this.processQuantityBillDetails(
@@ -440,6 +482,20 @@ export class BillService {
         matchingGroupSummary.groupId,
       );
     }
+  }
+
+  private withOptionalBillStatus<T extends Record<string, unknown>>(
+    billData: T,
+    billStatus?: BillStatus,
+  ): T | (T & { status: BillStatus }) {
+    if (!billStatus) {
+      return billData;
+    }
+
+    return {
+      ...billData,
+      status: billStatus,
+    };
   }
 
   // Calcular totales para servicio alternativo
@@ -3162,7 +3218,35 @@ export class BillService {
       // 3. Calcular op_duration total
       const opDuration = await this.calculateOperationDuration(operationId, latestEndDateTime);
 
-      // 4. Actualizar operación a COMPLETED con fechas y duración
+      const isSpecialOperation = await this.isSpecialOperationByTariff(operationId);
+
+      if (isSpecialOperation) {
+        const toApprovedBillStatus = 'TO_APPROVED' as BillStatus;
+
+        await this.prisma.bill.updateMany({
+          where: {
+            id_operation: operationId,
+            status: BillStatus.ACTIVE,
+          },
+          data: {
+            status: toApprovedBillStatus,
+          },
+        });
+
+        await this.prisma.operation.update({
+          where: { id: operationId },
+          data: {
+            status: 'TO_APPROVED',
+            dateEnd: latestEndDateTime.date,
+            timeEnd: latestEndDateTime.time,
+            op_duration: opDuration,
+          },
+        });
+
+        return;
+      }
+
+      // 4. Actualizar operación a COMPLETED con fechas y duración (flujo normal)
       await this.prisma.operation.update({
         where: { id: operationId },
         data: {
@@ -3182,6 +3266,19 @@ export class BillService {
       console.error(`[BillService] ❌ Error completando operación ${operationId}:`, error);
       // No lanzar error para no interrumpir la creación de facturas
     }
+  }
+
+  private async isSpecialOperationByTariff(operationId: number): Promise<boolean> {
+    const specialTariffCount = await this.prisma.operation_Worker.count({
+      where: {
+        id_operation: operationId,
+        tariff: {
+          isSpecial: 'YES',
+        },
+      },
+    });
+
+    return specialTariffCount > 0;
   }
 
   /**

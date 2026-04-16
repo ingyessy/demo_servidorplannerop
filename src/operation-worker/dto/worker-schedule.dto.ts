@@ -1,5 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsArray, IsNumber, IsOptional, IsString } from 'class-validator';
+import {
+  IsArray,
+  IsDateString,
+  IsNumber,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 
 export class WorkerScheduleDto {
   @ApiProperty({
@@ -19,20 +25,20 @@ export class WorkerScheduleDto {
 
   @ApiProperty({
     description: 'Fecha de inicio para estos trabajadores',
-    example: '2023-10-01',
+    example: '2023-10-01T00:00:00.000Z',
     required: false,
   })
   @IsOptional()
-  @IsString()
+  @IsDateString()
   dateStart?: string;
 
   @ApiProperty({
     description: 'Fecha de fin para estos trabajadores',
-    example: '2023-10-31',
+    example: '2023-10-31T00:00:00.000Z',
     required: false,
   })
   @IsOptional()
-  @IsString()
+  @IsDateString()
   dateEnd?: string;
 
   @ApiProperty({

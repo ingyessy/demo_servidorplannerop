@@ -64,7 +64,7 @@ export class OperationRelationService {
 
     // Asignar trabajadores
     if (hasWorkers) {
-      const reponse =
+      const response =
         await this.operationWorkerService.assignWorkersToOperation(
           {
             id_operation: operationId,
@@ -75,18 +75,30 @@ export class OperationRelationService {
           id_site,
         );
 
-      if (reponse && (reponse.status === 403 || reponse.status === 400)) {
-        return reponse;
+      if (response && (response.status === 403 || response.status === 400)) {
+        return response;
       }
+
+      return {
+        workers: response,
+        inCharge: hasInCharge
+          ? await this.operationInChargeService.assignInChargeToOperation({
+              id_operation: operationId,
+              userIds: uniqueInChargedIds,
+            })
+          : { message: 'No users to assign', assignedUsers: [] },
+      };
     }
 
     // Asignar encargados
     if (hasInCharge) {
-      await this.operationInChargeService.assignInChargeToOperation({
+      return await this.operationInChargeService.assignInChargeToOperation({
         id_operation: operationId,
         userIds: uniqueInChargedIds,
       });
     }
+
+    return { message: 'No workers or in-charge users to assign' };
   }
   /**
    * Extrae los IDs de trabajadores de grupos programados

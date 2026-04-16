@@ -9,6 +9,7 @@ import {
 } from 'class-validator';
 
 export enum BillStatus {
+  TO_APPROVED = 'TO_APPROVED',
   ACTIVE = 'ACTIVE',
   COMPLETED = 'COMPLETED'
 }
