@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { CreateBillDto, GroupBillDto } from './dto/create-bill.dto';
 import { UpdateBillDto } from './dto/update-bill.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -28,8 +28,19 @@ type CreateBillOptions = {
   skipOperationCompletion?: boolean;
 };
 
+type CreateBillFromOperationOptions = CreateBillOptions & {
+  mode?: 'NORMAL' | 'SPECIAL';
+  workerGroupOverrides?: Array<{
+    id_group?: string | null;
+    number_of_hours?: number | null;
+    group_hours?: number | Decimal | null;
+  }>;
+};
+
 @Injectable()
 export class BillService {
+  private readonly logger = new Logger(BillService.name);
+
   constructor(
     private prisma: PrismaService,
     private operationFinderService: OperationFinderService,
@@ -58,6 +69,16 @@ export class BillService {
     if (!createBillDto.groups || createBillDto.groups.length === 0) {
       console.error('[BillService] ❌ Error: No se proporcionaron grupos');
       throw new ConflictException('La operación debe tener al menos un grupo de trabajadores para facturar');
+    }
+
+    for (const group of createBillDto.groups) {
+      const paysSummary = (group.pays || []).map((pay) => ({
+        id_worker: pay.id_worker,
+        pay: pay.pay,
+      }));
+      this.logger.log(
+        `[BillCreate][DTO] operation=${createBillDto.id_operation} group=${group.id || 'N/A'} amount=${group.amount ?? 'N/A'} number_of_hours=${group.number_of_hours ?? group.group_hours ?? 'N/A'} unit_type=${(group as any)?.unit_type ?? 'N/A'} pays=${JSON.stringify(paysSummary)}`,
+      );
     }
 
     // console.log(`[BillService] ✅ Validación básica correcta: ${createBillDto.groups.length} grupos a procesar`);
@@ -118,31 +139,271 @@ export class BillService {
     };
   }
 
-  // Validar operación
- private async validateOperation(operationId: number) {
-  const validateOperationID =
-    await this.operationFinderService.getOperationWithDetailedTariffs(
+  async createFromOperation(
+    operationId: number,
+    userId: number,
+    options: CreateBillFromOperationOptions = {},
+  ) {
+    if (!operationId || operationId <= 0) {
+      throw new ConflictException('El ID de la operación es obligatorio para crear una factura');
+    }
+
+    const mode = options.mode ?? 'SPECIAL';
+
+    if (mode === 'SPECIAL') {
+      const existingBills = await this.prisma.bill.count({
+        where: { id_operation: operationId },
+      });
+
+      if (existingBills > 0) {
+        this.logger.log(
+          `La operación ${operationId} ya tiene ${existingBills} factura(s). Se omite creación automática de prefactura.`,
+        );
+        return {
+          message: 'La operación ya tiene facturas creadas',
+        };
+      }
+    }
+
+    const createBillDto = await this.buildCreateBillDtoFromOperation(
       operationId,
+      options.workerGroupOverrides,
     );
 
-  if (!validateOperationID || validateOperationID.status === 404) {
-    throw new NotFoundException('Operation not found');
-  }
+    const targetBillStatus =
+      options.billStatus ??
+      (mode === 'SPECIAL' ? ('TO_APPROVED' as BillStatus) : undefined);
+    const skipOperationCompletion =
+      options.skipOperationCompletion ?? mode === 'SPECIAL';
 
-  // ✅ AGREGAR LOG PARA VERIFICAR QUE op_duration LLEGUE CORRECTAMENTE
-  // console.log('=== VALIDATE OPERATION ===');
-  // console.log('validateOperationID.op_duration:', validateOperationID.op_duration);
-  // console.log('validateOperationID.workerGroups:', validateOperationID.workerGroups?.length);
-  
-  if (validateOperationID.workerGroups) {
-    validateOperationID.workerGroups.forEach((group, index) => {
-      // console.log(`Grupo ${index + 1} - op_duration:`, group.op_duration);
+    return await this.create(createBillDto, userId, {
+      billStatus: targetBillStatus,
+      skipOperationCompletion,
     });
   }
-  // console.log('=== FIN VALIDATE OPERATION ===');
 
-  return validateOperationID;
-}
+  // Validar operación
+  private async validateOperation(operationId: number) {
+    const validateOperationID =
+      await this.operationFinderService.getOperationWithDetailedTariffs(
+        operationId,
+      );
+
+    if (!validateOperationID || validateOperationID.status === 404) {
+      throw new NotFoundException('Operation not found');
+    }
+
+    // ✅ AGREGAR LOG PARA VERIFICAR QUE op_duration LLEGUE CORRECTAMENTE
+    // console.log('=== VALIDATE OPERATION ===');
+    // console.log('validateOperationID.op_duration:', validateOperationID.op_duration);
+    // console.log('validateOperationID.workerGroups:', validateOperationID.workerGroups?.length);
+
+    if (validateOperationID.workerGroups) {
+      validateOperationID.workerGroups.forEach((group, index) => {
+        // console.log(`Grupo ${index + 1} - op_duration:`, group.op_duration);
+      });
+    }
+    // console.log('=== FIN VALIDATE OPERATION ===');
+
+    return validateOperationID;
+  }
+
+  private async buildCreateBillDtoFromOperation(
+    operationId: number,
+    workerGroupOverrides?: Array<{
+      id_group?: string | null;
+      number_of_hours?: number | null;
+      group_hours?: number | Decimal | null;
+    }>,
+  ): Promise<CreateBillDto> {
+    const operationWorkers = await this.prisma.operation_Worker.findMany({
+      where: {
+        id_operation: operationId,
+        id_worker: { not: -1 },
+      },
+      select: {
+        id_worker: true,
+        id_group: true,
+        id_tariff: true,
+        dateStart: true,
+        timeStart: true,
+        dateEnd: true,
+        timeEnd: true,
+      },
+    });
+
+    if (!operationWorkers.length) {
+      throw new ConflictException(
+        `No se encontraron trabajadores/grupos para facturar la operación ${operationId}`,
+      );
+    }
+
+    const uniqueGroups = [
+      ...new Set(
+        operationWorkers
+          .map((ow) => ow.id_group)
+          .filter((groupId): groupId is string => !!groupId),
+      ),
+    ];
+
+    if (!uniqueGroups.length) {
+      throw new ConflictException(
+        `No se encontraron grupos válidos para facturar la operación ${operationId}`,
+      );
+    }
+
+    const quantityByGroup = new Map<string, number>();
+    for (const workerGroup of workerGroupOverrides || []) {
+      if (!workerGroup.id_group) {
+        continue;
+      }
+
+      const explicitQuantity =
+        Number(workerGroup.number_of_hours ?? workerGroup.group_hours ?? 0) || 0;
+
+      if (explicitQuantity > 0) {
+        quantityByGroup.set(workerGroup.id_group, explicitQuantity);
+      }
+    }
+
+    const tariffIds = [
+      ...new Set(
+        operationWorkers
+          .map((ow) => ow.id_tariff)
+          .filter((id): id is number => typeof id === 'number'),
+      ),
+    ];
+
+    const tariffs = tariffIds.length
+      ? await this.prisma.tariff.findMany({
+          where: { id: { in: tariffIds } },
+          select: {
+            id: true,
+            pay_units: true,
+            unitOfMeasure: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        })
+      : [];
+
+    const unitByTariffId = new Map<number, string>();
+    const quantityByTariffId = new Map<number, number>();
+    for (const tariff of tariffs) {
+      unitByTariffId.set(
+        tariff.id,
+        (tariff.unitOfMeasure?.name || '').trim().toUpperCase(),
+      );
+      quantityByTariffId.set(tariff.id, Number(tariff.pay_units ?? 0));
+    }
+
+    const groups = uniqueGroups.map((groupId) => {
+      const groupWorkers = operationWorkers.filter((ow) => ow.id_group === groupId);
+      const representativeTariffId = groupWorkers.find(
+        (ow) => typeof ow.id_tariff === 'number',
+      )?.id_tariff;
+      const unitName = representativeTariffId
+        ? unitByTariffId.get(representativeTariffId)
+        : '';
+      const isTimeBasedUnit = unitName === 'HORAS' || unitName === 'JORNAL';
+      const tariffQuantity = representativeTariffId
+        ? Number(quantityByTariffId.get(representativeTariffId) ?? 0)
+        : 0;
+      const workerDurations = groupWorkers
+        .map((ow) => {
+          if (!ow.dateStart || !ow.timeStart || !ow.dateEnd || !ow.timeEnd) {
+            return 0;
+          }
+
+          const start = new Date(ow.dateStart);
+          const [sh, sm] = ow.timeStart.split(':').map(Number);
+          start.setHours(sh, sm, 0, 0);
+
+          const end = new Date(ow.dateEnd);
+          const [eh, em] = ow.timeEnd.split(':').map(Number);
+          end.setHours(eh, em, 0, 0);
+
+          const diffHours = (end.getTime() - start.getTime()) / 3_600_000;
+          return diffHours > 0 ? diffHours : 0;
+        })
+        .filter((hours) => hours > 0);
+
+      const groupHours =
+        workerDurations.length > 0
+          ? Math.round(
+              (workerDurations.reduce((sum, hours) => sum + hours, 0) /
+                workerDurations.length) *
+                100,
+            ) / 100
+          : 0;
+
+      const explicitQuantity = quantityByGroup.get(groupId) || 0;
+      const quantityForBilling = explicitQuantity > 0 ? explicitQuantity : tariffQuantity;
+
+      if (!isTimeBasedUnit && quantityForBilling <= 0) {
+        throw new ConflictException(
+          `No se pudo determinar la cantidad para el grupo ${groupId} (unidad ${unitName || 'N/A'}). Envíe amount explícito o configure pay_units en la tarifa.`,
+        );
+      }
+
+      const amountBase = isTimeBasedUnit
+        ? groupHours > 0
+          ? groupHours
+          : 1
+        : quantityForBilling > 0
+          ? quantityForBilling
+          : 1;
+
+      const hoursDistributionBase = isTimeBasedUnit ? groupHours : 0;
+      const numberOfHoursValue = isTimeBasedUnit
+        ? groupHours
+        : quantityForBilling > 0
+          ? quantityForBilling
+          : 1;
+
+      this.logger.log(
+        `[BillCreate][FromOperation][DTO] operation=${operationId} group=${groupId} unit=${unitName || 'N/A'} explicitQuantity=${explicitQuantity} tariffQuantity=${tariffQuantity} amount=${amountBase}`,
+      );
+
+      return {
+        id: groupId,
+        amount: amountBase,
+        group_hours: new Decimal(groupHours),
+        number_of_hours: numberOfHoursValue,
+        pays: groupWorkers.map((ow) => ({
+          id_worker: ow.id_worker,
+          pay: 1,
+        })),
+        paysheetHoursDistribution: {
+          HOD: hoursDistributionBase,
+          HON: 0,
+          HED: 0,
+          HEN: 0,
+          HFOD: 0,
+          HFON: 0,
+          HFED: 0,
+          HFEN: 0,
+        },
+        billHoursDistribution: {
+          HOD: hoursDistributionBase,
+          HON: 0,
+          HED: 0,
+          HEN: 0,
+          HFOD: 0,
+          HFON: 0,
+          HFED: 0,
+          HFEN: 0,
+        },
+      };
+    });
+
+    return {
+      id_operation: operationId,
+      groups,
+    };
+  }
 
   // Procesar grupos JORNAL
   private async processJornalGroups(
@@ -436,6 +697,14 @@ export class BillService {
       );
       if (!matchingGroupSummary) continue;
 
+      const paysSummary = (group.pays || []).map((pay) => ({
+        id_worker: pay.id_worker,
+        pay: pay.pay,
+      }));
+      this.logger.log(
+        `[BillCreate][Quantity][DTO] operation=${createBillDto.id_operation} group=${group.id} unit=${matchingGroupSummary.schedule?.unit_of_measure || 'N/A'} amount=${group.amount ?? 'N/A'} number_of_hours=${group.number_of_hours ?? group.group_hours ?? 'N/A'} pays=${JSON.stringify(paysSummary)}`,
+      );
+
       const { totalPaysheet, totalFacturation } = this.calculateQuantityTotals(
         matchingGroupSummary,
         group,
@@ -457,6 +726,17 @@ export class BillService {
         userId,
       );
 
+      this.logger.log(
+        `[BillCreate][Quantity][PrePersist] operation=${createBillDto.id_operation} group=${matchingGroupSummary.groupId} billData=${JSON.stringify({
+          amount: billData.amount,
+          number_of_hours: billData.number_of_hours,
+          group_hours: billData.group_hours,
+          total_bill: billData.total_bill,
+          total_paysheet: billData.total_paysheet,
+          number_of_workers: billData.number_of_workers,
+        })}`,
+      );
+
       const billSaved = await this.prisma.bill.create({
         data: this.withOptionalBillStatus(
           {
@@ -465,6 +745,24 @@ export class BillService {
           billStatus,
         ),
       });
+
+      const persistedBill = await this.prisma.bill.findUnique({
+        where: { id: billSaved.id },
+        select: {
+          id: true,
+          id_group: true,
+          amount: true,
+          number_of_hours: true,
+          group_hours: true,
+          total_bill: true,
+          total_paysheet: true,
+          status: true,
+        },
+      });
+
+      this.logger.log(
+        `[BillCreate][Quantity][Persisted] operation=${createBillDto.id_operation} group=${matchingGroupSummary.groupId} bill=${billSaved.id} values=${JSON.stringify(persistedBill)}`,
+      );
 
       await this.processQuantityBillDetails(
         matchingGroupSummary.workers,
@@ -619,6 +917,15 @@ export class BillService {
       totalPaysheet: amount * paysheetTariff,
       totalFacturation: amount * facturationTariff,
     };
+  }
+
+  private sanitizeBillAmount(amount: unknown, fallback: number = 0): number {
+    const parsed = Number(amount);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      return fallback;
+    }
+
+    return parsed;
   }
 
   // Obtener DTO de grupo
@@ -987,12 +1294,13 @@ export class BillService {
       : 0;
 
     const numberHours = paysheetTotalHours || billTotalHours || 0;
+    const normalizedAmount = this.sanitizeBillAmount(group.amount, 0);
 
     return {
       week_number: week_number || 0,
       id_operation: operationId,
       id_user: userId,
-      amount: group.amount || 0,
+      amount: normalizedAmount,
       number_of_workers: matchingGroupSummary.workers?.length || 0,
       total_bill: totalFacturation,
       total_paysheet: totalPaysheet,
@@ -1030,16 +1338,19 @@ export class BillService {
     userId: number,
   ) {
     const week_number = getWeekNumber(matchingGroupSummary.schedule?.dateStart);
+    const normalizedAmount = this.sanitizeBillAmount(group.amount, 0);
+    const normalizedNumberOfHours =
+      group.number_of_hours ?? group.group_hours ?? normalizedAmount;
 
     return {
       week_number: week_number || 0,
       id_operation: operationId,
       id_user: userId,
-      amount: group.amount || 0,
+      amount: normalizedAmount,
       number_of_workers: matchingGroupSummary.workers?.length || 0,
       total_bill: totalFacturation,
       total_paysheet: totalPaysheet,
-      number_of_hours: group.number_of_hours || group.group_hours || 0,
+      number_of_hours: normalizedNumberOfHours,
       createdAt: new Date(),
       observation: group.observation || '',
       id_group: matchingGroupSummary.groupId,
@@ -1816,16 +2127,51 @@ export class BillService {
       throw new ConflictException(`No se encontró la factura con ID: ${id}`);
     }
 
+    // Normalizar payload: algunos clientes envían formato de creación ({ groups: [...] })
+    // al endpoint PATCH /bill/:id. En ese caso, tomamos el primer grupo.
+    const rawPayload = updateBillDto as UpdateBillDto & {
+      groups?: GroupBillDto[];
+    };
+    const nestedGroup = Array.isArray(rawPayload.groups)
+      ? rawPayload.groups[0]
+      : undefined;
+
+    const normalizedUpdateBillDto: UpdateBillDto = nestedGroup
+      ? {
+          ...rawPayload,
+          ...nestedGroup,
+        }
+      : updateBillDto;
+
+    this.logger.log(
+      `[BillUpdate][IN] bill=${id} user=${userId} hasNestedGroups=${Array.isArray(rawPayload.groups)} nestedCount=${rawPayload.groups?.length || 0} root_amount=${(updateBillDto as any)?.amount ?? 'N/A'} normalized_amount=${(normalizedUpdateBillDto as any)?.amount ?? 'N/A'}`,
+    );
+
+    if (Array.isArray(rawPayload.groups) && rawPayload.groups.length > 0) {
+      const groupsSummary = rawPayload.groups.map((group) => ({
+        id: group?.id || 'N/A',
+        amount: (group as any)?.amount,
+        number_of_hours: (group as any)?.number_of_hours,
+        group_hours: (group as any)?.group_hours,
+        pays_count: Array.isArray((group as any)?.pays)
+          ? (group as any).pays.length
+          : 0,
+      }));
+      this.logger.log(
+        `[BillUpdate][IN_GROUPS] bill=${id} detail=${JSON.stringify(groupsSummary)}`,
+      );
+    }
+
     // ✅ MANEJAR ACTUALIZACIÓN DE FECHAS DEL GRUPO
     const shouldUpdateGroupDates = !!(
-      updateBillDto.dateStart_group ||
-      updateBillDto.timeStart_group ||
-      updateBillDto.dateEnd_group ||
-      updateBillDto.timeEnd_group
+      normalizedUpdateBillDto.dateStart_group ||
+      normalizedUpdateBillDto.timeStart_group ||
+      normalizedUpdateBillDto.dateEnd_group ||
+      normalizedUpdateBillDto.timeEnd_group
     );
 
     // ✅ USAR EL id_group DE LA BILL EXISTENTE SI NO SE PROPORCIONA EN EL DTO
-    const groupId = updateBillDto.id || billDb.id_group;
+    const groupId = normalizedUpdateBillDto.id || billDb.id_group;
     
     if (!groupId) {
       throw new ConflictException('No se pudo determinar el ID del grupo para actualizar');
@@ -1838,10 +2184,10 @@ export class BillService {
       await this.updateOperationWorkerDates(
         billDb.id_operation,
         groupId,
-        updateBillDto.dateStart_group,
-        updateBillDto.timeStart_group,
-        updateBillDto.dateEnd_group,
-        updateBillDto.timeEnd_group,
+        normalizedUpdateBillDto.dateStart_group,
+        normalizedUpdateBillDto.timeStart_group,
+        normalizedUpdateBillDto.dateEnd_group,
+        normalizedUpdateBillDto.timeEnd_group,
       );
 
       // Actualizar los campos de fecha del grupo en la Bill (cuando estén en el schema)
@@ -1860,9 +2206,37 @@ export class BillService {
 
     // ✅ Asegurar que el DTO tenga un id para las funciones internas
     const completeUpdateBillDto = {
-      ...updateBillDto,
+      ...normalizedUpdateBillDto,
       id: groupId // Usar el groupId determinado arriba
     };
+
+    this.logger.log(
+      `[BillUpdate][NORMALIZED] bill=${id} group=${groupId} amount=${(completeUpdateBillDto as any)?.amount ?? 'N/A'} number_of_hours=${(completeUpdateBillDto as any)?.number_of_hours ?? 'N/A'} pays_count=${Array.isArray((completeUpdateBillDto as any)?.pays) ? (completeUpdateBillDto as any).pays.length : 0}`,
+    );
+
+    // Si no llegan pagos en el payload, reutilizar los ya persistidos en billDetail.
+    if (!Array.isArray(completeUpdateBillDto.pays) || completeUpdateBillDto.pays.length === 0) {
+      const existingPays = await this.prisma.billDetail.findMany({
+        where: { id_bill: id },
+        include: {
+          operationWorker: {
+            select: {
+              id_worker: true,
+            },
+          },
+        },
+      });
+
+      completeUpdateBillDto.pays = existingPays.map((detail) => ({
+        id_worker: detail.operationWorker.id_worker,
+        pay: Number(detail.pay_unit ?? 1),
+        pay_rate: Number(detail.pay_rate ?? 0),
+      }));
+
+      this.logger.warn(
+        `[BillUpdate][PAYS_FALLBACK] bill=${id} group=${groupId} pays_loaded_from_db=${completeUpdateBillDto.pays.length}`,
+      );
+    }
 
     this.validateUpdateGroups([completeUpdateBillDto]);
 
@@ -1897,6 +2271,11 @@ export class BillService {
     );
 
     const billDB = await this.findOne(id);
+
+    this.logger.log(
+      `[BillUpdate][PERSISTED] bill=${id} group=${billDB?.id_group || 'N/A'} amount=${billDB?.amount ?? 'N/A'} number_of_hours=${billDB?.number_of_hours ?? 'N/A'} group_hours=${billDB?.group_hours ?? 'N/A'} total_bill=${billDB?.total_bill ?? 'N/A'} total_paysheet=${billDB?.total_paysheet ?? 'N/A'}`,
+    );
+
     return billDB;
   }
 
@@ -2868,7 +3247,9 @@ export class BillService {
 
     } catch (error) {
       console.error(`[BillService] ❌ Error recalculando op_duration:`, error);
-      throw new ConflictException(`Error al recalcular la duración de la operación: ${error.message}`);
+      throw new ConflictException(
+        `Error al recalcular la duración de la operación: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
@@ -3039,7 +3420,9 @@ export class BillService {
       return groupHours;
     } catch (error) {
       console.error(`[BillService] ❌ Error recalculando group_hours:`, error);
-      throw new ConflictException(`Error al recalcular las horas del grupo: ${error.message}`);
+      throw new ConflictException(
+        `Error al recalcular las horas del grupo: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
@@ -3092,9 +3475,9 @@ export class BillService {
   private async updateOperationWorkerDates(
     operationId: number,
     groupId: string,
-    dateStart?: Date,
+    dateStart?: Date | string,
     timeStart?: string,
-    dateEnd?: Date,
+    dateEnd?: Date | string,
     timeEnd?: string,
   ): Promise<void> {
     try {
@@ -3119,9 +3502,14 @@ export class BillService {
       // Preparar los datos a actualizar
       const updateData: any = {};
 
-      if (dateStart) {
-        updateData.dateStart = dateStart;
-        // console.log(`[BillService] 📅 Actualizando dateStart a: ${dateStart.toISOString()}`);
+      const normalizedDateStart = this.normalizeGroupDateInput(dateStart, 'dateStart_group');
+      const normalizedDateEnd = this.normalizeGroupDateInput(dateEnd, 'dateEnd_group');
+
+      if (normalizedDateStart) {
+        updateData.dateStart = normalizedDateStart;
+        this.logger.log(
+          `[BillUpdate][DateNormalization] group=${groupId} field=dateStart_group normalized=${normalizedDateStart.toISOString()}`,
+        );
       }
 
       if (timeStart) {
@@ -3129,9 +3517,11 @@ export class BillService {
         // console.log(`[BillService] ⏰ Actualizando timeStart a: ${timeStart}`);
       }
 
-      if (dateEnd) {
-        updateData.dateEnd = dateEnd;
-        // console.log(`[BillService] 📅 Actualizando dateEnd a: ${dateEnd.toISOString()}`);
+      if (normalizedDateEnd) {
+        updateData.dateEnd = normalizedDateEnd;
+        this.logger.log(
+          `[BillUpdate][DateNormalization] group=${groupId} field=dateEnd_group normalized=${normalizedDateEnd.toISOString()}`,
+        );
       }
 
       if (timeEnd) {
@@ -3156,19 +3546,21 @@ export class BillService {
       // console.log(`[BillService] ✅ Actualizados ${result.count} trabajadores del grupo ${groupId}`);
 
       // Calcular nueva duración basada en las fechas actualizadas
-      if (dateStart && timeStart && dateEnd && timeEnd) {
-        const startDateTime = new Date(dateStart);
+      if (normalizedDateStart && timeStart && normalizedDateEnd && timeEnd) {
+        let startDateTime = new Date(normalizedDateStart);
         const [startHour, startMinute] = timeStart.split(':').map(Number);
         startDateTime.setHours(startHour, startMinute, 0, 0);
 
-        const endDateTime = new Date(dateEnd);
+        let endDateTime = new Date(normalizedDateEnd);
         const [endHour, endMinute] = timeEnd.split(':').map(Number);
         endDateTime.setHours(endHour, endMinute, 0, 0);
 
         // Corregir fechas invertidas si es necesario
         if (startDateTime > endDateTime) {
           console.warn(`[BillService] ⚠️ Fechas invertidas detectadas, intercambiando...`);
-          [startDateTime.setTime(endDateTime.getTime()), endDateTime.setTime(startDateTime.getTime())];
+          const tempStart = startDateTime;
+          startDateTime = endDateTime;
+          endDateTime = tempStart;
         }
 
         const durationHours = (endDateTime.getTime() - startDateTime.getTime()) / 3_600_000;
@@ -3177,8 +3569,62 @@ export class BillService {
 
     } catch (error) {
       console.error(`[BillService] ❌ Error actualizando fechas del grupo ${groupId}:`, error);
-      throw new ConflictException(`Error al actualizar las fechas del grupo: ${error.message}`);
+      throw new ConflictException(
+        `Error al actualizar las fechas del grupo: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
+  }
+
+  private normalizeGroupDateInput(
+    value: Date | string | undefined,
+    fieldName: string,
+  ): Date | undefined {
+    if (!value) {
+      return undefined;
+    }
+
+    if (value instanceof Date) {
+      if (Number.isNaN(value.getTime())) {
+        this.logger.warn(
+          `[BillUpdate][DateNormalization] field=${fieldName} invalid Date object recibido`,
+        );
+        return undefined;
+      }
+
+      return value;
+    }
+
+    const raw = String(value).trim();
+    if (!raw) {
+      return undefined;
+    }
+
+    const isoDate = new Date(raw);
+    if (!Number.isNaN(isoDate.getTime())) {
+      return isoDate;
+    }
+
+    const ddmmyyyy = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(raw);
+    if (ddmmyyyy) {
+      const [, dayText, monthText, yearText] = ddmmyyyy;
+      const day = Number(dayText);
+      const month = Number(monthText);
+      const year = Number(yearText);
+      const normalized = new Date(year, month - 1, day);
+
+      if (
+        normalized.getFullYear() === year &&
+        normalized.getMonth() === month - 1 &&
+        normalized.getDate() === day
+      ) {
+        return normalized;
+      }
+    }
+
+    this.logger.warn(
+      `[BillUpdate][DateNormalization] field=${fieldName} formato no reconocido: ${raw}`,
+    );
+    return undefined;
   }
 
   async remove(id: number) {
@@ -4003,7 +4449,9 @@ export class BillService {
 
     } catch (error) {
       console.error('Error en findAllPaginatedWithFilters:', error);
-      throw new Error(`Error obteniendo bills paginadas: ${error.message}`);
+      throw new Error(
+        `Error obteniendo bills paginadas: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 

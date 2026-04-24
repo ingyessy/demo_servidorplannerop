@@ -195,6 +195,7 @@ export class OperationWorkerService {
     // Si al actualizar horarios se completó el último grupo, cerrar la operación automáticamente.
     const completionInfo = await this.completeOperationIfAllGroupsFinished(
       id_operation,
+      workersToUpdate,
     );
 
     return {
@@ -290,6 +291,7 @@ export class OperationWorkerService {
    */
   private async completeOperationIfAllGroupsFinished(
     id_operation: number,
+    workersToUpdate?: WorkerScheduleDto[],
   ): Promise<{completed: boolean; isSpecial?: boolean; newStatus?: string}> {
     try {
       // Verificar si todos los grupos están completados
@@ -338,6 +340,7 @@ export class OperationWorkerService {
         await this.ensurePreBillsForSpecialOperation(
           id_operation,
           operation.id_user ?? 1,
+          workersToUpdate,
         );
       }
 
@@ -421,6 +424,7 @@ export class OperationWorkerService {
   private async ensurePreBillsForSpecialOperation(
     operationId: number,
     userId: number,
+    workersToUpdate?: WorkerScheduleDto[],
   ): Promise<void> {
     const existingBills = await this.prisma.bill.count({
       where: { id_operation: operationId },
@@ -438,6 +442,7 @@ export class OperationWorkerService {
       select: {
         id_worker: true,
         id_group: true,
+        id_tariff: true,
         dateStart: true,
         timeStart: true,
         dateEnd: true,
@@ -465,8 +470,65 @@ export class OperationWorkerService {
       );
     }
 
+    const quantityByGroup = new Map<string, number>();
+    for (const workerGroup of workersToUpdate || []) {
+      if (!workerGroup.id_group) {
+        continue;
+      }
+
+      const explicitQuantity =
+        Number(workerGroup.number_of_hours ?? workerGroup.group_hours ?? 0) || 0;
+
+      if (explicitQuantity > 0) {
+        quantityByGroup.set(workerGroup.id_group, explicitQuantity);
+      }
+    }
+
+    const tariffIds = [
+      ...new Set(
+        operationWorkers
+          .map((ow) => ow.id_tariff)
+          .filter((id): id is number => typeof id === 'number'),
+      ),
+    ];
+
+    const tariffs = tariffIds.length
+      ? await this.prisma.tariff.findMany({
+          where: { id: { in: tariffIds } },
+          select: {
+            id: true,
+            pay_units: true,
+            unitOfMeasure: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        })
+      : [];
+
+    const unitByTariffId = new Map<number, string>();
+    const quantityByTariffId = new Map<number, number>();
+    for (const tariff of tariffs) {
+      unitByTariffId.set(
+        tariff.id,
+        (tariff.unitOfMeasure?.name || '').trim().toUpperCase(),
+      );
+      quantityByTariffId.set(tariff.id, Number(tariff.pay_units ?? 0));
+    }
+
     const billGroups = uniqueGroups.map((groupId) => {
       const groupWorkers = operationWorkers.filter((ow) => ow.id_group === groupId);
+      const representativeTariffId = groupWorkers.find(
+        (ow) => typeof ow.id_tariff === 'number',
+      )?.id_tariff;
+      const unitName = representativeTariffId
+        ? unitByTariffId.get(representativeTariffId)
+        : '';
+      const isTimeBasedUnit = unitName === 'HORAS' || unitName === 'JORNAL';
+      const tariffQuantity = representativeTariffId
+        ? Number(quantityByTariffId.get(representativeTariffId) ?? 0)
+        : 0;
       const workerDurations = groupWorkers
         .map((ow) => {
           if (!ow.dateStart || !ow.timeStart || !ow.dateEnd || !ow.timeEnd) {
@@ -495,19 +557,51 @@ export class OperationWorkerService {
             ) / 100
           : 0;
 
-      const amountBase = groupHours > 0 ? groupHours : 1;
+      const explicitQuantity = quantityByGroup.get(groupId) || 0;
+      const fallbackQuantity = groupWorkers.length > 0 ? groupWorkers.length : 1;
+      const quantityForBilling =
+        explicitQuantity > 0
+          ? explicitQuantity
+          : tariffQuantity > 0
+            ? tariffQuantity
+            : fallbackQuantity;
+
+      if (!isTimeBasedUnit && explicitQuantity <= 0 && tariffQuantity <= 0) {
+        console.warn(
+          `[OperationWorkerService][Prefactura][FallbackQuantity] operation=${operationId} group=${groupId} unit=${unitName || 'N/A'} fallbackWorkers=${fallbackQuantity}`,
+        );
+      }
+
+      const amountBase = isTimeBasedUnit
+        ? groupHours > 0
+          ? groupHours
+          : 1
+        : quantityForBilling > 0
+          ? quantityForBilling
+          : 1;
+
+      const hoursDistributionBase = isTimeBasedUnit ? groupHours : 0;
+      const numberOfHoursValue = isTimeBasedUnit
+        ? groupHours
+        : quantityForBilling > 0
+          ? quantityForBilling
+          : 1;
+
+      console.log(
+        `[OperationWorkerService][Prefactura][DTO] operation=${operationId} group=${groupId} unit=${unitName || 'N/A'} explicitQuantity=${explicitQuantity} tariffQuantity=${tariffQuantity} amount=${amountBase}`,
+      );
 
       return {
         id: groupId,
         amount: amountBase,
         group_hours: new Decimal(groupHours),
-        number_of_hours: groupHours,
+        number_of_hours: numberOfHoursValue,
         pays: groupWorkers.map((ow) => ({
           id_worker: ow.id_worker,
           pay: 1,
         })),
         paysheetHoursDistribution: {
-          HOD: groupHours,
+          HOD: hoursDistributionBase,
           HON: 0,
           HED: 0,
           HEN: 0,
@@ -517,7 +611,7 @@ export class OperationWorkerService {
           HFEN: 0,
         },
         billHoursDistribution: {
-          HOD: groupHours,
+          HOD: hoursDistributionBase,
           HON: 0,
           HED: 0,
           HEN: 0,

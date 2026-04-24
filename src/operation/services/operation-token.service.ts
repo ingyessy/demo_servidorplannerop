@@ -21,9 +21,19 @@ export class OperationTokenService {
       process.env.CLIENT_URL ||
       'http://192.168.15.68:5173/cargoplannerweb/confirm-operation';
 
-    // El token viaja en query porque el portal de confirmación ya espera ese formato.
-    const encodedToken = encodeURIComponent(token);
-    const separator = confirmationPageUrl.includes('?') ? '&' : '?';
-    return `${confirmationPageUrl.replace(/\/$/, '')}${separator}token=${encodedToken}`;
+    const normalizedBaseUrl = confirmationPageUrl.trim().replace(/\/$/, '');
+
+    // Soporta URLs base con o sin query previa y evita token duplicado.
+    try {
+      const url = new URL(normalizedBaseUrl);
+      url.searchParams.set('token', token);
+      return url.toString();
+    } catch {
+      const baseWithoutToken = normalizedBaseUrl
+        .replace(/([?&])token=[^&]*/gi, '$1')
+        .replace(/[?&]$/, '');
+      const separator = baseWithoutToken.includes('?') ? '&' : '?';
+      return `${baseWithoutToken}${separator}token=${encodeURIComponent(token)}`;
+    }
   }
 }

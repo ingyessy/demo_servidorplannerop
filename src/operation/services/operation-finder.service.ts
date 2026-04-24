@@ -66,9 +66,23 @@ export class OperationFinderService {
       if (typeof id_site === 'number') where.id_site = id_site;
       if (typeof id_subsite === 'number') where.id_subsite = id_subsite;
 
+      const findOneInclude = {
+        ...this.defaultInclude,
+        confirmation: {
+          select: {
+            id: true,
+            id_operation: true,
+            observation: true,
+            confirmedAt: true,
+            ipAddress: true,
+            device: true,
+          },
+        },
+      };
+
       const response = await this.prisma.operation.findFirst({
         where,
-        include: this.defaultInclude,
+        include: findOneInclude,
       });
 
       if (!response) {

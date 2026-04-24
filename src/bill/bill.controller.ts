@@ -11,6 +11,7 @@ import {
   NotFoundException,
   ConflictException,
   Query,
+  Logger,
 } from '@nestjs/common';
 import { BillService } from './bill.service';
 import { CreateBillDto } from './dto/create-bill.dto';
@@ -33,16 +34,30 @@ import { ValidationPipe } from '@nestjs/common';
 @Roles(Role.SUPERVISOR, Role.ADMIN, Role.SUPERADMIN)
 @ApiBearerAuth('access-token')
 export class BillController {
+  private readonly logger = new Logger(BillController.name);
+
   constructor(private readonly billService: BillService) {}
 
   @Post()
   async create(
     @CurrentUser('userId') userId: number,
     @Body() createBillDto: CreateBillDto) {
-      // Agrega este console.log para ver lo que llega del frontend
-  console.log('=== Datos recibidos para crear factura ==='); 
-  console.log(JSON.stringify(createBillDto, null, 2));
-  console.log('==========================================');
+    const groupsSummary = (createBillDto?.groups || []).map((group) => ({
+      id: group?.id || 'N/A',
+      amount: group?.amount,
+      number_of_hours: group?.number_of_hours,
+      group_hours: group?.group_hours,
+      pays_count: group?.pays?.length || 0,
+    }));
+
+    this.logger.log(
+      `[BillController][CREATE][IN] user=${userId} operation=${createBillDto?.id_operation} groups=${groupsSummary.length} detail=${JSON.stringify(groupsSummary)}`,
+    );
+
+    this.logger.debug(
+      `[BillController][CREATE][RAW_BODY] ${JSON.stringify(createBillDto)}`,
+    );
+
     const response = await this.billService.create(createBillDto, userId);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
@@ -346,14 +361,50 @@ PATCH /bill/955
   })
   @ApiResponse({ status: 200, description: 'Bill actualizado exitosamente' })
   @ApiResponse({ status: 404, description: 'Bill no encontrado' })
-  update(
+  async update(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser('userId') userId: number,
     @Body() updateBillDto: UpdateBillDto,
   ) {
-   
-    
-    return this.billService.update(id, updateBillDto, userId);
+    const dtoAsAny = updateBillDto as UpdateBillDto & {
+      groups?: Array<{
+        id?: string;
+        amount?: number;
+        number_of_hours?: number;
+        group_hours?: number;
+        pays?: Array<unknown>;
+      }>;
+    };
+
+    const nestedGroupsSummary = (dtoAsAny.groups || []).map((group) => ({
+      id: group?.id || 'N/A',
+      amount: group?.amount,
+      number_of_hours: group?.number_of_hours,
+      group_hours: group?.group_hours,
+      pays_count: group?.pays?.length || 0,
+    }));
+
+    this.logger.log(
+      `[BillController][PATCH][IN] bill=${id} user=${userId} root_amount=${(updateBillDto as any)?.amount ?? 'N/A'} root_id=${(updateBillDto as any)?.id ?? 'N/A'} nested_groups=${nestedGroupsSummary.length}`,
+    );
+
+    if (nestedGroupsSummary.length > 0) {
+      this.logger.log(
+        `[BillController][PATCH][GROUPS] bill=${id} detail=${JSON.stringify(nestedGroupsSummary)}`,
+      );
+    }
+
+    this.logger.debug(
+      `[BillController][PATCH][RAW_BODY] bill=${id} payload=${JSON.stringify(updateBillDto)}`,
+    );
+
+    const updatedBill = await this.billService.update(id, updateBillDto, userId);
+
+    this.logger.log(
+      `[BillController][PATCH][OUT] bill=${id} group=${updatedBill?.id_group || 'N/A'} amount=${updatedBill?.amount ?? 'N/A'} number_of_hours=${updatedBill?.number_of_hours ?? 'N/A'} group_hours=${updatedBill?.group_hours ?? 'N/A'} total_bill=${updatedBill?.total_bill ?? 'N/A'} total_paysheet=${updatedBill?.total_paysheet ?? 'N/A'}`,
+    );
+
+    return updatedBill;
   }
   
   @Patch(':id/status')

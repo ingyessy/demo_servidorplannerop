@@ -89,5 +89,23 @@ export class WorkerScheduleDto {
   @IsString()
   @IsOptional()
   observation?: string;
+
+  @ApiProperty({
+    description: 'Cantidad para unidades no horarias (por ejemplo, CAJAS).',
+    example: 99,
+    required: false,
+  })
+  @IsOptional()
+  @IsNumber()
+  number_of_hours?: number;
+
+  @ApiProperty({
+    description: 'Alias de cantidad usado por algunos clientes para unidades no horarias.',
+    example: 99,
+    required: false,
+  })
+  @IsOptional()
+  @IsNumber()
+  group_hours?: number;
   
 }
