@@ -35,6 +35,7 @@ type CreateBillFromOperationOptions = CreateBillOptions & {
     number_of_hours?: number | null;
     group_hours?: number | Decimal | null;
   }>;
+  groupIds?: string[];
 };
 
 @Injectable()
@@ -149,25 +150,67 @@ export class BillService {
     }
 
     const mode = options.mode ?? 'SPECIAL';
+    const requestedGroupIds = [...new Set((options.groupIds ?? [])
+      .map((groupId) => String(groupId).trim())
+      .filter((groupId) => groupId.length > 0))];
 
     if (mode === 'SPECIAL') {
-      const existingBills = await this.prisma.bill.count({
-        where: { id_operation: operationId },
-      });
+      if (requestedGroupIds.length > 0) {
+        const existingBills = await this.prisma.bill.findMany({
+          where: {
+            id_operation: operationId,
+            id_group: {
+              in: requestedGroupIds,
+            },
+          },
+          select: {
+            id_group: true,
+          },
+        });
 
-      if (existingBills > 0) {
-        this.logger.log(
-          `La operación ${operationId} ya tiene ${existingBills} factura(s). Se omite creación automática de prefactura.`,
+        const alreadyBilledGroups = new Set(
+          existingBills
+            .map((bill) => bill.id_group)
+            .filter((groupId): groupId is string => !!groupId),
         );
-        return {
-          message: 'La operación ya tiene facturas creadas',
+
+        const pendingGroupIds = requestedGroupIds.filter(
+          (groupId) => !alreadyBilledGroups.has(groupId),
+        );
+
+        if (!pendingGroupIds.length) {
+          this.logger.log(
+            `La operación ${operationId} ya tiene factura(s) para los grupos solicitados. Se omite creación automática de prefactura.`,
+          );
+          return {
+            message: 'La operación ya tiene facturas creadas para los grupos solicitados',
+          };
+        }
+
+        options = {
+          ...options,
+          groupIds: pendingGroupIds,
         };
+      } else {
+        const existingBills = await this.prisma.bill.count({
+          where: { id_operation: operationId },
+        });
+
+        if (existingBills > 0) {
+          this.logger.log(
+            `La operación ${operationId} ya tiene ${existingBills} factura(s). Se omite creación automática de prefactura.`,
+          );
+          return {
+            message: 'La operación ya tiene facturas creadas',
+          };
+        }
       }
     }
 
     const createBillDto = await this.buildCreateBillDtoFromOperation(
       operationId,
       options.workerGroupOverrides,
+      options.groupIds,
     );
 
     const targetBillStatus =
@@ -181,6 +224,70 @@ export class BillService {
       skipOperationCompletion,
     });
   }
+
+async ensureSpecialBillsForCompletedGroups(
+  operationId: number,
+): Promise<{ created: boolean; message: string }> {
+  const isSpecialOperation = await this.isSpecialOperationByTariff(operationId);
+
+  if (!isSpecialOperation) {
+    return {
+      created: false,
+      message: 'La operación no es especial',
+    };
+  }
+
+  const operation = await this.prisma.operation.findUnique({
+    where: { id: operationId },
+    select: { id_user: true },
+  });
+
+  if (!operation) {
+    throw new NotFoundException(`No se encontró la operación ${operationId}`);
+  }
+
+  const completedGroupIds = await this.getCompletedGroupIds(operationId);
+
+  if (!completedGroupIds.length) {
+    return {
+      created: false,
+      message: 'No hay grupos completados para generar bill',
+    };
+  }
+
+  this.logger.log(
+    `[ensureSpecialBillsForCompletedGroups] operation=${operationId} groups=${completedGroupIds.join(
+      ',',
+    )}`,
+  );
+
+  try {
+    // ✅ Obtener amounts de los grupos desde facturas previas o contexto
+    const workerGroupOverrides = await this.buildWorkerGroupOverridesForCompletedGroups(
+      operationId,
+      completedGroupIds,
+    );
+
+    await this.createFromOperation(operationId, operation.id_user, {
+      mode: 'SPECIAL',
+      groupIds: completedGroupIds,
+      workerGroupOverrides,
+    });
+
+    return {
+      created: true,
+      message: 'Bills especiales sincronizadas para grupos completados',
+    };
+  } catch (error) {
+    this.logger.error(
+      `[ensureSpecialBillsForCompletedGroups] Error creando prefacturas operation=${operationId} groups=${completedGroupIds.join(
+        ',',
+      )}`,
+      error,
+    );
+    throw error;
+  }
+}
 
   // Validar operación
   private async validateOperation(operationId: number) {
@@ -215,6 +322,7 @@ export class BillService {
       number_of_hours?: number | null;
       group_hours?: number | Decimal | null;
     }>,
+    groupIds?: string[],
   ): Promise<CreateBillDto> {
     const operationWorkers = await this.prisma.operation_Worker.findMany({
       where: {
@@ -246,7 +354,15 @@ export class BillService {
       ),
     ];
 
-    if (!uniqueGroups.length) {
+    const requestedGroupIds = [...new Set((groupIds ?? [])
+      .map((groupId) => String(groupId).trim())
+      .filter((groupId) => groupId.length > 0))];
+
+    const filteredGroups = requestedGroupIds.length > 0
+      ? uniqueGroups.filter((groupId) => requestedGroupIds.includes(groupId))
+      : uniqueGroups;
+
+    if (!filteredGroups.length) {
       throw new ConflictException(
         `No se encontraron grupos válidos para facturar la operación ${operationId}`,
       );
@@ -299,7 +415,7 @@ export class BillService {
       quantityByTariffId.set(tariff.id, Number(tariff.pay_units ?? 0));
     }
 
-    const groups = uniqueGroups.map((groupId) => {
+    const groups = filteredGroups.map((groupId) => {
       const groupWorkers = operationWorkers.filter((ow) => ow.id_group === groupId);
       const representativeTariffId = groupWorkers.find(
         (ow) => typeof ow.id_tariff === 'number',
@@ -342,9 +458,27 @@ export class BillService {
       const explicitQuantity = quantityByGroup.get(groupId) || 0;
       const quantityForBilling = explicitQuantity > 0 ? explicitQuantity : tariffQuantity;
 
-      if (!isTimeBasedUnit && quantityForBilling <= 0) {
+      this.logger.log(
+        `[BillCreate][FromOperation][Quantity] group=${groupId} unit=${unitName || 'N/A'} explicitQuantity=${explicitQuantity} tariffQuantity=${tariffQuantity} quantityForBilling=${quantityForBilling}`,
+      );
+
+      // ✅ Para operaciones especiales sin unidad de tiempo, usar fallback de 1 en lugar de fallar
+      const isSpecialMode = groupIds && groupIds.length > 0; // Si se pasó groupIds, es modo especial
+      const safeFinalQuantity = quantityForBilling > 0 
+        ? quantityForBilling 
+        : isSpecialMode && !isTimeBasedUnit 
+          ? 1 // Fallback para facturación especial: usar 1 como cantidad por defecto
+          : quantityForBilling;
+
+      if (!isTimeBasedUnit && quantityForBilling <= 0 && (!isSpecialMode || groupIds?.length === 0)) {
         throw new ConflictException(
           `No se pudo determinar la cantidad para el grupo ${groupId} (unidad ${unitName || 'N/A'}). Envíe amount explícito o configure pay_units en la tarifa.`,
+        );
+      }
+
+      if (!isTimeBasedUnit && quantityForBilling <= 0 && isSpecialMode) {
+        this.logger.warn(
+          `[BillCreate][FromOperation][Fallback] group=${groupId} unit=${unitName || 'N/A'} usando cantidad=1 como fallback para facturación especial`,
         );
       }
 
@@ -352,15 +486,15 @@ export class BillService {
         ? groupHours > 0
           ? groupHours
           : 1
-        : quantityForBilling > 0
-          ? quantityForBilling
+        : safeFinalQuantity > 0
+          ? safeFinalQuantity
           : 1;
 
       const hoursDistributionBase = isTimeBasedUnit ? groupHours : 0;
       const numberOfHoursValue = isTimeBasedUnit
         ? groupHours
-        : quantityForBilling > 0
-          ? quantityForBilling
+        : safeFinalQuantity > 0
+          ? safeFinalQuantity
           : 1;
 
       this.logger.log(
@@ -2251,7 +2385,7 @@ export class BillService {
         validateOperationID,
         userId,
         billDb.id_operation,
-        billDb.amount,
+        billDb.amount.toNumber(),
         billDb,
       );
     } else {
@@ -2426,7 +2560,7 @@ export class BillService {
       // NO debemos recalcularlas, solo recalcular los totales con el nuevo número de trabajadores
       const updateBillDto: UpdateBillDto = {
         id: String(bill.id_group || ''),
-        amount: bill.amount,
+        amount: bill.amount.toNumber(),
         group_hours: bill.group_hours ? new Decimal(bill.group_hours.toString()) : new Decimal(0),
         billHoursDistribution: {
           HOD: Number(bill.FAC_HOD) || 0,
@@ -2466,7 +2600,7 @@ export class BillService {
         validateOperationID,
         bill.id_user,
         operationId,
-        bill.amount,
+        bill.amount.toNumber(),
         bill,
       );
 
@@ -3368,7 +3502,7 @@ export class BillService {
             // Preparar UpdateBillDto para forzar recálculo
             const updateBillDto: UpdateBillDto = {
               id: String(id_group),
-              amount: bill.amount || 0, // ✅ USAR AMOUNT DE LA BD
+              amount: bill.amount.toNumber() || 0, // ✅ USAR AMOUNT DE LA BD
               group_hours: new Decimal(groupHours.toString()),
               billHoursDistribution: {
                 HOD: Number(bill.HOD) || 0,
@@ -3403,7 +3537,7 @@ export class BillService {
               validateOperationID,
               bill.id_user,
               id_operation,
-              bill.amount,
+              bill.amount.toNumber(),
               bill,
             );
 
@@ -3725,6 +3859,93 @@ export class BillService {
     });
 
     return specialTariffCount > 0;
+  }
+
+  private async getCompletedGroupIds(operationId: number): Promise<string[]> {
+    const workers = await this.prisma.operation_Worker.findMany({
+      where: {
+        id_operation: operationId,
+        id_worker: { not: -1 },
+        id_group: { not: null },
+      },
+      select: {
+        id_group: true,
+        dateEnd: true,
+        timeEnd: true,
+      },
+    });
+
+    const groupsMap = new Map<string, { completed: boolean }>();
+
+    for (const worker of workers) {
+      if (!worker.id_group) {
+        continue;
+      }
+
+      const currentGroup = groupsMap.get(worker.id_group) ?? { completed: true };
+      if (!worker.dateEnd || !worker.timeEnd) {
+        currentGroup.completed = false;
+      }
+
+      groupsMap.set(worker.id_group, currentGroup);
+    }
+
+    return [...groupsMap.entries()]
+      .filter(([, group]) => group.completed)
+      .map(([groupId]) => groupId);
+  }
+
+  /**
+   * Construye workerGroupOverrides con amounts de facturas previas para grupos completados
+   * @param operationId ID de la operación
+   * @param completedGroupIds Lista de IDs de grupos completados
+   * @returns Array de workerGroupOverrides con quantities/amounts
+   */
+  private async buildWorkerGroupOverridesForCompletedGroups(
+    operationId: number,
+    completedGroupIds: string[],
+  ): Promise<Array<{ id_group: string; number_of_hours?: number; group_hours?: number }>> {
+    const overrides: Array<{ id_group: string; number_of_hours?: number; group_hours?: number }> = [];
+
+    for (const groupId of completedGroupIds) {
+      // ✅ Obtener última factura del grupo para reutilizar el amount
+      const lastBill = await this.prisma.bill.findFirst({
+        where: {
+          id_operation: operationId,
+          id_group: groupId,
+        },
+        select: {
+          amount: true,
+          group_hours: true,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+
+      // ✅ Si existe factura previa, usar su amount como quantity
+      const amountToUse = lastBill?.amount ? Number(lastBill.amount) : 0;
+      const groupHoursToUse = lastBill?.group_hours ? Number(lastBill.group_hours) : undefined;
+
+      // ✅ Pasar el amount como number_of_hours para que se use en quantityByGroup
+      if (amountToUse > 0) {
+        overrides.push({
+          id_group: groupId,
+          number_of_hours: amountToUse, // ← Esto se usará para llenar quantityByGroup
+          group_hours: groupHoursToUse,
+        });
+
+        this.logger.log(
+          `[buildWorkerGroupOverridesForCompletedGroups] group=${groupId} previousAmount=${amountToUse} groupHours=${groupHoursToUse}`,
+        );
+      } else {
+        this.logger.warn(
+          `[buildWorkerGroupOverridesForCompletedGroups] group=${groupId} NO previous bill found, will rely on tariff pay_units`,
+        );
+      }
+    }
+
+    return overrides;
   }
 
   /**

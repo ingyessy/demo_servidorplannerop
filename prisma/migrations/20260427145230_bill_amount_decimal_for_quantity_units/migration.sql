@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Bill" ALTER COLUMN "amount" SET DATA TYPE DECIMAL(15,3);

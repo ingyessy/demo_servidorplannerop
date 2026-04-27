@@ -693,9 +693,7 @@ export class OperationService {
       const { BillService } = await import('../bill/bill.service');
       const billService = this.moduleRef.get(BillService, { strict: false });
 
-      await billService.createFromOperation(operationId, userId, {
-        mode: 'SPECIAL',
-      });
+      await billService.ensureSpecialBillsForCompletedGroups(operationId);
     } catch (error) {
       this.logger.error(
         `Error generando prefacturas para operación especial ${operationId}`,
