@@ -356,16 +356,7 @@ export class OperationWorkerService {
   private async ensurePreBillsForSpecialOperation(
     operationId: number,
   ): Promise<void> {
-    try {
-      const { BillService } = await import('../bill/bill.service');
-      const billService = this.moduleRef.get(BillService, { strict: false });
-
-      await billService.ensureSpecialBillsForCompletedGroups(operationId);
-    } catch (error) {
-      throw new ConflictException(
-        'No fue posible generar las prefacturas para la operación especial',
-      );
-    }
+    return;
   }
 
   /**

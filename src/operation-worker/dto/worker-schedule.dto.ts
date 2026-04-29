@@ -68,10 +68,10 @@ export class WorkerScheduleDto {
   @IsNumber()
   id_task?: number;
 
-   @ApiProperty({
+  @ApiProperty({
     description: 'ID de la subtask (subservicio) asignada al grupo',
     example: 163,
-    required: true
+    required: true,
   })
   @IsNumber()
   id_subtask: number;
@@ -100,12 +100,21 @@ export class WorkerScheduleDto {
   number_of_hours?: number;
 
   @ApiProperty({
-    description: 'Alias de cantidad usado por algunos clientes para unidades no horarias.',
+    description:
+      'Alias de cantidad usado por algunos clientes para unidades no horarias.',
     example: 99,
     required: false,
   })
   @IsOptional()
   @IsNumber()
   group_hours?: number;
-  
+
+  @ApiProperty({
+    description: 'Cantidad explícita para facturación especial (ej. CAJAS).',
+    example: 1234,
+    required: false,
+  })
+  @IsOptional()
+  @IsNumber()
+  amount?: number;
 }
