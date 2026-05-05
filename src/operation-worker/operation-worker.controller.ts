@@ -172,4 +172,25 @@ export class OperationWorkerController {
       dto.workersToUpdate,
     );
   }
+
+  @Get(':id_operation/billing-status')
+  @ApiOperation({
+    summary: 'Obtener estado de facturación de una operación especial',
+    description: 'Retorna información sobre qué grupos tienen factura y cuáles no en una operación especial',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Estado de facturación obtenido exitosamente',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Operación no encontrada',
+  })
+  getSpecialOperationBillingStatus(
+    @Param('id_operation', ParseIntPipe) id_operation: number,
+  ) {
+    return this.operationWorkerService.getSpecialOperationBillingStatus(
+      id_operation,
+    );
+  }
 }

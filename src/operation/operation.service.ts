@@ -871,7 +871,7 @@ export class OperationService {
             include: {
               operation: {
                 select: {
-                  id: true,
+                  id: true, 
                   status: true,
                   dateStart: true,
                   dateEnd: true,
@@ -884,6 +884,14 @@ export class OperationService {
                   task: { select: { name: true } },
                   Site: { select: { name: true } },
                   subSite: { select: { name: true } },
+                  Bill: {
+                    select: {
+                      id_group: true,
+                      amount: true,
+                      number_of_hours: true,
+                      group_hours: true,
+                    },
+                  },
                   workers: {
                     select: {
                       id_worker: true,
@@ -939,7 +947,13 @@ export class OperationService {
     const canConfirm =
       tokenStatus === TokenStatus.ACTIVE &&
       operation.status === StatusOperation.TO_APPROVED;
-
+     // Construir mapa de Bills por id_group
+    const billMap = new Map<string, any>();
+    for (const bill of operation.Bill || []) {
+      if (bill.id_group) {
+        billMap.set(bill.id_group, bill);
+      }
+    }
     const groupMap = new Map<
       string,
       {
@@ -1000,23 +1014,25 @@ export class OperationService {
     }));
 
     // Se unifica salida en `operation` (general) y `groups` (detalle por grupo).
-    const previewGroups = groups.map((group) => ({
-      idGrupo: group.groupId,
-      subservicio: group.subservices,
-      cantTrabajadores: group.workersCount,
-      horasTrabajadas: group.totalHoursWorked,
-      unidadDeMedida: group.unitOfMeasure,
-      cantidad: group.quantity,
-    }));
+    const previewGroups = groups.map((group) => {
+      const bill = billMap.get(group.groupId);
+      // Usar Bill.number_of_hours si existe, de lo contrario usar el calculado
+      const billHours = bill?.number_of_hours ? Number(bill.number_of_hours) : group.totalHoursWorked;
+      const amount = bill?.amount ?? 0;
+
+      return {
+        idGrupo: group.groupId,
+        subservicio: group.subservices,
+        cantTrabajadores: group.workersCount,
+        horasTrabajadas: Math.round(billHours * 100) / 100,
+        amount: amount,
+        unidadDeMedida: group.unitOfMeasure,
+      };
+    });
 
     const totalWorkers = new Set(
       (operation.workers || []).map((w) => w.id_worker),
     ).size;
-
-    const totalHoursWorked =
-      Math.round(
-        groups.reduce((acc, group) => acc + group.totalHoursWorked, 0) * 100,
-      ) / 100;
 
     return {
       token: {
@@ -1053,7 +1069,6 @@ export class OperationService {
       totals: {
         totalGroups: groups.length,
         totalWorkers,
-        totalHoursWorked,
       },
       canConfirm,
     };
@@ -1747,6 +1762,30 @@ export class OperationService {
 
         ...directFields
       } = updateOperationDto;
+
+        // Fusionar la información de `groups` dentro de `workers.update` para
+        // que valores como `amount`, `group_hours` y `number_of_hours` lleguen
+        // a `updateWorkersSchedule` y sean utilizados al generar prefacturas.
+        if (groups && Array.isArray(groups) && groups.length > 0) {
+          const groupMap = new Map<string, any>();
+          for (const g of groups) {
+            const gidKey = (g as any).id_group ?? (g as any).groupId;
+            if (gidKey) groupMap.set(gidKey, g);
+          }
+
+          if (workers && workers.update && Array.isArray(workers.update)) {
+            for (const up of workers.update) {
+              const gid = (up as any).id_group ?? (up as any).groupId;
+              const grp = groupMap.get(gid);
+              if (!grp) continue;
+              if ((grp as any).amount !== undefined) (up as any).amount = Number((grp as any).amount);
+              if ((grp as any).number_of_hours !== undefined)
+                (up as any).number_of_hours = Number((grp as any).number_of_hours);
+              if ((grp as any).group_hours !== undefined)
+                (up as any).group_hours = Number((grp as any).group_hours);
+            }
+          }
+        }
 
       // ✅ VERIFICAR SI LA OPERACIÓN ESTÁ COMPLETADA ANTES DE PROCESAR TRABAJADORES
       const currentOperation = await this.prisma.operation.findUnique({

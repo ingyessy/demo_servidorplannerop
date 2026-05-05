@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
+import { BillService } from 'src/bill/bill.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AssignWorkersDto } from './dto/assign-workers.dto';
 import { WorkerScheduleDto } from './dto/worker-schedule.dto';
@@ -154,7 +155,7 @@ export class OperationWorkerService {
       id_site,
     );
 
-    await this.ensurePreBillsForSpecialOperation(id_operation);
+    await this.ensurePreBillsForSpecialOperation(id_operation, workersToUpdate);
 
     const completionInfo = await this.completeOperationIfAllGroupsFinished(
       id_operation,
@@ -339,6 +340,48 @@ export class OperationWorkerService {
         `[OperationWorkerService] ✅ Operación ${id_operation} completada: ${targetStatus}, isSpecial: ${isSpecialOperation}`,
       );
 
+      // ✅ VALIDACIÓN ADICIONAL PARA OPERACIONES ESPECIALES
+      if (isSpecialOperation) {
+        const allGroups = await this.prisma.operation_Worker.findMany({
+          where: {
+            id_operation: id_operation,
+            id_group: { not: null },
+          },
+          select: { id_group: true },
+          distinct: ['id_group'],
+        });
+
+        let groupsWithoutBills = 0;
+        for (const groupRecord of allGroups) {
+          const groupId = groupRecord.id_group;
+          if (!groupId) continue;
+
+          const bill = await this.prisma.bill.findFirst({
+            where: {
+              id_operation: id_operation,
+              id_group: groupId,
+            },
+          });
+
+          if (!bill) {
+            groupsWithoutBills++;
+            console.warn(
+              `[OperationWorkerService] ⚠️ Grupo ${groupId} sin factura`,
+            );
+          }
+        }
+
+        if (groupsWithoutBills === 0) {
+          console.log(
+            `[OperationWorkerService] ✅ Todos los grupos tienen factura`,
+          );
+        } else {
+          console.warn(
+            `[OperationWorkerService] ❌ ${groupsWithoutBills} grupo(s) sin factura`,
+          );
+        }
+      }
+
       return {
         completed: true,
         isSpecial: isSpecialOperation,
@@ -353,10 +396,200 @@ export class OperationWorkerService {
     }
   }
 
+  /**
+   * ✅ NUEVO: Obtiene el estado de facturación de una operación especial
+   * @param operationId - ID de la operación
+   */
+  async getSpecialOperationBillingStatus(operationId: number): Promise<{
+    isSpecial: boolean;
+    totalGroups: number;
+    groupsWithBills: number;
+    groupsWithoutBills: number;
+    allBilled: boolean;
+  }> {
+    try {
+      const specialTariffCount = await this.prisma.operation_Worker.count({
+        where: {
+          id_operation: operationId,
+          tariff: {
+            isSpecial: YES_NO.YES,
+          },
+        },
+      });
+
+      const isSpecial = specialTariffCount > 0;
+
+      const allGroups = await this.prisma.operation_Worker.findMany({
+        where: {
+          id_operation: operationId,
+          id_group: { not: null },
+        },
+        select: { id_group: true },
+        distinct: ['id_group'],
+      });
+
+      let groupsWithBills = 0;
+      for (const groupRecord of allGroups) {
+        const groupId = groupRecord.id_group;
+        if (!groupId) continue;
+
+        const bill = await this.prisma.bill.findFirst({
+          where: {
+            id_operation: operationId,
+            id_group: groupId,
+          },
+        });
+
+        if (bill) groupsWithBills++;
+      }
+
+      const totalGroups = allGroups.length;
+      const groupsWithoutBills = totalGroups - groupsWithBills;
+      const allBilled = groupsWithoutBills === 0;
+
+      console.log(
+        `[OperationWorkerService] Estado de facturación operación ${operationId}: isSpecial=${isSpecial}, total=${totalGroups}, facturados=${groupsWithBills}`,
+      );
+
+      return {
+        isSpecial,
+        totalGroups,
+        groupsWithBills,
+        groupsWithoutBills,
+        allBilled,
+      };
+    } catch (error) {
+      console.error(
+        `[OperationWorkerService] Error obteniendo estado de facturación:`,
+        error,
+      );
+      throw error;
+    }
+  }
+
   private async ensurePreBillsForSpecialOperation(
     operationId: number,
+    workersToUpdate?: WorkerScheduleDto[],
   ): Promise<void> {
-    return;
+    try {
+      console.log(
+        `[OperationWorkerService][EnsurePreBillsForSpecialOperation] 🟢 Iniciando validación de facturas especiales para operación ${operationId}`,
+      );
+
+      // 1. Verificar si la operación tiene tarifas especiales (isSpecial = YES)
+      const specialTariffCount = await this.prisma.operation_Worker.count({
+        where: {
+          id_operation: operationId,
+          tariff: {
+            isSpecial: YES_NO.YES,
+          },
+        },
+      });
+
+      if (specialTariffCount === 0) {
+        console.log(
+          `[OperationWorkerService][EnsurePreBillsForSpecialOperation] ⏭️ Operación ${operationId} no es especial`,
+        );
+        return;
+      }
+
+      console.log(
+        `[OperationWorkerService][EnsurePreBillsForSpecialOperation] ✅ Operación ${operationId} ES ESPECIAL`,
+      );
+
+      const groupContext = new Map<
+        string,
+        { amount?: number; number_of_hours?: number; group_hours?: number }
+      >();
+
+      for (const worker of workersToUpdate ?? []) {
+        if (!worker.id_group || groupContext.has(worker.id_group)) {
+          continue;
+        }
+
+        groupContext.set(worker.id_group, {
+          amount: worker.amount,
+          number_of_hours: worker.number_of_hours,
+          group_hours: worker.group_hours,
+        });
+      }
+
+      // 2. Obtener todos los grupos completados
+      const completedGroups = await this.prisma.operation_Worker.findMany({
+        where: {
+          id_operation: operationId,
+          dateEnd: { not: null },
+          timeEnd: { not: null },
+          id_worker: { not: -1 },
+        },
+        select: {
+          id_group: true,
+        },
+        distinct: ['id_group'],
+      });
+
+      console.log(
+        `[OperationWorkerService][EnsurePreBillsForSpecialOperation] 📊 Grupos completados: ${completedGroups.length}`,
+      );
+
+      // 3. Para cada grupo, verificar si tiene factura y generarla si no existe
+      for (const groupRecord of completedGroups) {
+        const groupId = groupRecord.id_group;
+
+        if (!groupId) continue;
+
+        const existingBill = await this.prisma.bill.findFirst({
+          where: {
+            id_operation: operationId,
+            id_group: groupId,
+          },
+          select: { id: true },
+        });
+
+        if (existingBill) {
+          console.log(
+            `[OperationWorkerService][EnsurePreBillsForSpecialOperation] ✅ Grupo ${groupId} ya tiene factura`,
+          );
+          continue;
+        }
+
+        console.log(
+          `[OperationWorkerService][EnsurePreBillsForSpecialOperation] 📄 Generando factura para grupo ${groupId}...`,
+        );
+
+        // Obtener BillService
+        const billService = this.moduleRef.get(BillService, { strict: false });
+
+        if (!billService) {
+          console.error(
+            `[OperationWorkerService][EnsurePreBillsForSpecialOperation] ❌ BillService no disponible`,
+          );
+          continue;
+        }
+
+        const result = await billService.generateBillForSpecialGroup(
+          operationId,
+          groupId,
+          1,
+          groupContext.get(groupId),
+        );
+
+        if (result.success) {
+          console.log(
+            `[OperationWorkerService][EnsurePreBillsForSpecialOperation] ✅ Factura generada para grupo ${groupId}`,
+          );
+        } else {
+          console.warn(
+            `[OperationWorkerService][EnsurePreBillsForSpecialOperation] ⚠️ Error: ${result.message}`,
+          );
+        }
+      }
+    } catch (error) {
+      console.error(
+        `[OperationWorkerService][EnsurePreBillsForSpecialOperation] ❌ Error:`,
+        error,
+      );
+    }
   }
 
   /**

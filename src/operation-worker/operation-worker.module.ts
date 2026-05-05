@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { OperationWorkerService } from './operation-worker.service';
 import { OperationWorkerController } from './operation-worker.controller';
 import { AuthModule } from 'src/auth/auth.module';
@@ -7,9 +7,10 @@ import { RemoveWorkerFromOperationService } from './service/remove-worker-from-o
 import { UpdateWorkerSheduleService } from './service/update-worker-shedule/update-worker-shedule.service';
 import { AssignWorkerToOperationService } from './service/assign-worker-to-operation/assign-worker-to-operation.service';
 import { WorkerModule } from 'src/worker/worker.module';
+import { BillModule } from 'src/bill/bill.module';
 
 @Module({
-  imports: [AuthModule, ValidationModule, WorkerModule],
+  imports: [AuthModule, ValidationModule, WorkerModule, forwardRef(() => BillModule)],
   controllers: [OperationWorkerController],
   providers: [
     OperationWorkerService,

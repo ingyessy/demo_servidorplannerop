@@ -1,0 +1,16 @@
+{
+  "entryPoints": [
+    "./src/prisma/**/*.ts"
+  ],
+  "exclude": [
+    "**/node_modules/**",
+    "**/*.spec.ts",
+    "**/*.test.ts",
+    "**/dist/**"
+  ],
+  "out": "./docs/prisma",
+  "name": "Documentación Prisma",
+  "excludePrivate": true,
+  "entryPointStrategy": "expand",
+  "readme": "./temp-prisma-readme.md"
+}

@@ -31,15 +31,17 @@ export class PayrollCalculationService {
   for (const group of groups) {
     const billData = groupsData.find((g) => g.id === group.groupId);
     const paysheetData = groupsData.find((g) => g.id === group.groupId);
+    const billPays = billData?.pays ?? [];
+    const paysheetPays = paysheetData?.pays ?? [];
 
     if (group.settle_payment && group.settle_payment === 'YES') {
-      if (billData?.pays.length != group.workerCount) {
+      if (billPays.length != group.workerCount) {
         throw new ConflictException(
-          `El grupo ${group.groupId} tiene un número de trabajadores diferente al esperado: ${group.workerCount} trabajadores, pero se encontraron ${billData?.pays.length} pagos.`,
+          `El grupo ${group.groupId} tiene un número de trabajadores diferente al esperado: ${group.workerCount} trabajadores, pero se encontraron ${billPays.length} pagos.`,
         );
       }
 
-      for (const pay of billData?.pays || []) {
+      for (const pay of billPays) {
         if (group.workers.find((w) => w.id === pay.id_worker) === undefined) {
           throw new ConflictException(
             `El trabajador ${pay.id_worker} no está asignado al grupo ${group.groupId}.`,
@@ -59,7 +61,7 @@ export class PayrollCalculationService {
         group,
         paysheetData.paysheetHoursDistribution,
         operationDate,
-        paysheetData.pays, // ✅ AGREGAR PAYS
+        paysheetPays,
       );
 
       totalPayroll += payrollResult.totalAmount;
@@ -68,7 +70,7 @@ export class PayrollCalculationService {
         group,
         billData.billHoursDistribution,
         operationDate,
-        billData.pays, // ✅ AGREGAR PAYS
+        billPays,
       );
       
       totalBilling += billingResult.totalAmount;
@@ -90,10 +92,11 @@ export class PayrollCalculationService {
         observation: billData?.observation || '',
         workers: group.workers
       });
-    } catch (error) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       console.error(
         `Error al calcular para el grupo ${group.groupId}:`,
-        error.message,
+        errorMessage,
       );
       continue;
     }

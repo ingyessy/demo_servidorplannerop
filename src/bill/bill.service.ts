@@ -86,6 +86,324 @@ export class BillService {
     };
   }
 
+  /**
+   * ✅ NUEVO: Genera automáticamente factura para un grupo específico de una operación especial
+   * Se llama desde operation-worker.service cuando se completa un grupo
+   * @param operationId - ID de la operación
+   * @param groupId - ID del grupo (id_group)
+   * @param userId - ID del usuario que autoriza la facturación
+   * @returns Factura generada o error
+   */
+  async generateBillForSpecialGroup(
+    operationId: number,
+    groupId: string,
+    userId: number,
+    specialGroupData?: {
+      amount?: number;
+      number_of_hours?: number;
+      group_hours?: number;
+    },
+  ): Promise<{ success: boolean; billId?: number; message: string }> {
+    try {
+      console.log(
+        `[BillService][GenerateBillForSpecialGroup] 🟢 Iniciando generación de factura para grupo ${groupId} de operación ${operationId}`,
+      );
+
+      // 1. Validar que el grupo no tenga ya una factura
+      const existingBill = await this.prisma.bill.findFirst({
+        where: {
+          id_operation: operationId,
+          id_group: groupId,
+        },
+      });
+
+      if (existingBill) {
+        console.log(
+          `[BillService][GenerateBillForSpecialGroup] ⚠️ El grupo ${groupId} ya tiene factura con ID ${existingBill.id}`,
+        );
+        return {
+          success: false,
+          billId: existingBill.id,
+          message: `El grupo ${groupId} ya tiene factura`,
+        };
+      }
+
+      // 2. Validar la operación
+      const validateOperationID =
+        await this.operationFinderService.getOperationWithDetailedTariffs(
+          operationId,
+        );
+
+      if (!validateOperationID || validateOperationID.status === 404) {
+        throw new NotFoundException(`Operation ${operationId} not found`);
+      }
+
+      // 3. Encontrar el grupo en la operación
+      const targetGroup = validateOperationID.workerGroups?.find(
+        (wg) => wg.groupId === groupId,
+      );
+
+      if (!targetGroup) {
+        console.error(
+          `[BillService][GenerateBillForSpecialGroup] ❌ Grupo ${groupId} no encontrado en operación ${operationId}`,
+        );
+        return {
+          success: false,
+          message: `Grupo ${groupId} no encontrado en la operación`,
+        };
+      }
+
+      // 4. Crear un DTO de grupo para procesar
+      const resolvedAmount = Number(
+        specialGroupData?.amount ??
+          specialGroupData?.number_of_hours ??
+          specialGroupData?.group_hours ??
+          0,
+      );
+      const resolvedNumberOfHours = Number(
+        specialGroupData?.number_of_hours ??
+          specialGroupData?.group_hours ??
+          specialGroupData?.amount ??
+          0,
+      );
+      const resolvedGroupHours = Number(
+        specialGroupData?.group_hours ??
+          specialGroupData?.number_of_hours ??
+          specialGroupData?.amount ??
+          0,
+      );
+
+      const groupDto: GroupBillDto = {
+        id: groupId,
+        group_hours: new Decimal(resolvedGroupHours.toString()),
+        amount: resolvedAmount,
+        number_of_hours: resolvedNumberOfHours,
+        observation: targetGroup.observation || '',
+        paysheetHoursDistribution: {
+          HOD: 0,
+          HON: 0,
+          HED: 0,
+          HEN: 0,
+          HFOD: 0,
+          HFON: 0,
+          HFED: 0,
+          HFEN: 0,
+        },
+        billHoursDistribution: {
+          HOD: 0,
+          HON: 0,
+          HED: 0,
+          HEN: 0,
+          HFOD: 0,
+          HFON: 0,
+          HFED: 0,
+          HFEN: 0,
+        },
+      };
+
+      // 4b. ✅ GENERAR AUTOMÁTICAMENTE PAYS PARA GRUPOS POR CANTIDAD
+      // Para grupos CANTIDAD, necesitamos un "pays" por cada worker
+      const unitOfMeasure = targetGroup.schedule?.unit_of_measure;
+      const isAlternativeService = targetGroup.schedule?.alternative_paid_service === 'YES';
+      
+      if (unitOfMeasure === 'CAJAS' || (unitOfMeasure !== 'JORNAL' && unitOfMeasure !== 'HORAS' && !isAlternativeService)) {
+        // Generar pays automáticamente: una entrada por worker con pay=1
+        if (targetGroup.workers && targetGroup.workers.length > 0) {
+          groupDto.pays = targetGroup.workers.map((worker) => ({
+            id_worker: worker.id,
+            pay: 1,
+          }));
+          if (groupDto.pays && groupDto.pays.length > 0) {
+            console.log(
+              `[BillService][GenerateBillForSpecialGroup] 📋 Generados ${groupDto.pays.length} pagos automáticos para grupo CANTIDAD ${groupId}`,
+            );
+          }
+        }
+      }
+
+      // 5. Procesar según el tipo de tarifa del grupo
+      console.log(
+        `[BillService][GenerateBillForSpecialGroup] 📊 Procesando grupo: unitOfMeasure=${unitOfMeasure}, isAlternativeService=${isAlternativeService}`,
+      );
+
+      // 5a. Grupos JORNAL
+      if (unitOfMeasure === 'JORNAL' && !isAlternativeService) {
+        const result =
+          this.payrollCalculationService.processJornalGroups(
+            [targetGroup],
+            [groupDto],
+            targetGroup.dateRange.start,
+          );
+
+        const billData = this.prepareBillData(
+          result.groupResults[0],
+          operationId,
+          userId,
+          groupDto,
+        );
+        const billSaved = await this.prisma.bill.create({
+          data: {
+            ...billData,
+            status: BillStatus.TO_APPROVED,
+          },
+        });
+
+        await this.processBillDetails(
+          result.groupResults[0].workers,
+          billSaved.id,
+          operationId,
+          groupDto,
+          result.groupResults[0],
+        );
+
+        console.log(
+          `[BillService][GenerateBillForSpecialGroup] ✅ Factura JORNAL creada: ${billSaved.id}`,
+        );
+        return {
+          success: true,
+          billId: billSaved.id,
+          message: `Factura generada exitosamente para grupo ${groupId} (tipo: JORNAL)`,
+        };
+      }
+
+      // 5b. Grupos HORAS (sin servicio alternativo)
+      if (unitOfMeasure === 'HORAS' && !isAlternativeService) {
+        const result =
+          await this.hoursCalculationService.processHoursGroups(
+            targetGroup,
+            groupDto,
+          );
+
+        const billData = this.prepareHoursBillData(
+          result,
+          operationId,
+          userId,
+          groupDto,
+          targetGroup,
+        );
+        const billSaved = await this.prisma.bill.create({
+          data: {
+            ...billData,
+            status: BillStatus.TO_APPROVED,
+          },
+        });
+
+        await this.processHoursBillDetails(
+          targetGroup.workers,
+          billSaved.id,
+          operationId,
+          groupDto,
+          result,
+        );
+
+        console.log(
+          `[BillService][GenerateBillForSpecialGroup] ✅ Factura HORAS creada: ${billSaved.id}`,
+        );
+        return {
+          success: true,
+          billId: billSaved.id,
+          message: `Factura generada exitosamente para grupo ${groupId} (tipo: HORAS)`,
+        };
+      }
+
+      // 5c. Grupos con servicio alternativo
+      if (isAlternativeService) {
+        const { totalFacturation, totalPaysheet } =
+          await this.calculateAlternativeServiceTotals(
+            targetGroup,
+            groupDto,
+          );
+
+        const billData = this.prepareAlternativeServiceBillData(
+          targetGroup,
+          groupDto,
+          totalFacturation,
+          totalPaysheet,
+          operationId,
+          userId,
+        );
+
+        const billSaved = await this.prisma.bill.create({
+          data: {
+            ...billData,
+            status: BillStatus.TO_APPROVED,
+            group_hours: groupDto.group_hours ? Number(groupDto.group_hours) : null,
+          },
+        });
+
+        await this.processAlternativeServiceBillDetails(
+          targetGroup.workers,
+          billSaved.id,
+          operationId,
+          groupDto,
+          totalFacturation,
+          totalPaysheet,
+          targetGroup,
+        );
+
+        console.log(
+          `[BillService][GenerateBillForSpecialGroup] ✅ Factura SERVICIO ALTERNATIVO creada: ${billSaved.id}`,
+        );
+        return {
+          success: true,
+          billId: billSaved.id,
+          message: `Factura generada exitosamente para grupo ${groupId} (tipo: SERVICIO ALTERNATIVO)`,
+        };
+      }
+
+      // 5d. Grupos por cantidad
+      const { totalPaysheet, totalFacturation } = this.calculateQuantityTotals(
+        targetGroup,
+        groupDto,
+        0,
+      );
+
+      const billData = this.prepareQuantityBillData(
+        targetGroup,
+        groupDto,
+        totalPaysheet,
+        totalFacturation,
+        operationId,
+        userId,
+      );
+
+      const billSaved = await this.prisma.bill.create({
+        data: {
+          ...billData,
+          status: BillStatus.TO_APPROVED,
+        },
+      });
+
+      await this.processQuantityBillDetails(
+        targetGroup.workers,
+        billSaved.id,
+        operationId,
+        groupDto,
+        totalPaysheet,
+        totalFacturation,
+        targetGroup,
+      );
+
+      console.log(
+        `[BillService][GenerateBillForSpecialGroup] ✅ Factura CANTIDAD creada: ${billSaved.id}`,
+      );
+      return {
+        success: true,
+        billId: billSaved.id,
+        message: `Factura generada exitosamente para grupo ${groupId} (tipo: CANTIDAD)`,
+      };
+    } catch (error) {
+      console.error(
+        `[BillService][GenerateBillForSpecialGroup] ❌ Error generando factura para grupo ${groupId}:`,
+        error,
+      );
+      return {
+        success: false,
+        message: `Error generando factura: ${error instanceof Error ? error.message : 'Error desconocido'}`,
+      };
+    }
+  }
+
   // Validar operación
  private async validateOperation(operationId: number) {
   const validateOperationID =
@@ -566,7 +884,31 @@ export class BillService {
     if (!groupDto) {
       throw new ConflictException(`No se encontró el grupo con ID: ${groupId}`);
     }
-    return groupDto;
+    return {
+      ...groupDto,
+      amount: groupDto.amount ?? 0,
+      pays: groupDto.pays ?? [],
+      billHoursDistribution: groupDto.billHoursDistribution ?? {
+        HOD: 0,
+        HON: 0,
+        HED: 0,
+        HEN: 0,
+        HFOD: 0,
+        HFON: 0,
+        HFED: 0,
+        HFEN: 0,
+      },
+      paysheetHoursDistribution: groupDto.paysheetHoursDistribution ?? {
+        HOD: 0,
+        HON: 0,
+        HED: 0,
+        HEN: 0,
+        HFOD: 0,
+        HFON: 0,
+        HFED: 0,
+        HFEN: 0,
+      },
+    };
   }
 
   // Preparar datos de facturación para grupos JORNAL
@@ -1037,7 +1379,7 @@ export class BillService {
         uniqueWorkers,
       );
 
-      const payWorker = groupDto.pays.find((p) => p.id_worker === worker.id);
+      const payWorker = (groupDto.pays ?? []).find((p) => p.id_worker === worker.id);
 
       await this.createBillDetail({
         id_bill: billId,
@@ -1096,7 +1438,7 @@ export class BillService {
         uniqueWorkers,
       );
 
-      const payWorker = groupDto.pays.find((p) => p.id_worker === worker.id);
+      const payWorker = (groupDto.pays ?? []).find((p) => p.id_worker === worker.id);
 
       await this.createBillDetail({
         id_bill: billId,
@@ -1162,7 +1504,7 @@ export class BillService {
       if (facturationUnit !== 'HORAS' && facturationUnit !== 'JORNAL') {
         const totalUnitPays =
           group.pays?.reduce((sum, p) => sum + (p.pay || 0), 0) || 1;
-        payRate = (group.amount / totalUnitPays) * (payWorker?.pay || 1);
+        payRate = ((group.amount ?? 0) / totalUnitPays) * (payWorker?.pay || 1);
       } else {
         payRate = payWorker?.pay || 1;
       }
@@ -1207,19 +1549,48 @@ export class BillService {
         group.id,
       );
 
-      const totalUnitPays = group.pays.reduce(
+      const totalUnitPays = (group.pays ?? []).reduce(
         (sum, p) => sum + (p.pay || 0),
         0,
       );
-      const payWorker = group.pays.find((p) => p.id_worker === worker.id);
+      const payWorker = (group.pays ?? []).find((p) => p.id_worker === worker.id);
 
+      // ✅ DEFENSIVA: Si falta payWorker, generar fallback automáticamente
       if (!payWorker) {
-        throw new ConflictException(
-          `No se encontró el pago para el trabajador con ID: ${worker.id}`,
+        console.warn(
+          `⚠️ [processQuantityBillDetails] Falta entrada en pays para worker ${worker.id} en grupo ${group.id}. Usando fallback pay=1`,
         );
+        // Crear objeto fallback: asignar pay=1 para distribución equitativa
+        const fallbackPay = { id_worker: worker.id, pay: 1 };
+        // Usar el fallback solo para este cálculo
+        const payRate = ((group.amount ?? 0) / (totalUnitPays + 1)) * fallbackPay.pay;
+
+        const totalWorkerPaysheet = this.calculateTotalWorker(
+          totalPaysheet,
+          group,
+          worker,
+          uniqueWorkers,
+        );
+
+        const totalWorkerFacturation = this.calculateTotalWorker(
+          totalFacturation,
+          group,
+          worker,
+          uniqueWorkers,
+        );
+
+        await this.createBillDetail({
+          id_bill: billId,
+          id_operation_worker: operationWorker.id,
+          pay_rate: payRate,
+          pay_unit: fallbackPay.pay || 1,
+          total_bill: totalWorkerFacturation,
+          total_paysheet: totalWorkerPaysheet,
+        });
+        continue;
       }
 
-      const payRate = (group.amount / totalUnitPays) * payWorker.pay;
+      const payRate = ((group.amount ?? 0) / totalUnitPays) * payWorker.pay;
 
       const totalWorkerPaysheet = this.calculateTotalWorker(
         totalPaysheet,
@@ -2640,7 +3011,7 @@ export class BillService {
 
   private buildGroupPayArray(billDetails: any[], group: GroupBillDto) {
     return billDetails.map((bd) => {
-      const payDto = group.pays.find(
+      const payDto = (group.pays ?? []).find(
         (x) => x.id_worker === bd.operationWorker.worker.id,
       );
       let payValueWorker = payDto?.pay ?? (bd.pay_unit || 1); // Valor por defecto si no se encuentra el pago
@@ -2674,7 +3045,7 @@ export class BillService {
       if (!billDetail) continue;
 
       // Buscar el pago actualizado en el DTO
-      const pay = group.pays.find(
+      const pay = (group.pays ?? []).find(
         (p) => p.id_worker === operationWorker.id_worker,
       );
       const payValue = pay?.pay ?? billDetail.pay_unit;
