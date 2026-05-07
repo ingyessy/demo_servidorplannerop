@@ -1,7 +1,7 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
-import { StatusOperation } from '@prisma/client';
+import { StatusOperation, YES_NO } from '@prisma/client';
 import { OperationFilterDto } from 'src/operation/dto/fliter-operation.dto';
 import { PaginationService } from '../pagination.service';
 import { PaginatedResponse } from '../../interface/paginate-operation';
@@ -10,7 +10,7 @@ import { PaginatedResponse } from '../../interface/paginate-operation';
 export class PaginateOperationService {
   private readonly STATS_CACHE_TTL = 300; // 5 minutos en segundos
   private readonly LARGE_DATASET_CACHE_TTL = 600; // 10 minutos para datasets grandes
-  
+
   constructor(
     private readonly paginationService: PaginationService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
@@ -19,17 +19,15 @@ export class PaginateOperationService {
   /**
    * Pagina operaciones con sus estadísticas específicas
    */
-  async paginateOperations<T>(
-    options: {
-      prisma: any;
-      page?: number;
-      limit?: number;
-      filters?: OperationFilterDto;
-      activatePaginated?: boolean;
-      defaultInclude: any;
-      transformer: any;
-    }
-  ): Promise<PaginatedResponse<T>> {
+  async paginateOperations<T>(options: {
+    prisma: any;
+    page?: number;
+    limit?: number;
+    filters?: OperationFilterDto;
+    activatePaginated?: boolean;
+    defaultInclude: any;
+    transformer: any;
+  }): Promise<PaginatedResponse<T>> {
     try {
       const {
         prisma,
@@ -38,25 +36,37 @@ export class PaginateOperationService {
         filters,
         activatePaginated = true,
         defaultInclude,
-        transformer
+        transformer,
       } = options;
 
+      return await this.paginationService.paginateEntity<T, OperationFilterDto>(
+        {
+          prisma,
+          entity: 'operation',
+          page,
+          limit,
+          filters,
+          include: defaultInclude,
+          // Optimizar ordenamiento para grandes datasets
+          // Usar ID como campo secundario para consistencia y rendimiento
+          orderBy: [{ status: 'asc' }, { id: 'desc' }],
+          activatePaginated,
+          transformFn: (item) => {
+            const transformed = transformer.transformOperationResponse(item);
+            const isSpecial =
+              item?.workers?.some((w) => w.tariff?.isSpecial === YES_NO.YES) ??
+              false;
 
-      return await this.paginationService.paginateEntity<T, OperationFilterDto>({
-        prisma,
-        entity: 'operation',
-        page,
-        limit,
-        filters,
-        include: defaultInclude,
-        // Optimizar ordenamiento para grandes datasets
-        // Usar ID como campo secundario para consistencia y rendimiento
-        orderBy: [{ status: 'asc' }, { id: 'desc' }],
-        activatePaginated,
-        transformFn: (item) => transformer.transformOperationResponse(item),
-        buildWhereClause: (filters) => this.buildOperationWhereClause(filters),
-        getAdditionalStats: async () => this.getOperationStats(prisma)
-      });
+            return {
+              ...transformed,
+              isSpecial,
+            };
+          },
+          buildWhereClause: (filters) =>
+            this.buildOperationWhereClause(filters),
+          getAdditionalStats: async () => this.getOperationStats(prisma),
+        },
+      );
     } catch (error) {
       console.error('Error in paginateOperations:', error);
       throw new Error(`Error paginating operations: ${error.message}`);
@@ -68,14 +78,14 @@ export class PaginateOperationService {
    */
   private buildOperationWhereClause(filters?: OperationFilterDto): any {
     const whereClause: any = {};
-    
+
     if (!filters) return whereClause;
 
-    if(filters.id_site){
+    if (filters.id_site) {
       whereClause.id_site = filters.id_site;
     }
 
-    if(filters.id_subsite){
+    if (filters.id_subsite) {
       whereClause.id_subsite = filters.id_subsite;
     }
 
@@ -91,7 +101,7 @@ export class PaginateOperationService {
       // Filtrar solo por operaciones que INICIARON dentro del rango
       whereClause.dateStart = {
         gte: startDate,
-        lte: endDate
+        lte: endDate,
       };
     } else if (filters.dateStart) {
       whereClause.dateStart = { gte: filters.dateStart };
@@ -123,8 +133,10 @@ export class PaginateOperationService {
 
       const searchConditions: any[] = [
         { client: { name: { contains: filters.search, mode: 'insensitive' } } },
-        { jobArea: { name: { contains: filters.search, mode: 'insensitive' } } },
-        { 
+        {
+          jobArea: { name: { contains: filters.search, mode: 'insensitive' } },
+        },
+        {
           workers: {
             some: {
               SubTask: {
@@ -156,7 +168,7 @@ export class PaginateOperationService {
       // Intentar obtener del caché primero
       const cacheKey = 'operation-stats';
       const cached = await this.cacheManager.get(cacheKey);
-      
+
       if (cached) {
         return cached;
       }
@@ -203,10 +215,10 @@ export class PaginateOperationService {
         totalCompleted,
         totalCanceled,
       };
-      
+
       // Guardar en caché por 5 minutos
       await this.cacheManager.set(cacheKey, stats, this.STATS_CACHE_TTL * 1000);
-      
+
       return stats;
     } catch (error) {
       console.error('Error getting operation stats:', error);

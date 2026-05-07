@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { Prisma, StatusOperation } from '@prisma/client';
+import { Prisma, StatusOperation, YES_NO } from '@prisma/client';
 import { OperationTransformerService } from './operation-transformer.service';
 import { OperationFilterDto } from '../dto/fliter-operation.dto';
 import { PaginateOperationService } from 'src/common/services/pagination/operation/paginate-operation.service';
@@ -46,9 +46,16 @@ export class OperationFinderService {
         include: this.defaultInclude,
       });
 
-      return response.map((op) =>
-        this.transformer.transformOperationResponse(op),
-      );
+      return response.map((op) => {
+  const transformed = this.transformer.transformOperationResponse(op);
+  const isSpecial =
+    op?.workers?.some((w) => w.tariff?.isSpecial === YES_NO.YES) ?? false;
+
+  return {
+    ...transformed,
+    isSpecial,
+  };
+});
     } catch (error) {
       console.error('Error getting all operations:', error);
       throw new Error((error as Error).message);
@@ -89,7 +96,14 @@ export class OperationFinderService {
         return { message: 'Operation not found', status: 404 };
       }
 
-      return this.transformer.transformOperationResponse(response);
+      const transformed = this.transformer.transformOperationResponse(response);
+const isSpecial =
+  response.workers?.some((w) => w.tariff?.isSpecial === YES_NO.YES) ?? false;
+
+return {
+  ...transformed,
+  isSpecial,
+};
     } catch (error) {
       console.error(`Error finding operation with ID ${id}:`, error);
       throw new Error((error as Error).message);
