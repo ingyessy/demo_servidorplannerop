@@ -1,10 +1,19 @@
-import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+} from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { BillService } from 'src/bill/bill.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AssignWorkersDto } from './dto/assign-workers.dto';
 import { WorkerScheduleDto } from './dto/worker-schedule.dto';
-import { BillStatus, StatusComplete, StatusOperation, YES_NO } from '@prisma/client';
+import {
+  BillStatus,
+  StatusComplete,
+  StatusOperation,
+  YES_NO,
+} from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { RemoveWorkerFromOperationService } from './service/remove-worker-from-operation/remove-worker-from-operation.service';
 import { UpdateWorkerSheduleService } from './service/update-worker-shedule/update-worker-shedule.service';
@@ -149,11 +158,12 @@ export class OperationWorkerService {
       }
     });
 
-    const scheduleUpdateResult = await this.updateWorkerSheduleService.updateWorkersSchedule(
-      id_operation,
-      workersToUpdate,
-      id_site,
-    );
+    const scheduleUpdateResult =
+      await this.updateWorkerSheduleService.updateWorkersSchedule(
+        id_operation,
+        workersToUpdate,
+        id_site,
+      );
 
     await this.ensurePreBillsForSpecialOperation(id_operation, workersToUpdate);
 
@@ -260,7 +270,18 @@ export class OperationWorkerService {
         return { completed: false };
       }
 
-      if (operation.status === 'COMPLETED' || operation.status === 'TO_APPROVED') {
+      // ✅ Si está en REJECTED, permitir update sin cambiar estado
+      if (operation.status === 'REJECTED') {
+        console.log(
+          `[OperationWorkerService] ℹ️ Operación ${id_operation} está REJECTED - permitiendo actualización sin cambio de estado`,
+        );
+        return { completed: false };
+      }
+
+      if (
+        operation.status === 'COMPLETED' ||
+        operation.status === 'TO_APPROVED'
+      ) {
         return { completed: false };
       }
 
@@ -293,7 +314,12 @@ export class OperationWorkerService {
         finalTimeEnd = latestGroupEnd.timeEnd;
       }
 
-      if (operation.dateStart && operation.timeStrat && finalDateEnd && finalTimeEnd) {
+      if (
+        operation.dateStart &&
+        operation.timeStrat &&
+        finalDateEnd &&
+        finalTimeEnd
+      ) {
         const start = new Date(operation.dateStart);
         const [sh, sm] = operation.timeStrat.split(':').map(Number);
         start.setHours(sh, sm, 0, 0);
@@ -317,24 +343,26 @@ export class OperationWorkerService {
         },
       });
 
-      await this.prisma.operation_Worker.findMany({
-        where: { id_operation },
-        select: { id_worker: true },
-      }).then(async (operationWorkers) => {
-        const workerIds = operationWorkers
-          .map((ow) => ow.id_worker)
-          .filter((id) => id !== -1);
+      await this.prisma.operation_Worker
+        .findMany({
+          where: { id_operation },
+          select: { id_worker: true },
+        })
+        .then(async (operationWorkers) => {
+          const workerIds = operationWorkers
+            .map((ow) => ow.id_worker)
+            .filter((id) => id !== -1);
 
-        if (workerIds.length > 0) {
-          await this.prisma.worker.updateMany({
-            where: {
-              id: { in: workerIds },
-              status: { not: 'AVALIABLE' },
-            },
-            data: { status: 'AVALIABLE' },
-          });
-        }
-      });
+          if (workerIds.length > 0) {
+            await this.prisma.worker.updateMany({
+              where: {
+                id: { in: workerIds },
+                status: { not: 'AVALIABLE' },
+              },
+              data: { status: 'AVALIABLE' },
+            });
+          }
+        });
 
       console.log(
         `[OperationWorkerService] ✅ Operación ${id_operation} completada: ${targetStatus}, isSpecial: ${isSpecialOperation}`,
@@ -597,7 +625,9 @@ export class OperationWorkerService {
    * @param id_operation ID de la operación
    * @returns {dateEnd: Date, timeEnd: string} o null si no hay grupos completados
    */
-  private async getLatestGroupEndDateTime(id_operation: number): Promise<{ dateEnd: Date; timeEnd: string } | null> {
+  private async getLatestGroupEndDateTime(
+    id_operation: number,
+  ): Promise<{ dateEnd: Date; timeEnd: string } | null> {
     try {
       const completedWorkers = await this.prisma.operation_Worker.findMany({
         where: {
@@ -617,11 +647,19 @@ export class OperationWorkerService {
         return null;
       }
 
-      const groupEndTimes = new Map<string, { dateEnd: Date; timeEnd: string }>();
+      const groupEndTimes = new Map<
+        string,
+        { dateEnd: Date; timeEnd: string }
+      >();
 
       completedWorkers.forEach((worker) => {
         const groupId = worker.id_group;
-        if (groupId && worker.dateEnd && worker.timeEnd && !groupEndTimes.has(groupId)) {
+        if (
+          groupId &&
+          worker.dateEnd &&
+          worker.timeEnd &&
+          !groupEndTimes.has(groupId)
+        ) {
           groupEndTimes.set(groupId, {
             dateEnd: worker.dateEnd,
             timeEnd: worker.timeEnd,
@@ -645,7 +683,10 @@ export class OperationWorkerService {
 
       return latestEndInfo;
     } catch (error) {
-      console.error(`[OperationWorkerService] Error obteniendo fecha más reciente para operación ${id_operation}:`, error);
+      console.error(
+        `[OperationWorkerService] Error obteniendo fecha más reciente para operación ${id_operation}:`,
+        error,
+      );
       return null;
     }
   }
@@ -700,7 +741,8 @@ export class OperationWorkerService {
 
     await this.ensurePreBillsForSpecialOperation(id_operation);
 
-    const completionInfo = await this.completeOperationIfAllGroupsFinished(id_operation);
+    const completionInfo =
+      await this.completeOperationIfAllGroupsFinished(id_operation);
 
     return {
       ...updateResult,
@@ -728,9 +770,15 @@ export class OperationWorkerService {
         data: { status: 'COMPLETED' },
       });
 
-      return { message: 'Client programming completed', id: operation.id_clientProgramming };
+      return {
+        message: 'Client programming completed',
+        id: operation.id_clientProgramming,
+      };
     } catch (error) {
-      console.error('[OperationWorkerService] Error completing client programming:', error);
+      console.error(
+        '[OperationWorkerService] Error completing client programming:',
+        error,
+      );
       throw error;
     }
   }
