@@ -58,7 +58,7 @@ export class OperationService {
     private operationTokenService: OperationTokenService,
     private operationEmailService: OperationEmailService,
     // private billService: BillService,
-  ) {}
+  ) { }
   /**
    * Obtiene todas las operaciones
    * @returns Lista de operaciones con relaciones incluidas
@@ -624,8 +624,18 @@ export class OperationService {
     }
 
     if (action === 'REJECT') {
-      // Cuando se rechaza, la bill NO cambia de estado
-      // Solo la operación va a REJECTED
+      // Cuando se rechaza, eliminar todas las bills y billdetails de la operación
+      try {
+        await this.deleteAllBillsAndDetailsForOperation(operation.id);
+        this.logger.log(
+          `Bills y billdetails eliminados para operación rechazada ${operation.id}`,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Error eliminando bills para operación rechazada ${operation.id}: ${error}`,
+        );
+        throw error;
+      }
     }
 
     const result = await this.prisma.$transaction(async (tx) => {
@@ -714,6 +724,42 @@ export class OperationService {
       },
     });
   }
+  // Elimina todas las bills y billdetails de una operación. Usado al rechazar una operación especial.
+  private async deleteAllBillsAndDetailsForOperation(
+    operationId: number,
+  ): Promise<{ billsDeleted: number; detailsDeleted: number }> {
+    return await this.prisma.$transaction(async (tx) => {
+      // 1. Obtener todos los bills de la operación
+      const bills = await tx.bill.findMany({
+        where: { id_operation: operationId },
+        select: { id: true },
+      });
+
+      const billIds = bills.map((bill) => bill.id);
+
+      // 2. Eliminar todos los BillDetails de estos bills
+      const deletedDetails = await tx.billDetail.deleteMany({
+        where: {
+          id_bill: { in: billIds },
+        },
+      });
+
+      // 3. Eliminar todos los Bills de la operación
+      const deletedBills = await tx.bill.deleteMany({
+        where: { id_operation: operationId },
+      });
+
+      this.logger.log(
+        `Operación ${operationId} rechazada: ${deletedBills.count} bills y ${deletedDetails.count} billdetails eliminados`,
+      );
+
+      return {
+        billsDeleted: deletedBills.count,
+        detailsDeleted: deletedDetails.count,
+      };
+    });
+  }
+
 
   private async autoCompleteConfirmedSpecialOperation(operationId: number) {
     const operation = await this.prisma.operation.findUnique({
@@ -785,11 +831,11 @@ export class OperationService {
     const opDuration =
       operation.dateStart && operation.timeStrat
         ? this.calculateOperationDuration(
-            operation.dateStart,
-            operation.timeStrat,
-            latestEndDateTime.date,
-            latestEndDateTime.time,
-          )
+          operation.dateStart,
+          operation.timeStrat,
+          latestEndDateTime.date,
+          latestEndDateTime.time,
+        )
         : 0;
 
     const completedOperation = await this.prisma.operation.update({
@@ -871,7 +917,7 @@ export class OperationService {
             include: {
               operation: {
                 select: {
-                  id: true, 
+                  id: true,
                   status: true,
                   dateStart: true,
                   dateEnd: true,
@@ -947,7 +993,7 @@ export class OperationService {
     const canConfirm =
       tokenStatus === TokenStatus.ACTIVE &&
       operation.status === StatusOperation.TO_APPROVED;
-     // Construir mapa de Bills por id_group
+    // Construir mapa de Bills por id_group
     const billMap = new Map<string, any>();
     for (const bill of operation.Bill || []) {
       if (bill.id_group) {
@@ -1763,29 +1809,29 @@ export class OperationService {
         ...directFields
       } = updateOperationDto;
 
-        // Fusionar la información de `groups` dentro de `workers.update` para
-        // que valores como `amount`, `group_hours` y `number_of_hours` lleguen
-        // a `updateWorkersSchedule` y sean utilizados al generar prefacturas.
-        if (groups && Array.isArray(groups) && groups.length > 0) {
-          const groupMap = new Map<string, any>();
-          for (const g of groups) {
-            const gidKey = (g as any).id_group ?? (g as any).groupId;
-            if (gidKey) groupMap.set(gidKey, g);
-          }
+      // Fusionar la información de `groups` dentro de `workers.update` para
+      // que valores como `amount`, `group_hours` y `number_of_hours` lleguen
+      // a `updateWorkersSchedule` y sean utilizados al generar prefacturas.
+      if (groups && Array.isArray(groups) && groups.length > 0) {
+        const groupMap = new Map<string, any>();
+        for (const g of groups) {
+          const gidKey = (g as any).id_group ?? (g as any).groupId;
+          if (gidKey) groupMap.set(gidKey, g);
+        }
 
-          if (workers && workers.update && Array.isArray(workers.update)) {
-            for (const up of workers.update) {
-              const gid = (up as any).id_group ?? (up as any).groupId;
-              const grp = groupMap.get(gid);
-              if (!grp) continue;
-              if ((grp as any).amount !== undefined) (up as any).amount = Number((grp as any).amount);
-              if ((grp as any).number_of_hours !== undefined)
-                (up as any).number_of_hours = Number((grp as any).number_of_hours);
-              if ((grp as any).group_hours !== undefined)
-                (up as any).group_hours = Number((grp as any).group_hours);
-            }
+        if (workers && workers.update && Array.isArray(workers.update)) {
+          for (const up of workers.update) {
+            const gid = (up as any).id_group ?? (up as any).groupId;
+            const grp = groupMap.get(gid);
+            if (!grp) continue;
+            if ((grp as any).amount !== undefined) (up as any).amount = Number((grp as any).amount);
+            if ((grp as any).number_of_hours !== undefined)
+              (up as any).number_of_hours = Number((grp as any).number_of_hours);
+            if ((grp as any).group_hours !== undefined)
+              (up as any).group_hours = Number((grp as any).group_hours);
           }
         }
+      }
 
       // ✅ VERIFICAR SI LA OPERACIÓN ESTÁ COMPLETADA ANTES DE PROCESAR TRABAJADORES
       const currentOperation = await this.prisma.operation.findUnique({
@@ -2501,11 +2547,11 @@ export class OperationService {
               workersCount: workersCount,
               bill: bill
                 ? {
-                    id: bill.id,
-                    status: bill.status,
-                    observation: bill.observation,
-                    canDelete: bill.status === 'ACTIVE',
-                  }
+                  id: bill.id,
+                  status: bill.status,
+                  observation: bill.observation,
+                  canDelete: bill.status === 'ACTIVE',
+                }
                 : null,
               canDelete: !bill || bill.status === 'ACTIVE',
             };
@@ -2948,14 +2994,14 @@ export class OperationService {
     // Validar consistencia de tarifas especiales/no especiales para cambios de grupos.
     const tariffIdsFromConnect = Array.isArray(workersOps.connect)
       ? workersOps.connect
-          .map((item: any) => item?.id_tariff)
-          .filter((id: any) => typeof id === 'number')
+        .map((item: any) => item?.id_tariff)
+        .filter((id: any) => typeof id === 'number')
       : [];
 
     const tariffIdsFromUpdate = Array.isArray(workersOps.update)
       ? workersOps.update
-          .map((item: any) => item?.id_tariff)
-          .filter((id: any) => typeof id === 'number')
+        .map((item: any) => item?.id_tariff)
+        .filter((id: any) => typeof id === 'number')
       : [];
 
     const incomingTariffIds = [...tariffIdsFromConnect, ...tariffIdsFromUpdate];
