@@ -15,7 +15,12 @@ import {
 } from '@nestjs/common';
 import { BillService } from './bill.service';
 import { CreateBillDto } from './dto/create-bill.dto';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { SiteInterceptor } from 'src/common/interceptors/site.interceptor';
@@ -23,7 +28,7 @@ import { Roles } from 'src/auth/decorators/roles.decorator';
 import { Role, Status } from '@prisma/client';
 import { ParseIntPipe } from 'src/pipes/parse-int/parse-int.pipe';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
-import { UpdateBillDto, UpdateBillStatusDto } from './dto/update-bill.dto';
+import { UpdateBillDto, UpdateBillStatusDto, UpdateBillWithServiceChangeDto } from './dto/update-bill.dto';
 import { PaginationQueryDto } from 'src/common/dto/pagination.dto';
 import { FilterBillDto } from './dto/filter-bill.dto';
 import { ValidationPipe } from '@nestjs/common';
@@ -41,7 +46,8 @@ export class BillController {
   @Post()
   async create(
     @CurrentUser('userId') userId: number,
-    @Body() createBillDto: CreateBillDto) {
+    @Body() createBillDto: CreateBillDto,
+  ) {
     const groupsSummary = (createBillDto?.groups || []).map((group) => ({
       id: group?.id || 'N/A',
       amount: group?.amount,
@@ -69,11 +75,17 @@ export class BillController {
   }
 
   @Get()
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Obtener Bills con límite opcional',
-    description: 'Obtiene Bills con un límite máximo de 20 registros para evitar sobrecarga'
+    description:
+      'Obtiene Bills con un límite máximo de 20 registros para evitar sobrecarga',
   })
-  @ApiQuery({ name: 'limit', required: false, description: 'Límite de registros (máximo 20)', example: 10 })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Límite de registros (máximo 20)',
+    example: 10,
+  })
   async findAll(
     @CurrentUser('id_site') id_site?: number,
     @CurrentUser('id_subsite') id_subsite?: number | null,
@@ -82,30 +94,44 @@ export class BillController {
     // Si se especifica un límite, usar el método limitado
     if (limit) {
       const safeLimit = Math.min(parseInt(limit.toString()) || 20, 20);
-      return await this.billService.findAllLimited(safeLimit, id_site, id_subsite);
+      return await this.billService.findAllLimited(
+        safeLimit,
+        id_site,
+        id_subsite,
+      );
     }
-    
+
     // Para evitar problemas de conexión, por defecto limitar a 20
     return await this.billService.findAllLimited(20, id_site, id_subsite);
   }
 
   @Get('limited')
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Obtener Bills limitadas (sin pool)',
-    description: 'Obtiene un número limitado de Bills para evitar sobrecarga del sistema. Máximo 50 registros.'
+    description:
+      'Obtiene un número limitado de Bills para evitar sobrecarga del sistema. Máximo 50 registros.',
   })
-  @ApiQuery({ name: 'limit', required: false, description: 'Límite de registros (máximo 50)', example: 20 })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Límite de registros (máximo 50)',
+    example: 20,
+  })
   async findAllLimited(
     @CurrentUser('id_site') id_site?: number,
     @CurrentUser('id_subsite') id_subsite?: number | null,
     @Query('limit') limit?: number,
   ) {
     const safeLimit = Math.min(parseInt(limit?.toString() || '20'), 50);
-    return await this.billService.findAllLimited(safeLimit, id_site, id_subsite);
+    return await this.billService.findAllLimited(
+      safeLimit,
+      id_site,
+      id_subsite,
+    );
   }
 
   @Get('paginated')
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Obtener Bills paginadas con filtros',
     description: `
     Endpoint optimizado para la paginación de Bills con filtros específicos del frontend.
@@ -117,15 +143,56 @@ export class BillController {
     - Rango de fechas
     
     **Nota:** Todos los parámetros son opcionales. El userId se obtiene automáticamente del token de autenticación.
-    `
+    `,
   })
-  @ApiQuery({ name: 'search', required: false, description: 'Búsqueda por operación, código o subservicio', example: 'proyecto' })
-  @ApiQuery({ name: 'jobAreaId', required: false, type: Number, description: 'ID del área de trabajo', example: 1 })
-  @ApiQuery({ name: 'status', required: false, enum: ['ACTIVE', 'COMPLETED'], description: 'Estado de la factura', example: 'ACTIVE' })
-  @ApiQuery({ name: 'dateStart', required: false, type: String, description: 'Fecha de inicio (YYYY-MM-DD)', example: '2024-01-01' })
-  @ApiQuery({ name: 'dateEnd', required: false, type: String, description: 'Fecha de fin (YYYY-MM-DD)', example: '2024-12-31' })
-  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Número de página', example: 1 })
-  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Elementos por página (máximo: 100)', example: 20 })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    description: 'Búsqueda por operación, código o subservicio',
+    example: 'proyecto',
+  })
+  @ApiQuery({
+    name: 'jobAreaId',
+    required: false,
+    type: Number,
+    description: 'ID del área de trabajo',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['ACTIVE', 'COMPLETED'],
+    description: 'Estado de la factura',
+    example: 'ACTIVE',
+  })
+  @ApiQuery({
+    name: 'dateStart',
+    required: false,
+    type: String,
+    description: 'Fecha de inicio (YYYY-MM-DD)',
+    example: '2024-01-01',
+  })
+  @ApiQuery({
+    name: 'dateEnd',
+    required: false,
+    type: String,
+    description: 'Fecha de fin (YYYY-MM-DD)',
+    example: '2024-12-31',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Número de página',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Elementos por página (máximo: 100)',
+    example: 20,
+  })
   @ApiResponse({
     status: 200,
     description: 'Bills obtenidas exitosamente con filtros aplicados',
@@ -134,7 +201,7 @@ export class BillController {
       properties: {
         items: {
           type: 'array',
-          description: 'Lista de Bills para la página actual'
+          description: 'Lista de Bills para la página actual',
         },
         pagination: {
           type: 'object',
@@ -144,16 +211,17 @@ export class BillController {
             totalPages: { type: 'number', example: 8 },
             itemsPerPage: { type: 'number', example: 20 },
             hasNextPage: { type: 'boolean', example: true },
-            hasPreviousPage: { type: 'boolean', example: false }
-          }
-        }
-      }
-    }
+            hasPreviousPage: { type: 'boolean', example: false },
+          },
+        },
+      },
+    },
   })
   async findAllPaginated(
     @CurrentUser('siteId') siteId: number,
     @CurrentUser('subsiteId') subsiteId: number,
-    @Query(new ValidationPipe({ transform: true, whitelist: true })) filters: FilterBillDto,
+    @Query(new ValidationPipe({ transform: true, whitelist: true }))
+    filters: FilterBillDto,
   ) {
     // console.log('🔍 [Bill Controller] Parámetros recibidos:', {
     //   siteId,
@@ -161,18 +229,19 @@ export class BillController {
     //   filters,
     //   query_raw: filters
     // });
-    
+
     return await this.billService.findAllPaginatedWithFilters({
       ...filters,
       siteId,
-      subsiteId
+      subsiteId,
     });
   }
 
   @Get('search-stats')
   @ApiOperation({
     summary: 'Obtener estadísticas de búsqueda',
-    description: 'Devuelve contadores rápidos para filtros de búsqueda sin cargar los datos completos'
+    description:
+      'Devuelve contadores rápidos para filtros de búsqueda sin cargar los datos completos',
   })
   @ApiResponse({
     status: 200,
@@ -183,31 +252,58 @@ export class BillController {
         totalCount: {
           type: 'number',
           description: 'Total de registros que coinciden con los filtros',
-          example: 1250
+          example: 1250,
         },
         queryTime: {
           type: 'number',
           description: 'Tiempo en milisegundos que tomó la consulta',
-          example: 45
+          example: 45,
         },
         hasLargeDataset: {
           type: 'boolean',
-          description: 'Indica si el conjunto de datos es grande (>1000 registros)',
-          example: true
+          description:
+            'Indica si el conjunto de datos es grande (>1000 registros)',
+          example: true,
         },
         recommendedPageSize: {
           type: 'number',
-          description: 'Tamaño de página recomendado basado en el tamaño del conjunto',
-          example: 25
-        }
-      }
-    }
+          description:
+            'Tamaño de página recomendado basado en el tamaño del conjunto',
+          example: 25,
+        },
+      },
+    },
   })
-  @ApiQuery({ name: 'search', required: false, type: String, description: 'Término de búsqueda' })
-  @ApiQuery({ name: 'jobAreaId', required: false, type: Number, description: 'ID del área de trabajo' })
-  @ApiQuery({ name: 'status', required: false, enum: Status, description: 'Estado de la factura (ACTIVE, COMPLETED)' })
-  @ApiQuery({ name: 'dateStart', required: false, type: String, description: 'Fecha de inicio (YYYY-MM-DD)' })
-  @ApiQuery({ name: 'dateEnd', required: false, type: String, description: 'Fecha de fin (YYYY-MM-DD)' })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Término de búsqueda',
+  })
+  @ApiQuery({
+    name: 'jobAreaId',
+    required: false,
+    type: Number,
+    description: 'ID del área de trabajo',
+  })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: Status,
+    description: 'Estado de la factura (ACTIVE, COMPLETED)',
+  })
+  @ApiQuery({
+    name: 'dateStart',
+    required: false,
+    type: String,
+    description: 'Fecha de inicio (YYYY-MM-DD)',
+  })
+  @ApiQuery({
+    name: 'dateEnd',
+    required: false,
+    type: String,
+    description: 'Fecha de fin (YYYY-MM-DD)',
+  })
   async getSearchStats(
     @CurrentUser('id') userId: number,
     @Query('search') search?: string,
@@ -226,14 +322,14 @@ export class BillController {
       status,
       startDate,
       endDate,
-      userId
+      userId,
     );
   }
 
   @Get('count')
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Contar total de Bills',
-    description: 'Obtiene el número total de Bills sin cargar la data'
+    description: 'Obtiene el número total de Bills sin cargar la data',
   })
   async countAll(
     @CurrentUser('id_site') id_site?: number,
@@ -244,7 +340,7 @@ export class BillController {
   }
 
   @Get(':id')
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Obtener un Bill por ID',
     description: `
 Obtiene la información detallada de un Bill específico (factura) incluyendo:
@@ -297,22 +393,21 @@ Obtiene la información detallada de un Bill específico (factura) incluyendo:
   ]
 }
 \`\`\`
-    `
+    `,
   })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'Bill encontrado exitosamente con toda su información'
+  @ApiResponse({
+    status: 200,
+    description: 'Bill encontrado exitosamente con toda su información',
   })
-  @ApiResponse({ 
-    status: 404, 
-    description: 'Bill no encontrado con el ID especificado'
+  @ApiResponse({
+    status: 404,
+    description: 'Bill no encontrado con el ID especificado',
   })
   async findOne(
     @Param('id', ParseIntPipe) id: number,
-     @CurrentUser('id_site') id_site?: number,
+    @CurrentUser('id_site') id_site?: number,
     @CurrentUser('id_subsite') id_subsite?: number | null,
-
-) {
+  ) {
     const bill = await this.billService.findOne(id);
     if (!bill) {
       throw new NotFoundException(`Bill with ID ${id} not found`);
@@ -321,7 +416,7 @@ Obtiene la información detallada de un Bill específico (factura) incluyendo:
   }
 
   @Patch(':id')
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Actualizar un Bill',
     description: `
 Actualiza la información de un Bill específico (factura) de un grupo.
@@ -357,7 +452,7 @@ PATCH /bill/955
   ]
 }
 \`\`\`
-    `
+    `,
   })
   @ApiResponse({ status: 200, description: 'Bill actualizado exitosamente' })
   @ApiResponse({ status: 404, description: 'Bill no encontrado' })
@@ -398,7 +493,11 @@ PATCH /bill/955
       `[BillController][PATCH][RAW_BODY] bill=${id} payload=${JSON.stringify(updateBillDto)}`,
     );
 
-    const updatedBill = await this.billService.update(id, updateBillDto, userId);
+    const updatedBill = await this.billService.update(
+      id,
+      updateBillDto,
+      userId,
+    );
 
     this.logger.log(
       `[BillController][PATCH][OUT] bill=${id} group=${updatedBill?.id_group || 'N/A'} amount=${updatedBill?.amount ?? 'N/A'} number_of_hours=${updatedBill?.number_of_hours ?? 'N/A'} group_hours=${updatedBill?.group_hours ?? 'N/A'} total_bill=${updatedBill?.total_bill ?? 'N/A'} total_paysheet=${updatedBill?.total_paysheet ?? 'N/A'}`,
@@ -406,7 +505,7 @@ PATCH /bill/955
 
     return updatedBill;
   }
-  
+
   @Patch(':id/status')
   async updateStatus(
     @Param('id', ParseIntPipe) id: number,
@@ -414,15 +513,15 @@ PATCH /bill/955
     @CurrentUser('userId') userId: number,
   ) {
     const response = await this.billService.updateStatus(
-      id, 
-      updateBillStatusDto.status, 
-      userId
+      id,
+      updateBillStatusDto.status,
+      userId,
     );
     return response;
   }
 
   @Post('recalculate-group-hours')
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Recalcular group_hours desde fechas de Operation_Worker',
     description: `
 **Flujo completo para actualizar fechas de un grupo:**
@@ -466,38 +565,39 @@ POST /bill/recalculate-group-hours
 - Las fechas se actualizan en Operation_Worker (no en Operation)
 - Cada grupo puede tener fechas diferentes dentro de la misma operación
 - Solo afecta al grupo específico, no a otros grupos
-    `
+    `,
   })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'group_hours y op_duration recalculados exitosamente',
     schema: {
       example: {
         groupHours: 97.15,
         opDuration: 194.3,
-        message: 'Group hours recalculado exitosamente'
-      }
-    }
+        message: 'Group hours recalculado exitosamente',
+      },
+    },
   })
   @ApiResponse({ status: 404, description: 'Grupo u operación no encontrada' })
   async recalculateGroupHours(
-    @Body() body: { id_operation: number; id_group: string }
+    @Body() body: { id_operation: number; id_group: string },
   ) {
-    const groupHours = await this.billService.recalculateGroupHoursFromWorkerDates(
-      body.id_operation,
-      body.id_group
-    );
-    
+    const groupHours =
+      await this.billService.recalculateGroupHoursFromWorkerDates(
+        body.id_operation,
+        body.id_group,
+      );
+
     // Obtener el op_duration actualizado
     const operation = await this.billService['prisma'].operation.findUnique({
       where: { id: body.id_operation },
-      select: { op_duration: true }
+      select: { op_duration: true },
     });
-    
+
     return {
       groupHours,
       opDuration: operation?.op_duration,
-      message: 'Group hours recalculado exitosamente'
+      message: 'Group hours recalculado exitosamente',
     };
   }
 
@@ -505,4 +605,46 @@ POST /bill/recalculate-group-hours
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.billService.remove(id);
   }
+
+  @Patch(':id/update-with-service-change')
+@ApiOperation({
+  summary: 'Actualizar Bill con lógica de cambio de servicio',
+  description:
+  'Actualiza una factura ÚNICAMENTE cuando cambia el servicio/tariff. ' +
+  'Si el tariff no cambia, rechaza la solicitud con ConflictException. ' +
+  'Cuando el servicio cambia: borra la factura actual y crea una nueva con el nuevo tariff.',
+})
+@ApiResponse({
+  status: 200,
+  description: 'Bill actualizada o recreada exitosamente',
+  schema: {
+    example: {
+      success: true,
+      billId: 123,
+      message: 'Bill recreada exitosamente. Bill anterior: 122, Nueva bill: 123',
+      action: 'recreated',
+    },
+  },
+})
+async updateWithServiceChange(
+  @Param('id', ParseIntPipe) billId: number,
+  @Body() updateBillWithServiceChangeDto: UpdateBillWithServiceChangeDto,
+  @CurrentUser('userId') userId: number,
+) {
+  this.logger.log(
+    `[BillController][UPDATE_SERVICE_CHANGE][IN] bill=${billId} operation=${updateBillWithServiceChangeDto.id_operation} group=${updateBillWithServiceChangeDto.id_group} newTariff=${updateBillWithServiceChangeDto.new_id_tariff} userId=${userId}`,
+  );
+
+  const response = await this.billService.updateBillWithServiceChange(
+    billId,
+    updateBillWithServiceChangeDto,
+    userId,
+  );
+
+  this.logger.log(
+    `[BillController][UPDATE_SERVICE_CHANGE][OUT] success=${response.success} action=${response.action} newBillId=${response.billId}`,
+  );
+
+  return response;
+}
 }

@@ -625,17 +625,17 @@ export class OperationService {
 
     if (action === 'REJECT') {
       // Cuando se rechaza, eliminar todas las bills y billdetails de la operación
-      try {
-        await this.deleteAllBillsAndDetailsForOperation(operation.id);
-        this.logger.log(
-          `Bills y billdetails eliminados para operación rechazada ${operation.id}`,
-        );
-      } catch (error) {
-        this.logger.error(
-          `Error eliminando bills para operación rechazada ${operation.id}: ${error}`,
-        );
-        throw error;
-      }
+      // try {
+      //   await this.deleteAllBillsAndDetailsForOperation(operation.id);
+      //   this.logger.log(
+      //     `Bills y billdetails eliminados para operación rechazada ${operation.id}`,
+      //   );
+      // } catch (error) {
+      //   this.logger.error(
+      //     `Error eliminando bills para operación rechazada ${operation.id}: ${error}`,
+      //   );
+      //   throw error;
+      // }
     }
 
     const result = await this.prisma.$transaction(async (tx) => {
@@ -725,40 +725,40 @@ export class OperationService {
     });
   }
   // Elimina todas las bills y billdetails de una operación. Usado al rechazar una operación especial.
-  private async deleteAllBillsAndDetailsForOperation(
-    operationId: number,
-  ): Promise<{ billsDeleted: number; detailsDeleted: number }> {
-    return await this.prisma.$transaction(async (tx) => {
-      // 1. Obtener todos los bills de la operación
-      const bills = await tx.bill.findMany({
-        where: { id_operation: operationId },
-        select: { id: true },
-      });
+  // private async deleteAllBillsAndDetailsForOperation(
+  //   operationId: number,
+  // ): Promise<{ billsDeleted: number; detailsDeleted: number }> {
+  //   return await this.prisma.$transaction(async (tx) => {
+  //     // 1. Obtener todos los bills de la operación
+  //     const bills = await tx.bill.findMany({
+  //       where: { id_operation: operationId },
+  //       select: { id: true },
+  //     });
 
-      const billIds = bills.map((bill) => bill.id);
+  //     const billIds = bills.map((bill) => bill.id);
 
-      // 2. Eliminar todos los BillDetails de estos bills
-      const deletedDetails = await tx.billDetail.deleteMany({
-        where: {
-          id_bill: { in: billIds },
-        },
-      });
+  //     // 2. Eliminar todos los BillDetails de estos bills
+  //     const deletedDetails = await tx.billDetail.deleteMany({
+  //       where: {
+  //         id_bill: { in: billIds },
+  //       },
+  //     });
 
-      // 3. Eliminar todos los Bills de la operación
-      const deletedBills = await tx.bill.deleteMany({
-        where: { id_operation: operationId },
-      });
+  //     // 3. Eliminar todos los Bills de la operación
+  //     const deletedBills = await tx.bill.deleteMany({
+  //       where: { id_operation: operationId },
+  //     });
 
-      this.logger.log(
-        `Operación ${operationId} rechazada: ${deletedBills.count} bills y ${deletedDetails.count} billdetails eliminados`,
-      );
+  //     this.logger.log(
+  //       `Operación ${operationId} rechazada: ${deletedBills.count} bills y ${deletedDetails.count} billdetails eliminados`,
+  //     );
 
-      return {
-        billsDeleted: deletedBills.count,
-        detailsDeleted: deletedDetails.count,
-      };
-    });
-  }
+  //     return {
+  //       billsDeleted: deletedBills.count,
+  //       detailsDeleted: deletedDetails.count,
+  //     };
+  //   });
+  // }
 
 
   private async autoCompleteConfirmedSpecialOperation(operationId: number) {
