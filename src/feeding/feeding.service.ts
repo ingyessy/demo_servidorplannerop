@@ -814,6 +814,30 @@ if (!workerBill) {
     }
   }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
   async findByOperation(id_operation: number, id_site?: number) {
   try {
     const validation = await this.validation.validateAllIds({
@@ -899,9 +923,9 @@ const response =
     },
   });
 
-    if (!response || response.length === 0) {
-      return { message: 'Feeding not found', status: 404 };
-    }
+    // if (!response || response.length === 0) {
+    //   return { message: 'Feeding not found', status: 404 };
+    // }
     return response.map(feeding => ({
       ...feeding,
       serviceName: feeding.operation?.task?.name || null,
@@ -1101,6 +1125,31 @@ const response =
 //     throw new Error(error.message || String(error));
 //   }
 // }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   async update(
     id: number,
     updateFeedingDto: UpdateFeedingDto,

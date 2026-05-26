@@ -120,9 +120,9 @@ export class FeedingController {
     @CurrentUser('siteId') id_site: number,
   ) {
     const response = await this.feedingService.findByOperation(id, id_site);
-    if (response['status'] === 404) {
-      throw new NotFoundException(response['message']);
-    }
+    // if (response['status'] === 404) {
+    //   throw new NotFoundException(response['message']);
+    // }
     return response;
   }
 

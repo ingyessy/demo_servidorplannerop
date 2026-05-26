@@ -52,42 +52,69 @@ export class AreaService {
   async findAll(
   id_site?: number,
   id_subsite?: number,
-) {
-  try {
-    const whereClause: any = {};
+  ) {
+    try {
+      const whereClause: any = {};
 
-    // Siempre filtra por sede si viene
-    if (id_site) {
-      whereClause.id_site = id_site;
-    }
+      // Siempre filtra por sede si viene
+      if (id_site) {
+        whereClause.id_site = id_site;
+      }
 
-    // Solo filtra por subsede si es un número válido (no null, no undefined)
-    if (typeof id_subsite === 'number' && !isNaN(id_subsite)) {
-      whereClause.id_subsite = id_subsite;
-    }
-    // Si id_subsite es null o undefined, NO agregar filtro de subsede
+      // Solo filtra por subsede si es un número válido (no null, no undefined)
+      if (typeof id_subsite === 'number' && !isNaN(id_subsite)) {
+        whereClause.id_subsite = id_subsite;
+      }
+      // Si id_subsite es null o undefined, NO agregar filtro de subsede
 
-    const response = await this.prisma.jobArea.findMany({
-      where: whereClause,
-      include: {
+      const response = await this.prisma.jobArea.findMany({
+        where: whereClause,
+       
+            select: {
+        id: true,
+        name: true,
+        status: true,
+        id_site: true,
+        id_subsite: true,
+        id_user: true,
         Site: {
-          select: {
-            name: true,
+            select: {
+              name: true,
+            },
           },
-        },
-        subSite: {
+          subSite: {
+            select: {
+              name: true,
+            },
+          },
+           // CONTADOR DE TRABAJADORES
+        _count: {
           select: {
-            name: true,
+            workers: true,
           },
         },
       },
-    });
-
-    return response;
-  } catch (error) {
-    throw new Error(error.message || String(error));
+       orderBy: {
+        id: 'desc',
+      },
+      });
+ // include: {
+        //   Site: {
+        //     select: {
+        //       name: true,
+        //     },
+        //   },
+        //   subSite: {
+        //     select: {
+        //       name: true,
+        //     },
+        //   },
+        // },
+      return response;
+    } catch (error) {
+      throw new Error(error.message || String(error));
+    }
   }
-}
 
   /**
    * Busca un area por su ID

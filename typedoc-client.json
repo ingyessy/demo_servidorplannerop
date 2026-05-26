@@ -1,0 +1,16 @@
+{
+  "entryPoints": [
+    "./src/client/**/*.ts"
+  ],
+  "exclude": [
+    "**/node_modules/**",
+    "**/*.spec.ts",
+    "**/*.test.ts",
+    "**/dist/**"
+  ],
+  "out": "./docs/client",
+  "name": "Documentación Client",
+  "excludePrivate": true,
+  "entryPointStrategy": "expand",
+  "readme": "./temp-client-readme.md"
+}
