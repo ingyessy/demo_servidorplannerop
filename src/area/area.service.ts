@@ -71,23 +71,43 @@ export class AreaService {
       where: whereClause,
       include: {
         Site: {
-          select: {
-            name: true,
+            select: {
+              name: true,
+            },
           },
-        },
-        subSite: {
+          subSite: {
+            select: {
+              name: true,
+            },
+          },
+           // CONTADOR DE TRABAJADORES
+        _count: {
           select: {
-            name: true,
+            workers: true,
           },
         },
       },
-    });
-
-    return response;
-  } catch (error) {
-    throw new Error(error.message || String(error));
+       orderBy: {
+        id: 'desc',
+      },
+      });
+ // include: {
+        //   Site: {
+        //     select: {
+        //       name: true,
+        //     },
+        //   },
+        //   subSite: {
+        //     select: {
+        //       name: true,
+        //     },
+        //   },
+        // },
+      return response;
+    } catch (error) {
+      throw new Error(error.message || String(error));
+    }
   }
-}
 
   /**
    * Busca un area por su ID
