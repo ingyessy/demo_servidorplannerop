@@ -524,8 +524,8 @@ export class FeedingService {
       operationStartDateTime.setHours(hours, minutes, 0, 0);
 
       return {
-        availableMeals: availableMealTypes,
-        availableMealNames: availableMealTypes.map(
+        availableMeals: allAvailableMeals,
+        availableMealNames: allAvailableMeals.map(
           (type) => feedingTypeNames[type],
         ),
         operationStartDate: operation.dateStart,
@@ -533,7 +533,7 @@ export class FeedingService {
         operationEndTime: operation.timeEnd,
         operationStartDateTime: operationStartDateTime,
         currentTime: new Date(),
-        missingMealsIncluded: allMissingMealTypes,
+        missingMealsIncluded: allAvailableMeals,
       };
     } catch (error) {
       throw new Error(error);
