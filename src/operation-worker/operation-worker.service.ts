@@ -62,41 +62,6 @@ export class OperationWorkerService {
     );
   }
   /**
-   * Cambiar estado de programacion cliente a COMPLETED
-   * @param id_clientProgramming - ID de la programación del cliente
-   * @returns Resultado de la actualización
-   */
-  async completeClientProgramming(id: number) {
-    try {
-      // Validar que la programación del cliente existe para extraer el ID clientProgramming
-      const clientProgramming = await this.prisma.operation.findUnique({
-        where: { id },
-      });
-      if (!clientProgramming) {
-        return { message: 'Client programming not found', status: 404 };
-      }
-      const id_clientProgramming = clientProgramming.id_clientProgramming;
-
-      if (id_clientProgramming === null) {
-        return {
-          message: 'Operation has no associated client programming',
-          status: 400,
-        };
-      }
-
-      const updateResult = await this.prisma.clientProgramming.update({
-        where: { id: id_clientProgramming },
-        data: {
-          status: StatusComplete.COMPLETED,
-        },
-      });
-      return updateResult;
-    } catch (error) {
-      console.error('Error completing client programming:', error);
-      throw new Error((error as Error).message);
-    }
-  }
-  /**
    * Remueve trabajadores de una operación
    * @param removeWorkersDto - Datos de remoción
    * @returns Resultado de la operación
@@ -114,16 +79,6 @@ export class OperationWorkerService {
   async releaseAllWorkersFromOperation(id_operation: number) {
     return await this.removerWorkerFromOperationService.releaseAllWorkersFromOperation(
       id_operation,
-    );
-  }
-
-  /**
-   * Remueve trabajadores (por ids o grupos) de una operación delegando al servicio especializado
-   * @param removeWorkersDto - DTO con { id_operation, workerIds?, workersToRemove? }
-   */
-  async removeWorkersFromOperation(removeWorkersDto: any) {
-    return await this.removerWorkerFromOperationService.removeWorkersFromOperation(
-      removeWorkersDto,
     );
   }
 
@@ -807,11 +762,20 @@ export class OperationWorkerService {
         select: { id_clientProgramming: true },
       });
 
-      if (!operation || !operation.id_clientProgramming) return null;
+      if (!operation) {
+        return { message: 'Client programming not found', status: 404 };
+      }
+
+      if (operation.id_clientProgramming === null) {
+        return {
+          message: 'Operation has no associated client programming',
+          status: 400,
+        };
+      }
 
       await this.prisma.clientProgramming.update({
         where: { id: operation.id_clientProgramming },
-        data: { status: 'COMPLETED' },
+        data: { status: StatusComplete.COMPLETED },
       });
 
       return {

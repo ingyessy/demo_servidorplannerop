@@ -13,9 +13,11 @@ import { AuthModule } from 'src/auth/auth.module';
 import { OperationWorkerModule } from 'src/operation-worker/operation-worker.module';
 import { TariffModule } from 'src/tariff/tariff.module';
 import { WorkerModule } from 'src/worker/worker.module';
+import { BillModule } from 'src/bill/bill.module';
 import { OperationTokenService } from './services/operation-token.service';
 import { OperationEmailService } from './services/operation-email.service';
 import { EtherealTestService } from './services/ethereal-test.service';
+import { OperationExportService } from './services/operation-export.service';
 import { OperationTestController } from './operation-test.controller';
 
 @Module({
@@ -40,6 +42,7 @@ import { OperationTestController } from './operation-test.controller';
     OperationTokenService,
     OperationEmailService,
     EtherealTestService,
+    OperationExportService,
   ],
   // Se exporta OperationService para que el módulo de cron pueda reutilizar la lógica de expiración de tokens.
   exports: [OperationService, OperationFinderService]

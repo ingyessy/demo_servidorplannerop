@@ -12,6 +12,7 @@ import {
   ConflictException,
   Query,
   Res,
+  Logger,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { BillService } from './bill.service';

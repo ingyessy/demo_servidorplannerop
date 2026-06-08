@@ -12,7 +12,6 @@ import { BaseCalculationService } from './services/base-calculation.service';
 
 @Module({
   imports: [AuthModule, forwardRef(() => OperationModule), ConfigurationModule],
-  imports: [AuthModule, forwardRef(() => OperationModule), ConfigurationModule],
   controllers: [BillController],
   providers: [
     BillService,
