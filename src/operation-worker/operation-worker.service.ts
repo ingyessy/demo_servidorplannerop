@@ -61,7 +61,51 @@ export class OperationWorkerService {
       id_site,
     );
   }
+  /**
+   * Cambiar estado de programacion cliente a COMPLETED
+   * @param id_clientProgramming - ID de la programación del cliente
+   * @returns Resultado de la actualización
+   */
+  async completeClientProgramming(id: number) {
+    try {
+      // Validar que la programación del cliente existe para extraer el ID clientProgramming
+      const clientProgramming = await this.prisma.operation.findUnique({
+        where: { id },
+      });
+      if (!clientProgramming) {
+        return { message: 'Client programming not found', status: 404 };
+      }
+      const id_clientProgramming = clientProgramming.id_clientProgramming;
 
+      if (id_clientProgramming === null) {
+        return {
+          message: 'Operation has no associated client programming',
+          status: 400,
+        };
+      }
+
+      const updateResult = await this.prisma.clientProgramming.update({
+        where: { id: id_clientProgramming },
+        data: {
+          status: StatusComplete.COMPLETED,
+        },
+      });
+      return updateResult;
+    } catch (error) {
+      console.error('Error completing client programming:', error);
+      throw new Error((error as Error).message);
+    }
+  }
+  /**
+   * Remueve trabajadores de una operación
+   * @param removeWorkersDto - Datos de remoción
+   * @returns Resultado de la operación
+   */
+  async removeWorkersFromOperation(removeWorkersDto: any) {
+    return await this.removerWorkerFromOperationService.removeWorkersFromOperation(
+      removeWorkersDto,
+    );
+  }
   /**
    *  Libera todos los trabajadores de una operación
    * @param id_operation
@@ -138,18 +182,18 @@ export class OperationWorkerService {
     workersToUpdate: WorkerScheduleDto[],
     id_site?: number | null,
   ) {
-    console.log('[OperationWorkerService] updateWorkersSchedule llamado con:');
-    console.log('- id_operation:', id_operation);
-    console.log('- workersToUpdate:', JSON.stringify(workersToUpdate, null, 2));
+    // console.log('[OperationWorkerService] updateWorkersSchedule llamado con:');
+    // console.log('- id_operation:', id_operation);
+    // console.log('- workersToUpdate:', JSON.stringify(workersToUpdate, null, 2));
 
     workersToUpdate.forEach((worker, index) => {
-      console.log(`[OperationWorkerService] Worker ${index}:`, {
-        id_group: worker.id_group,
-        workerIds: worker.workerIds,
-        id_task: worker.id_task,
-        id_subtask: worker.id_subtask,
-        id_tariff: worker.id_tariff,
-      });
+      // console.log(`[OperationWorkerService] Worker ${index}:`, {
+      //   id_group: worker.id_group,
+      //   workerIds: worker.workerIds,
+      //   id_task: worker.id_task,
+      //   id_subtask: worker.id_subtask, // ✅ VERIFICAR QUE ESTÉ
+      //   id_tariff: worker.id_tariff,
+      // });
 
       if (worker.id_subtask === undefined) {
         console.error(
@@ -702,9 +746,9 @@ export class OperationWorkerService {
       throw new BadRequestException('dateEnd invalido para finalizar grupo');
     }
 
-    console.log(
-      `[OperationWorkerService] Finalizando grupo ${id_group} con fecha/hora: ${parsedDateEnd.toISOString()} ${timeEnd}`,
-    );
+    // console.log(
+    //   `[OperationWorkerService] Finalizando grupo ${id_group} con fecha/hora: ${parsedDateEnd.toISOString()} ${timeEnd}`,
+    // );
 
     const groupWorkers = await this.prisma.operation_Worker.findMany({
       where: {

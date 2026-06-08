@@ -11,7 +11,7 @@ export class PaginationService {
    * @param totalItems Total de elementos en la base de datos
    * @returns Resultados paginados con prefetch de páginas adicionales
    */
-  processPaginatedResults<T>(
+  processPaginatedResults<T>( 
     items: T[],
     page: number,
     limit: number,
@@ -223,7 +223,7 @@ export class PaginationService {
       return response;
     } catch (error) {
       console.error('Error in paginateEntity:', error);
-      throw new Error(`Error paginating entity: ${error.message}`);
+      throw new Error(`Error paginating entity: ${(error as Error).message}`);
     }
   }
 }

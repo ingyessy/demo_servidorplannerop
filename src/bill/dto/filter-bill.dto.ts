@@ -18,7 +18,7 @@ export class FilterBillDto {
   @ApiProperty({
     description: 'Búsqueda por operación, código o subservicio',
     required: false,
-    example: 'proyecto'
+    example: ' '
   })
   @IsOptional()
   @IsString()
@@ -47,7 +47,7 @@ export class FilterBillDto {
   @ApiProperty({
     description: 'Fecha de inicio (formato: YYYY-MM-DD)',
     required: false,
-    example: '2024-01-01'
+    example: '2026-03-08'
   })
   @IsOptional()
   @Type(() => Date)
@@ -57,7 +57,7 @@ export class FilterBillDto {
   @ApiProperty({
     description: 'Fecha de fin (formato: YYYY-MM-DD)',
     required: false,
-    example: '2024-12-31'
+    example: '2026-03-14'
   })
   @IsOptional()
   @Type(() => Date)

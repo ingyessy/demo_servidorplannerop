@@ -73,44 +73,44 @@ export class OperationsCronService {
   /**
    * Actualiza las operaciones en progreso
    * Inicializa operaciones PENDING a INPROGRESS cuando llega su fecha y hora programada
-   * Se ejecuta cada 5 minutos, con optimizaciones inteligentes para reducir carga
-   */
-  @Cron('*/5 * * * *') // Cada 5 minutos (optimizado para reducir carga)
-  async handleUpdateInProgressOperations() {
-    // 🎛️ Verificar si el cron job está habilitado
-    if (!this.isEnabled) {
-      return; // Salir silenciosamente si está deshabilitado
-    }
+   * Se ejecuta cada 15 minutos para reducir carga en servidor DigitalOcean
+  //  */
+  // @Cron('*/15 * * * *') // Cada 15 minutos (reducida de 5 para evitar desconexión)
+  // async handleUpdateInProgressOperations() {
+  //   // 🎛️ Verificar si el cron job está habilitado
+  //   if (!this.isEnabled) {
+  //     return; // Salir silenciosamente si está deshabilitado
+  //   }
 
-    try {
-      const result = await this.updateOperation.updateInProgressOperations();
+  //   try {
+  //     const result = await this.updateOperation.updateInProgressOperations();
       
-      if (result.updatedCount > 0) {
-        this.logger.log(`✅ ${result.updatedCount} operaciones iniciadas automáticamente`);
-      }
+  //     if (result.updatedCount > 0) {
+  //       this.logger.log(`✅ ${result.updatedCount} operaciones iniciadas automáticamente`);
+  //     }
       
-      // 📊 Log informativo sobre optimizaciones
-      if (result.skipped && result.reason === 'Deep sleep mode') {
-        this.logger.debug(`😴 Modo sueño profundo activo (próxima verificación en ${result.nextCheck} minutos)`);
-      } else if (result.consecutiveEmptyRuns && result.consecutiveEmptyRuns >= 3) {
-        this.logger.debug(`📈 ${result.consecutiveEmptyRuns} ejecuciones consecutivas sin operaciones${result.willEnterDeepSleep ? ' - entrando en modo sueño profundo' : ''}`);
-      }
-    } catch (error) {
-      this.logger.error('Error in cron job updateInProgressOperations:', error);
-    }
-  }
+  //     // 📊 Log informativo sobre optimizaciones
+  //     if (result.skipped && result.reason === 'Deep sleep mode') {
+  //       this.logger.debug(`😴 Modo sueño profundo activo (próxima verificación en ${result.nextCheck} minutos)`);
+  //     } else if (result.consecutiveEmptyRuns && result.consecutiveEmptyRuns >= 3) {
+  //       this.logger.debug(`📈 ${result.consecutiveEmptyRuns} ejecuciones consecutivas sin operaciones${result.willEnterDeepSleep ? ' - entrando en modo sueño profundo' : ''}`);
+  //     }
+  //   } catch (error) {
+  //     this.logger.error('Error in cron job updateInProgressOperations:', error);
+  //   }
+  // }
 
   /**
    * Actualiza los trabajadores con permisos que inician hoy
    */
-  @Cron(CronExpression.EVERY_10_MINUTES)
-  async handleUpdateWorkersWithStartingPermissions() {
-    try {
-      await this.updatePermission.updateWorkersWithStartingPermissions();
-    } catch (error) {
-      this.logger.error('Error updating workers with starting permissions:', error);
-    }
-  }
+  // @Cron(CronExpression.EVERY_20_MINUTES)
+  // async handleUpdateWorkersWithStartingPermissions() {
+  //   try {
+  //     await this.updatePermission.updateWorkersWithStartingPermissions();
+  //   } catch (error) {
+  //     this.logger.error('Error updating workers with starting permissions:', error);
+  //   }
+  // }
 
   /**
    * 🔄 HÍBRIDO: Verificación reactiva + CronJob de respaldo cada hora
@@ -123,14 +123,14 @@ export class OperationsCronService {
    * - Nadie consulta trabajadores por períodos largos
    * - Permisos expiran sin que se dispare verificación reactiva
    */
-  @Cron(CronExpression.EVERY_HOUR)
-  async handleUpdateWorkersWithExpiredPermissions() {
-    try {
-      await this.updatePermission.updateWorkersWithExpiredPermissions();
-    } catch (error) {
-      this.logger.error('Error updating workers with expired permissions:', error);
-    }
-  }
+  // @Cron(CronExpression.EVERY_HOUR)
+  // async handleUpdateWorkersWithExpiredPermissions() {
+  //   try {
+  //     await this.updatePermission.updateWorkersWithExpiredPermissions();
+  //   } catch (error) {
+  //     this.logger.error('Error updating workers with expired permissions:', error);
+  //   }
+  // }
 
 /**
    * Actualiza los trabajadores con incapacidades expiradas
@@ -184,14 +184,14 @@ async handleUpdateWorkersWithExpiredInabilities() {
   /**
    * Actualizar trabajadores según su programación
    */
-  @Cron(CronExpression.EVERY_5_MINUTES)
-  async handleUpdateWorkersScheduleState() {
-    try {
-      await this.updateOperationWorker.updateWorkersScheduleState();
-    } catch (error) {
-      this.logger.error('Error in cron job:', error);
-    }
-  }
+  // @Cron(CronExpression.EVERY_10_MINUTES) // Aumentado de 5 para evitar sobrecarga
+  // async handleUpdateWorkersScheduleState() {
+  //   try {
+  //     await this.updateOperationWorker.updateWorkersScheduleState();
+  //   } catch (error) {
+  //     this.logger.error('Error in cron job:', error);
+  //   }
+  // }
 
   @Cron(CronExpression.EVERY_5_MINUTES)
   async handleExpireConfirmationTokens() {

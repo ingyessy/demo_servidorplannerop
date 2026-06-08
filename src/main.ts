@@ -7,10 +7,22 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import * as cookieParser from 'cookie-parser';
 import { AuthService } from './auth/auth.service';
 import { DocsAuthMiddleware } from './common/middleware/docs-auth.middleware';
+import { PrismaService } from './prisma/prisma.service';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   app.set('trust proxy', 'loopback');
+  
+  // ✅ Validar conexión a BD antes de iniciar servidor
+  try {
+    const prisma = app.get(PrismaService);
+    await prisma.$queryRaw`SELECT 1`;
+    console.log('✅ Base de datos conectada correctamente');
+  } catch (error) {
+    console.error('❌ Error conectando a base de datos:', (error as Error).message);
+    process.exit(1);
+  }
+  
   app.use(cookieParser());
   
   // ✅ Agregar prefijo global /api a todas las rutas
@@ -27,16 +39,17 @@ async function bootstrap() {
     //   'https://seal-app-55opl.ondigitalocean.app',
     //   'https://cargoban.com.co', // Dominio de tu frontend en producción
     //   'https://www.cargoban.com.co', // Dominio alternativo en producción
-    //    'http://localhost:3001',   // Para desarrollo local
+    //   //  'http://localhost:3001',   // Para desarrollo local
     //   //  'http://127.0.0.1:3001',  // Alternativa para desarrollo local
     // ],
     ///-------------------------------HABILITAR EN DESARROLLO LOCAL CON CUALQUIER PUERTO---------------------------
     origin: (origin, callback) => {
       const allowedOrigins = [
-        'https://seal-app-55opl.ondigitalocean.app',
+        // 'https://seal-app-55opl.ondigitalocean.app',
         'https://cargoban.com.co',
         'https://www.cargoban.com.co',
-        'http://localhost:3001'
+        'http://localhost:3001',
+         'http://127.0.0.1:3001',
       ];
       // Permitir cualquier puerto en localhost, 127.0.0.1 y redes privadas
       const localhostRegex = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
@@ -110,6 +123,12 @@ const config = new DocumentBuilder()
   app.useStaticAssets(publicPath);
 
   app.enableShutdownHooks();
+
+  // ⏱️ Timeout global de 30 segundos para solicitudes
+  app.use((req, res, next) => {
+    req.setTimeout(30000); // 30 segundos máximo por solicitud
+    next();
+  });
 
   await app.listen(process.env.PORT ?? 3001, '0.0.0.0');
 }

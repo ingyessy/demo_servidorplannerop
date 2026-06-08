@@ -26,6 +26,7 @@ import { OperationTestController } from './operation-test.controller';
     OperationWorkerModule,
     TariffModule,
     forwardRef(() => WorkerModule),
+    forwardRef(() => BillModule),
   ],
   controllers: [OperationController, OperationTestController],
   providers: [

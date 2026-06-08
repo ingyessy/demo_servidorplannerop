@@ -15,26 +15,34 @@ export class HoursDistribution {
   @ApiProperty({ example: '1' })
   @IsNumber()
   HOD!: number;
+  HOD!: number;
   @IsNumber()
   @ApiProperty({ example: '0' })
+  HON!: number;
   HON!: number;
   @IsNumber()
   @ApiProperty({ example: '2' })
   HED!: number;
+  HED!: number;
   @IsNumber()
   @ApiProperty({ example: '0' })
+  HEN!: number;
   HEN!: number;
   @IsNumber()
   @ApiProperty({ example: '0' })
   HFOD!: number;
+  HFOD!: number;
   @IsNumber()
   @ApiProperty({ example: '0' })
+  HFON!: number;
   HFON!: number;
   @IsNumber()
   @ApiProperty({ example: '0' })
   HFED!: number;
+  HFED!: number;
   @IsNumber()
   @ApiProperty({ example: '0' })
+  HFEN!: number;
   HFEN!: number;
 }
 
@@ -50,8 +58,10 @@ export class GroupBillDto {
 
   @ApiProperty({ description: 'Distribuccion horaria para facturacion' })
   billHoursDistribution!: HoursDistribution;
+  billHoursDistribution!: HoursDistribution;
 
   @ApiProperty({ description: 'Distribuccion horaria para nomina' })
+  paysheetHoursDistribution!: HoursDistribution;
   paysheetHoursDistribution!: HoursDistribution;
 
   @ApiProperty({ example: '1' })
@@ -109,6 +119,7 @@ export class WorkerPay {
   @IsNumber()
   @Min(1)
   @Type(() => Number)
+  id_worker!: number;
   id_worker!: number;
 
   @ApiProperty({ example: '1.5' })

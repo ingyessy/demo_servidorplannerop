@@ -19,15 +19,17 @@ export class PaginateOperationService {
   /**
    * Pagina operaciones con sus estadísticas específicas
    */
-  async paginateOperations<T>(options: {
-    prisma: any;
-    page?: number;
-    limit?: number;
-    filters?: OperationFilterDto;
-    activatePaginated?: boolean;
-    defaultInclude: any;
-    transformer: any;
-  }): Promise<PaginatedResponse<T>> {
+  async paginateOperations<T>(
+    options: {
+      prisma: any;
+      page?: number;
+      limit?: number;
+      filters?: OperationFilterDto;
+      activatePaginated?: boolean; 
+      defaultInclude: any;
+      transformer: any;
+    }
+  ): Promise<PaginatedResponse<T>> {
     try {
       const {
         prisma,
@@ -69,7 +71,7 @@ export class PaginateOperationService {
       );
     } catch (error) {
       console.error('Error in paginateOperations:', error);
-      throw new Error(`Error paginating operations: ${error.message}`);
+      throw new Error(`Error paginating operations: ${(error as Error).message}`);
     }
   }
 

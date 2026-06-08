@@ -11,8 +11,9 @@ import {
   NotFoundException,
   ConflictException,
   Query,
-  Logger,
+  Res,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { BillService } from './bill.service';
 import { CreateBillDto } from './dto/create-bill.dto';
 import {
@@ -31,12 +32,14 @@ import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { UpdateBillDto, UpdateBillStatusDto, UpdateBillWithServiceChangeDto } from './dto/update-bill.dto';
 import { PaginationQueryDto } from 'src/common/dto/pagination.dto';
 import { FilterBillDto } from './dto/filter-bill.dto';
+import { ExportBillDto } from './dto/export-bill.dto';
 import { ValidationPipe } from '@nestjs/common';
+import { ApiProduces } from '@nestjs/swagger';
 
 @Controller('bill')
 @UseInterceptors(SiteInterceptor)
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.SUPERVISOR, Role.ADMIN, Role.SUPERADMIN)
+@Roles(Role.SUPERVISOR,Role.PROGRAMMER, Role.ADMIN, Role.SUPERADMIN)
 @ApiBearerAuth('access-token')
 export class BillController {
   private readonly logger = new Logger(BillController.name);
@@ -46,24 +49,11 @@ export class BillController {
   @Post()
   async create(
     @CurrentUser('userId') userId: number,
-    @Body() createBillDto: CreateBillDto,
-  ) {
-    const groupsSummary = (createBillDto?.groups || []).map((group) => ({
-      id: group?.id || 'N/A',
-      amount: group?.amount,
-      number_of_hours: group?.number_of_hours,
-      group_hours: group?.group_hours,
-      pays_count: group?.pays?.length || 0,
-    }));
-
-    this.logger.log(
-      `[BillController][CREATE][IN] user=${userId} operation=${createBillDto?.id_operation} groups=${groupsSummary.length} detail=${JSON.stringify(groupsSummary)}`,
-    );
-
-    this.logger.debug(
-      `[BillController][CREATE][RAW_BODY] ${JSON.stringify(createBillDto)}`,
-    );
-
+    @Body() createBillDto: CreateBillDto) {
+      // Agrega este console.log para ver lo que llega del frontend
+  // console.log('=== Datos recibidos para crear factura ==='); 
+  // console.log(JSON.stringify(createBillDto, null, 2));
+  // console.log('==========================================');
     const response = await this.billService.create(createBillDto, userId);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
@@ -367,7 +357,7 @@ Obtiene la información detallada de un Bill específico (factura) incluyendo:
   "id_group": "d1de43a7-cfdd-4950-8238-73374038f927",
   "group_hours": 97.15,  // Calculado desde Operation_Worker
   "op_duration": 194.3,  // Suma de todos los group_hours
-  "amount": 0,
+  "amount": 0.00,
   "number_of_workers": 2,
   "total_bill": "0",
   "total_paysheet": "1437376.430",
@@ -375,7 +365,7 @@ Obtiene la información detallada de un Bill específico (factura) incluyendo:
   "paysheetHoursDistribution": { ... },
   "compensatory": {
     "hours": 1.22,
-    "amount": 150000,
+    "amount": 150000.00,
     "percentage": 10.5
   },
   "operation": { ... },
@@ -519,6 +509,107 @@ PATCH /bill/955
     );
     return response;
   }
+@Get('export/excel')
+@ApiOperation({
+  summary: 'Exportar Bills a Excel',
+  description: `
+Exporta las Bills (facturas) filtradas a un archivo Excel.
+
+✅ Procesamiento 100% en backend (STREAM)
+✅ No usa memoria del cliente
+✅ Soporta grandes volúmenes de datos
+
+SIN PAGINACIÓN: descarga todos los registros que coincidan con los filtros
+`
+})
+@ApiQuery({
+  name: 'search',
+  required: false,
+  type: String,
+  description: 'Búsqueda general (operación, cliente, código, subservicio)'
+})
+@ApiQuery({
+  name: 'jobAreaIds',
+  required: false,
+  type: String,
+  isArray: true,
+  description: 'IDs de áreas de trabajo. Ej: jobAreaIds=27&jobAreaIds=28'
+})
+@ApiQuery({
+  name: 'status',
+  required: false,
+  enum: ['ACTIVE', 'COMPLETED'],
+  description: 'Estado de la factura'
+})
+@ApiQuery({
+  name: 'dateStart',
+  required: false,
+  type: String,
+  description: 'Fecha inicio (YYYY-MM-DD)'
+})
+@ApiQuery({
+  name: 'dateEnd',
+  required: false,
+  type: String,
+  description: 'Fecha fin (YYYY-MM-DD)'
+})
+@ApiResponse({
+  status: 200,
+  description: 'Archivo Excel generado correctamente'
+})
+async exportToExcel(
+  @CurrentUser('siteId') siteId: number,
+  @CurrentUser('subsiteId') subsiteId: number,
+  @Query() query: any,
+  @Res() res: Response
+) {
+  try {
+    const normalizedFilters = {
+      search: query.search,
+      status: query.status,
+      dateStart: query.dateStart,
+      dateEnd: query.dateEnd,
+      jobAreaIds: Array.isArray(query.jobAreaIds)
+        ? query.jobAreaIds
+        : query.jobAreaIds
+          ? [query.jobAreaIds]
+          : [],
+      siteId,
+      subsiteId,
+    };
+
+    // console.log('🎯 QUERY CRUDA CONTROLLER:', query);
+    // console.log('🎯 FILTROS NORMALIZADOS CONTROLLER:', normalizedFilters);
+
+    const dateRange =
+      normalizedFilters.dateStart && normalizedFilters.dateEnd
+        ? `_${normalizedFilters.dateStart}_a_${normalizedFilters.dateEnd}`
+        : `_${new Date().toISOString().split('T')[0]}`;
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="reporte_operacion${dateRange}_${new Date().getTime()}.xlsx"`
+    );
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Pragma', 'no-cache');
+
+    await this.billService.exportBillsToExcelStream(normalizedFilters, res);
+  } catch (error) {
+    console.error('❌ Error exportando Excel:', error);
+
+    if (!res.headersSent) {
+      res.status(500).json({
+        message: 'Error generando Excel',
+        error: (error as Error).message || error,
+      });
+    }
+  }
+}
+
 
   @Post('recalculate-group-hours')
   @ApiOperation({

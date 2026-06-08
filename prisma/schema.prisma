@@ -381,7 +381,10 @@ model Configuration {
 model Bill {
   id                Int          @id @default(autoincrement())
   id_operation      Int
-  amount            Int
+  operation         Operation @relation(fields: [id_operation], references: [id])
+  // id_tariff         Int
+  // tariff            Tariff    @relation(fields: [id_tariff], references: [id])
+  amount            Decimal?   @db.Decimal(15, 3)
   number_of_workers Int
   total_bill        Decimal      @db.Decimal(15, 3)
   total_paysheet    Decimal      @db.Decimal(15, 3)
@@ -417,6 +420,13 @@ model Bill {
   operation         Operation    @relation(fields: [id_operation], references: [id])
   user              User         @relation(fields: [id_user], references: [id])
   billDetails       BillDetail[]
+  group_hours       Decimal?  @db.Decimal(15, 3)
+  observation       String?
+  dateStart_group DateTime? @db.Date
+  timeStart_group String?
+  dateEnd_group   DateTime? @db.Date
+  timeEnd_group   String?
+
 }
 
 model BillDetail {
@@ -497,6 +507,7 @@ enum Role {
   SUPERADMIN
   GH
   SUPERVISOR
+  PROGRAMMER
 }
 
 enum Status {

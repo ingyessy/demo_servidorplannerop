@@ -16,7 +16,8 @@ import {
   ValidationPipe,
   ConflictException,
   UseInterceptors,
-  ForbiddenException,
+  ForbiddenException,   ParseEnumPipe,
+  StreamableFile,
 } from '@nestjs/common';
 import { OperationService } from './operation.service';
 import { Request, Response } from 'express';
@@ -26,7 +27,7 @@ import { ParseIntPipe } from 'src/pipes/parse-int/parse-int.pipe';
 import { DateTransformPipe } from 'src/pipes/date-transform/date-transform.pipe';
 import {
   ApiBearerAuth,
-  ApiBody,
+  ApiBody,  ApiConsumes,
   ApiParam,
   ApiOperation,
   ApiQuery,
@@ -35,7 +36,7 @@ import {
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { Role, StatusOperation } from '@prisma/client';
-import { ExcelExportService } from 'src/common/validation/services/excel-export.service';
+// import { ExcelExportService } from 'src/common/validation/services/excel-export.service';
 import { OperationFilterDto } from './dto/fliter-operation.dto';
 import { PaginatedOperationQueryDto } from './dto/paginated-operation-query.dto';
 import { BooleanTransformPipe } from 'src/pipes/boolean-transform/boolean-transform.pipe';
@@ -50,33 +51,64 @@ import { WorkerHoursReportQueryDto } from './dto/worker-hours-report-query.dto';
 import { ConfirmOperationDto } from './dto/confirm-operation.dto';
 import { RegenerateConfirmationTokenDto } from './dto/regenerate-confirmation-token.dto';
 import { TokenPreviewDto } from './dto/token-preview.dto';
+import { OperationExportService } from './services/operation-export.service';
+import { ExportOperationsDto, ExportReportType } from './dto/export-operations.dto';
 // import { OperationsCronService } from 'src/cron-job/cron-job.service';
 @Controller('operation')
 @UseInterceptors(SiteInterceptor)
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.SUPERVISOR, Role.ADMIN, Role.SUPERADMIN)
+@Roles(Role.SUPERVISOR, Role.PROGRAMMER, Role.ADMIN, Role.SUPERADMIN)
 @ApiBearerAuth('access-token')
 export class OperationController {
   constructor(
     private readonly operationService: OperationService,
-    private readonly excelExportService: ExcelExportService,
     private readonly workerAnalyticsService: WorkerAnalyticsService,
-    // private readonly cronService: OperationsCronService,
+    private readonly operationExportService: OperationExportService,
   ) {}
 
-  @Post()
-  @UsePipes(new DateTransformPipe())
-  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
-  async create(
-    @Body() createOperationDto: CreateOperationDto,
-    @CurrentUser('siteId') siteId: number,
-    @CurrentUser('subsiteId') subsiteId: number,
-    @CurrentUser('userId') userId: number,
-  ) {
-    console.log('Body crudo recibido:', arguments[0]);
-    // LOG para ver lo que llega del frontend
-    console.log('DTO recibido en controlador:', createOperationDto);
-    createOperationDto.id_user = userId;
+  // @Post()
+  // @UsePipes(new DateTransformPipe())
+  // @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  // async create(
+  //   @Body() createOperationDto: CreateOperationDto,
+  //   @CurrentUser('siteId') siteId: number,
+  //   @CurrentUser('subsiteId') subsiteId: number,
+  //    @CurrentUser('userId') userId: number,
+  // ) {
+  //   createOperationDto.id_user = userId;
+  //   createOperationDto.id_site = siteId;
+  //   createOperationDto.id_subsite = subsiteId;
+  //   const response = await this.operationService.createWithWorkers(
+  //     createOperationDto,
+  //     subsiteId,
+  //     siteId,
+  //   );
+  //   if (response['status'] === 404) {
+  //     throw new NotFoundException(response['message']);
+  //   } else if (response['status'] === 409) {
+  //     throw new ConflictException(response['message']);
+  //   } else if (response['status'] === 400) {
+  //     throw new BadRequestException(response['message']);
+  //   } else if (response['status'] === 403) {
+  //     throw new ForbiddenException(response['message']);
+  //   }
+  //   return response;
+  // }
+
+@Post()
+@UsePipes(new DateTransformPipe())
+@UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+async create(
+  @Body() createOperationDto: CreateOperationDto,
+  @CurrentUser('siteId') siteId: number,
+  @CurrentUser('subsiteId') subsiteId: number,
+  @CurrentUser('userId') userId: number,
+) {
+  
+// console.log('Body crudo recibido:', arguments[0]);
+  // LOG para ver lo que llega del frontend
+  // console.log('DTO recibido en controlador:', createOperationDto);
+  createOperationDto.id_user = userId;
 
     if (
       typeof createOperationDto.id_site === 'undefined' ||
@@ -558,23 +590,23 @@ export class OperationController {
     if (!Array.isArray(response)) {
       return response;
     }
-    if (format === 'excel') {
-      return this.excelExportService.exportToExcel(
-        res,
-        response,
-        'operations',
-        'Operaciones',
-        'binary',
+ if (format === 'excel') { 
+      const { buffer, fileName } =
+        await this.operationExportService.exportProgramming(response);
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       );
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`); // Asegura que el archivo se descargue con el nombre correcto
+      return res.send(buffer);
     }
     if (format === 'base64') {
-      return this.excelExportService.exportToExcel(
-        res,
-        response,
-        'operations',
-        'Operaciones',
-        'base64',
-      );
+      const { buffer, fileName } =
+        await this.operationExportService.exportProgramming(response); // Reutilizamos el mismo método de exportación para generar  Excel
+      return {
+        base64: buffer.toString('base64'),
+        fileName,
+      };
     }
     return response;
   }
@@ -849,7 +881,7 @@ export class OperationController {
 
       if (queryParams.dateEnd) {
         filters.dateEnd = queryParams.dateEnd;
-      }
+      } 
 
       if (queryParams.jobAreaId && queryParams.jobAreaId > 0) {
         filters.jobAreaId = queryParams.jobAreaId;
@@ -886,13 +918,11 @@ export class OperationController {
       );
 
       // Agregar metadatos útiles para el frontend
-      if (result.pagination && result.pagination.totalItems > 1000) {
+      if (result.pagination && result.pagination.totalItems > 20) {
         result.pagination['performanceHint'] = {
-          message:
-            'Dataset grande detectado. Considera usar filtros para reducir el conjunto de datos.',
-          recommendedPageSize: Math.min(100, adjustedLimit),
-          totalDataSizeCategory:
-            result.pagination.totalItems > 5000 ? 'very-large' : 'large',
+          message: 'Dataset grande detectado. Considera usar filtros para reducir el conjunto de datos.',
+          recommendedPageSize: Math.min(20, adjustedLimit),
+          totalDataSizeCategory: result.pagination.totalItems > 5000 ? 'very-large' : 'large'
         };
       }
 
@@ -981,6 +1011,30 @@ export class OperationController {
     return response;
   }
 
+// (asignaciones de tabajadores a operaciones)Nuevo endpoint para obtener operaciones por ID de trabajador
+ @Get('by-worker/:id_worker')
+ @ApiOperation({ summary: 'Obtener operaciones de un trabajador específico' })
+  async findOperationsByWorker(
+  @Param('id_worker', ParseIntPipe) idWorker: number,
+  @Query('page') page = '1',
+  @Query('limit') limit?: string,
+  @Query('status') status?: string,
+  @CurrentUser('siteId') siteId?: number,
+) {
+  const parsedLimit = limit ? Number(limit) : undefined;
+  const statuses = status ? status.split(',') : [ 'INPROGRESS'];
+  const response = await this.operationService.findByWorker(
+    idWorker,
+    siteId,
+    Number(page),
+    parsedLimit,
+    statuses,
+  );
+  if (response?.['status'] === 404) throw new NotFoundException(response['message']);
+  if (response?.['status'] === 403) throw new ForbiddenException(response['message']);
+    return response;
+  }
+
   @Get('detailsTariff/:id')
   async getOperationWithDetailedTariffs(@Param('id', ParseIntPipe) id: number) {
     const response =
@@ -1043,6 +1097,7 @@ export class OperationController {
     @Query('id_group') id_group: string,
     @CurrentUser('userId') userId: number,
     @CurrentUser('isSupervisor') isSupervisor: number,
+    @CurrentUser('isProgrammer') isProgrammer: number,
     @CurrentUser('isAdmin') isAdmin: number,
     @CurrentUser('siteId') siteId: number,
     @CurrentUser('subsiteId') subsiteId: number,
@@ -1050,7 +1105,7 @@ export class OperationController {
     const response = await this.operationService.remove(
       id,
       isAdmin ? siteId : undefined,
-      isSupervisor ? subsiteId : undefined,
+       (isSupervisor || isProgrammer)  ? subsiteId : undefined,
       id_group || undefined,
       userId,
     );
@@ -1093,39 +1148,145 @@ export class OperationController {
     },
   })
   async removeMultipleGroups(
-    @Param('id', ParseIntPipe) id: number,
-    @Body('id_groups') id_groups: string[],
-    @CurrentUser('userId') userId: number,
-    @CurrentUser('isSupervisor') isSupervisor: number,
-    @CurrentUser('isAdmin') isAdmin: number,
-    @CurrentUser('siteId') siteId: number,
-    @CurrentUser('subsiteId') subsiteId: number,
-  ) {
-    if (!id_groups || !Array.isArray(id_groups) || id_groups.length === 0) {
-      throw new BadRequestException(
-        'Se requiere un array de id_groups con al menos un elemento',
+      @Param('id', ParseIntPipe) id: number,
+      @Body('id_groups') id_groups: string[],
+      @CurrentUser('userId') userId: number,
+      @CurrentUser('isSupervisor') isSupervisor: number,
+      @CurrentUser('isProgrammer') isProgrammer: number,
+      @CurrentUser('isAdmin') isAdmin: number,
+      @CurrentUser('siteId') siteId: number,
+      @CurrentUser('subsiteId') subsiteId: number,
+    ) {
+      if (!id_groups || !Array.isArray(id_groups) || id_groups.length === 0) {
+        throw new BadRequestException('Se requiere un array de id_groups con al menos un elemento');
+      }
+
+      const response = await this.operationService.removeMultipleGroups(
+        id,
+        id_groups,
+        isAdmin ? siteId : undefined,
+        (isSupervisor || isProgrammer) ? subsiteId : undefined,
+        userId,
       );
-    }
 
-    const response = await this.operationService.removeMultipleGroups(
-      id,
-      id_groups,
-      isAdmin ? siteId : undefined,
-      isSupervisor ? subsiteId : undefined,
-      userId,
-    );
+      if (response['status'] === 404) {
+        throw new NotFoundException(response['message']);
+      } else if (response['status'] === 400) {
+        throw new BadRequestException(response['message']);
+      } else if (response['status'] === 403) {
+        throw new ForbiddenException(response['message']);
+      } else if (response['status'] === 207) {
+        // 207 Multi-Status: algunos grupos se eliminaron, otros no
+        return response;
+      }
 
-    if (response['status'] === 404) {
-      throw new NotFoundException(response['message']);
-    } else if (response['status'] === 400) {
-      throw new BadRequestException(response['message']);
-    } else if (response['status'] === 403) {
-      throw new ForbiddenException(response['message']);
-    } else if (response['status'] === 207) {
-      // 207 Multi-Status: algunos grupos se eliminaron, otros no
       return response;
     }
 
-    return response;
-  }
+
+  // Nuevo endpoint para exportar operaciones
+    @Post('export')
+    @ApiOperation({
+      summary: 'Exportar operaciones en XLSX (WORKER/NORMAL)',
+    })
+    @ApiConsumes('application/x-www-form-urlencoded', 'application/json')
+    @ApiBody({
+      required: true,
+      schema: {
+        type: 'object',
+        required: ['reportType', 'dateStart', 'dateEnd'],
+        properties: {
+          reportType: {
+            type: 'string',
+            enum: ['WORKER', 'NORMAL'],
+            example: 'NORMAL',
+          },
+          dateStart: {
+            type: 'string',
+            example: '2026-03-01',
+          },
+          dateEnd: {
+            type: 'string',
+            example: '2026-03-19',
+          },
+          status: {
+            type: 'string',
+            example: 'COMPLETED',
+          },
+          jobAreaIds: {
+            type: 'string',
+            example: '1,2,3',
+          },
+          inChargedId: {
+            type: 'number',
+            example: 10,
+          },
+          search: {
+            type: 'string',
+            example: 'muelle norte',
+          },
+        },
+      },
+    })
+    @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+    async exportOperations(
+      @Body() body: any,
+      @Body('reportType', new ParseEnumPipe(ExportReportType))
+      reportType: ExportReportType,
+      @Body('dateStart') dateStart: string,
+      @Body('dateEnd') dateEnd: string,
+      @CurrentUser() user: any,
+      @CurrentUser('userId') userIdClaim: number,
+      @CurrentUser('siteId') siteIdClaim: number,
+      @CurrentUser('subsiteId') subsiteIdClaim: number,
+    ): Promise<StreamableFile> {
+      const userId = userIdClaim ?? user?.userId ?? user?.id;
+      const siteId = siteIdClaim ?? user?.siteId;
+      const subsiteId = subsiteIdClaim ?? user?.subsiteId;
+
+      const normalizeStringArray = (value: unknown): string[] | undefined => {
+        if (!value) return undefined;
+        if (Array.isArray(value)) return value.map(String);
+        if (typeof value === 'string') return value.split(',').map(v => v.trim());
+        return undefined;
+      };
+
+      const normalizeNumberArray = (value: unknown): number[] | undefined => {
+        if (!value) return undefined;
+        if (Array.isArray(value)) return value.map(Number);
+        if (typeof value === 'string') return value.split(',').map(v => Number(v.trim()));
+        return undefined;
+      };
+
+      const dto: ExportOperationsDto = {
+        reportType,
+        filters: {
+          dateStart,
+          dateEnd,
+          status: normalizeStringArray(body?.status),
+          jobAreaIds: normalizeNumberArray(body?.jobAreaIds),
+          inChargedId: body?.inChargedId ? Number(body.inChargedId) : undefined,
+          search: body?.search,
+        },
+      };
+
+      const exportResult = await this.operationExportService.export(dto, {
+        userId,
+        siteId,
+        subsiteId,
+      });
+
+      // console.log('Export result:', body);
+
+      if ('noContent' in exportResult) {
+        throw new NotFoundException('No hay datos para exportar');
+      }
+
+      const { buffer, fileName } = exportResult;
+
+      return new StreamableFile(buffer, {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        disposition: `attachment; filename="${fileName}"`,
+      });
+    }
 }

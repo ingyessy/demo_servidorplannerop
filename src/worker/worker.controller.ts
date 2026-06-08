@@ -24,13 +24,16 @@ import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { DateTransformPipe } from 'src/pipes/date-transform/date-transform.pipe';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
-import { ExcelExportService } from 'src/common/validation/services/excel-export.service';
+// import { ExcelExportService } from 'src/common/validation/services/excel-export.service';
 import { SiteInterceptor } from 'src/common/interceptors/site.interceptor';
+import { RolesGuard } from 'src/auth/guards/roles.guard';
+import { Roles } from 'src/auth/decorators/roles.decorator';
+import { Role } from '@prisma/client';
 /**
  * @category Controller
  */
 @Controller('worker')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @UseInterceptors(SiteInterceptor)
 @ApiBearerAuth('access-token')
 export class WorkerController {
@@ -39,7 +42,7 @@ export class WorkerController {
 
   constructor(
     private readonly workerService: WorkerService,
-    private readonly excelExportService: ExcelExportService,
+    // private readonly excelExportService: ExcelExportService,
   ) {}
 
  @Post()
@@ -48,11 +51,12 @@ async create(
   @CurrentUser('userId') userId: number,
   @CurrentUser('siteId') siteId: number,
   @CurrentUser('subsiteId') subsiteId: number,
+  @CurrentUser('role') role: string,
 ) {
     const requestId = Math.random().toString(36).substring(7);
-    console.log(`[WorkerController] 🚀 ${requestId} - POST /worker initiated`);
-    console.log(`[WorkerController] ${requestId} - createWorkerDto:`, createWorkerDto);
-    console.log(`[WorkerController] ${requestId} - userId: ${userId}, siteId: ${siteId}, subsiteId: ${subsiteId}`);
+    // console.log(`[WorkerController] 🚀 ${requestId} - POST /worker initiated`);
+    // console.log(`[WorkerController] ${requestId} - createWorkerDto:`, createWorkerDto);
+    // console.log(`[WorkerController] ${requestId} - userId: ${userId}, siteId: ${siteId}, subsiteId: ${subsiteId}`);
     
     // Crear clave única para detectar peticiones duplicadas
     const requestKey = `${userId}-${createWorkerDto.dni}-${createWorkerDto.code}-${createWorkerDto.payroll_code}`;
@@ -82,7 +86,7 @@ async create(
     
     try {
       // Agrega el log aquí
-      console.log('subsiteId recibido:', subsiteId);
+      // console.log('subsiteId recibido:', subsiteId);
       createWorkerDto.id_user = userId;
 
     if (typeof createWorkerDto.id_site === 'undefined' || createWorkerDto.id_site === null) {
@@ -93,7 +97,7 @@ async create(
     }
 
       console.log(`[WorkerController] ${requestId} - Calling workerService.create...`);
-      const result = await this.workerService.create(createWorkerDto, siteId);
+      const result = await this.workerService.create(createWorkerDto, siteId, role);
       console.log(`[WorkerController] ${requestId} - ✅ Service call completed successfully`);
       
       // Marcar como completado (no en proceso)
@@ -215,13 +219,14 @@ async findById(
 }
 
   @Patch(':id')
-@UsePipes(new DateTransformPipe())
+  @Roles(Role.SUPERADMIN, Role.ADMIN, Role.GH)
 async update(
   @Param('id', ParseIntPipe) id: number,
   @Body() updateWorkerDto: UpdateWorkerDto,
   @CurrentUser('siteId') siteId: number,
   @CurrentUser('subsiteId') subsiteId: number,
   @CurrentUser('isSupervisor') isSupervisor: boolean,
+  @CurrentUser('role') role: string,
 ) {
   // ✅ CAMBIAR A findById en lugar de findOne
   const validateId = await this.workerService.findById(id, siteId);
@@ -246,21 +251,31 @@ async update(
     id,
     updateWorkerDto,
     siteId,
+    role,
   );
 
   return response;
 }
  //remove worker
  @Delete(':id')
+ @Roles(Role.SUPERADMIN, Role.ADMIN, Role.GH)
 async remove(
   @Param('id', ParseIntPipe) id: number,
   @CurrentUser('siteId') siteId: number,
+  @CurrentUser('role') role: string,
 ) {
   // ✅ CAMBIAR A findById en lugar de findOne
   const validateId = await this.workerService.findById(id, siteId);
   
   if ('status' in validateId && validateId.status === 404) {
     throw new ConflictException('Unauthorized to delete this worker');
+  }
+  
+  // Validar acceso basado en rol
+  if (role !== 'SUPERADMIN' && 'id_site' in validateId && validateId.id_site !== siteId) {
+    throw new ForbiddenException(
+      `You can only delete workers in your site (${siteId})`,
+    );
   }
   
   const response = await this.workerService.remove(id);

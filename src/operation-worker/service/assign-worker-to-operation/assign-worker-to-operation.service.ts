@@ -121,7 +121,7 @@ export class AssignWorkerToOperationService {
 
       // Asignar grupos de trabajadores con la misma programación
       if (scheduledGroupsToProcess.length > 0) {
-        console.log(`[AssignWorkerService] 📋 Procesando ${scheduledGroupsToProcess.length} grupos`);
+        // console.log(`[AssignWorkerService] 📋 Procesando ${scheduledGroupsToProcess.length} grupos`);
         
         // Para cada grupo de trabajadores con programación
         scheduledGroupsToProcess.forEach((group) => {
@@ -132,9 +132,9 @@ export class AssignWorkerToOperationService {
           const groupId = isNewGroup ? uuidv4() : group.id_group;
           
           if (isNewGroup) {
-            console.log(`[AssignWorkerService] 🆕 Creando nuevo grupo: ${groupId} (${group.workerIds.length} workers)`);
+            // console.log(`[AssignWorkerService] 🆕 Creando nuevo grupo: ${groupId} (${group.workerIds.length} workers)`);
           } else if (isExistingGroup) {
-            console.log(`[AssignWorkerService] ♻️ Agregando a grupo existente: ${groupId} (${group.workerIds.length} workers)`);
+            // console.log(`[AssignWorkerService] ♻️ Agregando a grupo existente: ${groupId} (${group.workerIds.length} workers)`);
           }
           
           const groupSchedule = {

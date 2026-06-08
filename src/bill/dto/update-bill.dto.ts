@@ -47,7 +47,7 @@ export class UpdateBillDto {
     },
   })
   @IsOptional()
-  billHoursDistribution: HoursDistribution;
+  billHoursDistribution!: HoursDistribution;
 
   @ApiProperty({
     description: 'Distribución horaria para nómina (opcional)',
@@ -64,7 +64,7 @@ export class UpdateBillDto {
     },
   })
   @IsOptional()
-  paysheetHoursDistribution: HoursDistribution;
+  paysheetHoursDistribution!: HoursDistribution;
 
   @ApiProperty({
     example: 0,
@@ -76,14 +76,14 @@ export class UpdateBillDto {
   @Min(0)
   @Type(() => Number)
   @IsOptional()
-  amount: number;
+  amount!: number;
 
   @ApiProperty({ example: 'ad789802-eb77-4593-8a21-8f23a9883e17' })
   @IsNumber()
   @Min(0)
   @Type(() => Number)
   @IsOptional()
-  group_hours: Decimal;
+  group_hours!: Decimal;
 
   @ApiProperty({
     example: 'Duración ajustada por cambio en fechas de trabajadores',

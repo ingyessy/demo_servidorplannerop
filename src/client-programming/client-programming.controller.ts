@@ -17,10 +17,11 @@ import {
 import { ClientProgrammingService } from './client-programming.service';
 import { CreateClientProgrammingDto } from './dto/create-client-programming.dto';
 import { UpdateClientProgrammingDto } from './dto/update-client-programming.dto';
+import { AssignClientProgrammingDto } from './dto/assign-client-programming.dto';
 import { ParseIntPipe } from 'src/pipes/parse-int/parse-int.pipe';
 import { DateTransformPipe } from 'src/pipes/date-transform/date-transform.pipe';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
-import { ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiBody, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { FilterClientProgrammingDto } from './dto/filter-client-programming.dto';
 import { SiteInterceptor } from 'src/common/interceptors/site.interceptor';
@@ -29,9 +30,10 @@ import { Role } from '@prisma/client';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 
 @Controller('client-programming')
+@ApiTags('Client Programming')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @UseInterceptors(SiteInterceptor)
-@Roles(Role.SUPERADMIN, Role.ADMIN, Role.SUPERVISOR)
+@Roles(Role.SUPERADMIN, Role.ADMIN, Role.SUPERVISOR, Role.PROGRAMMER)
 @ApiBearerAuth('access-token')
 export class ClientProgrammingController {
   constructor(
@@ -45,22 +47,32 @@ export class ClientProgrammingController {
     @CurrentUser('userId') userId: number,
     @CurrentUser('siteId') siteId: number,
     @CurrentUser('subsiteId') subsiteId: number,
+    @CurrentUser('role') role: string,
   ) {
     createClientProgrammingDto.id_user = userId;
+    // Usar los valores del usuario si no se proporciona explícitamente
     if (
-      !createClientProgrammingDto.id_site ||
-      !createClientProgrammingDto.id_subsite
+      createClientProgrammingDto.id_site === null ||
+      createClientProgrammingDto.id_site === undefined
     ) {
       createClientProgrammingDto.id_site = siteId;
+    }
+    if (
+      createClientProgrammingDto.id_subsite === null ||
+      createClientProgrammingDto.id_subsite === undefined
+    ) {
       createClientProgrammingDto.id_subsite = subsiteId;
     }
-    if (siteId && createClientProgrammingDto.id_site !== siteId) {
+    // Validar que el usuario tenga permiso en ese site
+    if (siteId !== null && siteId !== undefined && createClientProgrammingDto.id_site !== siteId) {
       throw new ForbiddenException(
         'No tienes permiso para crear una programación en este sitio',
       );
     }
     const response = await this.clientProgrammingService.create(
       createClientProgrammingDto,
+      role,
+      subsiteId,
     );
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
@@ -104,6 +116,8 @@ export class ClientProgrammingController {
     const response = await this.clientProgrammingService.findOne(id, siteId);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
+    } else if (response['status'] === 403) {
+      throw new ForbiddenException(response['message']);
     }
     return response;
   }
@@ -114,22 +128,54 @@ async update(
   @Param('id', ParseIntPipe) id: number,
   @Body() updateClientProgrammingDto: UpdateClientProgrammingDto,
   @CurrentUser('siteId') siteId: number,
+  @CurrentUser('subsiteId') subsiteId: number,
   @CurrentUser('role') role: string,
 ) {
-  if (role !== 'SUPERADMIN' && siteId && updateClientProgrammingDto.id_site !== siteId) {
-    throw new ForbiddenException(
-      'No tienes permiso para actualizar una programación en este sitio',
-    );
+  // Validar que el usuario tenga permiso en ese site (solo ADMIN)
+  if (role !== 'SUPERADMIN' && siteId !== null && siteId !== undefined) {
+    if (
+      updateClientProgrammingDto.id_site !== null &&
+      updateClientProgrammingDto.id_site !== undefined &&
+      updateClientProgrammingDto.id_site !== siteId
+    ) {
+      throw new ForbiddenException(
+        'No tienes permiso para actualizar una programación en este sitio',
+      );
+    }
   }
   const response = await this.clientProgrammingService.update(
     id,
     updateClientProgrammingDto,
+    role,
+    siteId,
+    subsiteId,
   );
   if (response['status'] === 404) {
     throw new NotFoundException(response['message']);
   }
   return response;
 }
+
+  @Patch(':id/assign')
+  @ApiOperation({ summary: 'Asignar programación cliente a una operación y cambiar estado a ASSIGNED' })
+  @ApiBody({ type: AssignClientProgrammingDto })
+  async assignToOperation(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() assignDto: AssignClientProgrammingDto,
+    @CurrentUser('siteId') siteId: number,
+  ) {
+    const response = await this.clientProgrammingService.assignToOperation(
+      id,
+      assignDto.id_operation,
+      siteId,
+    );
+    if (response['status'] === 404) {
+      throw new NotFoundException(response['message']);
+    } else if (response['status'] === 403) {
+      throw new ForbiddenException(response['message']);
+    }
+    return response;
+  }
 
   @Delete(':id')
   async remove(

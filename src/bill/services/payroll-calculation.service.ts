@@ -96,7 +96,7 @@ export class PayrollCalculationService {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error(
         `Error al calcular para el grupo ${group.groupId}:`,
-        errorMessage,
+        String(error), 
       );
       continue;
     }
@@ -150,8 +150,21 @@ export class PayrollCalculationService {
       'FOD',
     );
 
-    const totalAmount =
-      baseAmount + additionalHoursResult.amount + holidayResult.amount;
+    // const totalAmount =
+    //   baseAmount + additionalHoursResult.amount + holidayResult.amount;
+
+let totalAmount = 0;
+
+// ✅ SOLO PARA JORNAL FESTIVO
+if (isHolidayOrSunday) {
+  totalAmount =
+    holidayResult.amount +
+    additionalHoursResult.amount;
+} else {
+  totalAmount =
+    baseAmount +
+    additionalHoursResult.amount;
+}
 
     return {
       baseAmount,
@@ -210,9 +223,21 @@ export class PayrollCalculationService {
       'FAC_FOD',
     );
 
-    const totalAmount =
-      baseAmount + additionalHoursResult.amount + holidayResult.amount;
+    // const totalAmount =
+    //   baseAmount + additionalHoursResult.amount + holidayResult.amount;
+    
+      let totalAmount = 0;
 
+// ✅ SOLO PARA JORNAL FESTIVO
+if (isHolidayOrSunday) {
+  totalAmount =
+    holidayResult.amount +
+    additionalHoursResult.amount;
+} else {
+  totalAmount =
+    baseAmount +
+    additionalHoursResult.amount;
+}
     return {
       baseAmount,
       additionalHoursAmount: additionalHoursResult.amount,

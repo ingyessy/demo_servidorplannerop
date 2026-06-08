@@ -13,6 +13,7 @@ import {
   Res,
   UseInterceptors,
   ConflictException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { InabilityService } from './inability.service';
 import { CreateInabilityDto } from './dto/create-inability.dto';
@@ -23,7 +24,7 @@ import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { ApiBearerAuth, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { FilterInabilityDto } from './dto/filter-inability';
 import { Response } from 'express';
-import { ExcelExportService } from 'src/common/validation/services/excel-export.service';
+// import { ExcelExportService } from 'src/common/validation/services/excel-export.service';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { SiteInterceptor } from 'src/common/interceptors/site.interceptor';
 import { UpdateInabilityService } from './service/update-inability.service';
@@ -35,21 +36,22 @@ import { UpdateInabilityService } from './service/update-inability.service';
 export class InabilityController {
   constructor(
     private readonly inabilityService: InabilityService,
-    private readonly excelExportService: ExcelExportService,
+    // private readonly excelExportService: ExcelExportService,
     private readonly updateInabilityService: UpdateInabilityService,
   ) {}
 
   @Post()
-  @UsePipes(DateTransformPipe)
   async create(
     @Body() createInabilityDto: CreateInabilityDto,
     @CurrentUser('userId') userId: number,
     @CurrentUser('siteId') siteId: number,
+    @CurrentUser('role') role: string,
   ) {
     createInabilityDto.id_user = userId;
     const response = await this.inabilityService.create(
       createInabilityDto,
       siteId,
+      role,
     );
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
@@ -62,12 +64,16 @@ export class InabilityController {
   @Get()
   async findAll(
     @CurrentUser('siteId') siteId: number,
+    @CurrentUser('role') role: string,
+    @CurrentUser('subsiteId') subsiteId: number,
   ) {
-    const response = await this.inabilityService.findAll(siteId);
-    if (response['status'] === 404) {
+    const response = await this.inabilityService.findAll(siteId, role, subsiteId);
+    if (response && response['status'] === 404) {
       throw new NotFoundException(response['message']);
-    } else if (response['status'] === 409) {
+    } else if (response && response['status'] === 409) {
       throw new ConflictException(response['message']);
+    } else if (response && response['status'] === 500) {
+      throw new InternalServerErrorException(response['message']);
     }
     return response;
   }
@@ -82,8 +88,9 @@ export class InabilityController {
   async findByDni(
     @Param('dni') dni: string,
     @CurrentUser('siteId') siteId: number,
+    @CurrentUser('role') role: string,
   ) {
-    const response = await this.inabilityService.findByDni(dni, siteId);
+    const response = await this.inabilityService.findByDni(dni, siteId, role);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
     }
@@ -114,25 +121,25 @@ export class InabilityController {
     if (!Array.isArray(response)) {
       return response;
     }
-    if (format === 'excel') {
-      return this.excelExportService.exportToExcel(
-        res,
-        response,
-        'incapacidades',
-        'Reporte de Incapacidades',
-        'binary',
-      );
-    }
+    // if (format === 'excel') {
+    //   return this.excelExportService.exportToExcel(
+    //     res,
+    //     response,
+    //     'incapacidades',
+    //     'Reporte de Incapacidades',
+    //     'binary',
+    //   );
+    // }
 
-    if (format === 'base64') {
-      return this.excelExportService.exportToExcel(
-        null,
-        response,
-        'incapacidades',
-        'Reporte de Incapacidades',
-        'base64',
-      );
-    }
+    // if (format === 'base64') {
+    //   return this.excelExportService.exportToExcel(
+    //     null,
+    //     response,
+    //     'incapacidades',
+    //     'Reporte de Incapacidades',
+    //     'base64',
+    //   );
+    // }
     return response;
   }
 
@@ -140,8 +147,9 @@ export class InabilityController {
   async findOne(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser('siteId') siteId: number,
+    @CurrentUser('role') role: string,
   ) {
-    const response = await this.inabilityService.findOne(id, siteId);
+    const response = await this.inabilityService.findOne(id, siteId, role);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
     }
@@ -153,11 +161,13 @@ export class InabilityController {
     @Param('id', ParseIntPipe) id: number,
     @Body() updateInabilityDto: UpdateInabilityDto,
     @CurrentUser('siteId') siteId: number,
+    @CurrentUser('role') role: string,
   ) {
     const response = await this.inabilityService.update(
       id,
       updateInabilityDto,
       siteId,
+      role,
     );
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
@@ -171,8 +181,9 @@ export class InabilityController {
   async remove(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser('siteId') siteId: number,
+    @CurrentUser('role') role: string,
   ) {
-    const response = await this.inabilityService.remove(id, siteId);
+    const response = await this.inabilityService.remove(id, siteId, role);
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
     }else if (response['status'] === 409) {

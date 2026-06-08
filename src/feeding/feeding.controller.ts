@@ -108,7 +108,9 @@ export class FeedingController {
       );
     } catch (error) {
       console.error('Error in paginated request:', error);
-      throw new Error(`Error processing paginated request: ${error.message}`);
+      throw new Error(
+        `Error processing paginated request: ${(error as Error).message}`,
+      );
     }
   }
 
@@ -121,6 +123,28 @@ export class FeedingController {
     if (response['status'] === 404) {
       throw new NotFoundException(response['message']);
     }
+    return response;
+  }
+
+  @Get('pending-inprogress')
+  @ApiOperation({
+    summary:
+      'Obtener alimentaciones pendientes consolidadas de todas las operaciones INPROGRESS',
+  })
+  async findPendingInProgress(
+    @CurrentUser('siteId') siteId: number,
+    @CurrentUser('subsiteId') subsiteId: number,
+  ) {
+    const response =
+      await this.feedingService.getPendingMealsForInProgressOperations(
+        siteId,
+        subsiteId,
+      );
+
+    if (response && response['status'] === 404) {
+      throw new NotFoundException(response['message']);
+    }
+
     return response;
   }
 
@@ -169,25 +193,27 @@ export class FeedingController {
     return response;
   }
 
-
   @Get('operation/:id/available-meals')
-@ApiOperation({
-  summary: 'Obtener las comidas disponibles para una operación según la hora actual'
-})
-async getAvailableMealsForOperation(
-  @Param('id', ParseIntPipe) id: number,
-  @CurrentUser('siteId') siteId: number,
-) {
-  const response = await this.feedingService.getAvailableMealsForOperation(id);
-  if (response['status'] === 404) {
-    throw new NotFoundException(response['message']);
+  @ApiOperation({
+    summary:
+      'Obtener las comidas disponibles para una operación según la hora actual',
+  })
+  async getAvailableMealsForOperation(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser('siteId') siteId: number,
+  ) {
+    const response =
+      await this.feedingService.getAvailableMealsForOperation(id);
+    if (response['status'] === 404) {
+      throw new NotFoundException(response['message']);
+    }
+    return response;
   }
-  return response;
-}
 
   @Get('operation/:id/missing-meals')
   @ApiOperation({
-    summary: 'Obtener alimentaciones faltantes por trabajador en una operación para el día actual'
+    summary:
+      'Obtener alimentaciones faltantes por trabajador en una operación para el día actual',
   })
   async getMissingMealsForOperation(
     @Param('id', ParseIntPipe) id: number,

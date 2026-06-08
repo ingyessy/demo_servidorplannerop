@@ -71,15 +71,24 @@ export class AreaService {
       where: whereClause,
       include: {
         Site: {
+            select: {
+              name: true,
+            },
+          },
+          subSite: {
+            select: {
+              name: true,
+            },
+          },
+           // CONTADOR DE TRABAJADORES
+        _count: {
           select: {
-            name: true,
+            workers: true,
           },
         },
-        subSite: {
-          select: {
-            name: true,
-          },
-        },
+      },
+       orderBy: {
+        id: 'desc',
       },
     });
 
