@@ -18,11 +18,20 @@ export class ConfirmOperationDto {
   action!: 'APPROVE' | 'REJECT';
 
   @ApiProperty({
-    description: 'Observacion asociada a la confirmacion',
+    description: 'Observacion visible para el cliente',
+    required: false,
+    example: 'Operación aprobada con tarifa especial acordada',
+  })
+  @IsOptional()
+  @IsString()
+  clientObservation?: string;
+
+  @ApiProperty({
+    description: 'Observacion interna del supervisor (no visible al cliente)',
     required: false,
     example: 'Aprobado por el supervisor de turno',
   })
   @IsOptional()
   @IsString()
-  observation?: string;
+  supervisorObservation?: string;
 }

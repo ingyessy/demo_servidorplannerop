@@ -49,8 +49,10 @@ import { WorkerDistributionQueryDto } from './dto/worker-distribution-query.dto'
 import { getColombianDateTime } from 'src/common/utils/dateColombia';
 import { WorkerHoursReportQueryDto } from './dto/worker-hours-report-query.dto';
 import { ConfirmOperationDto } from './dto/confirm-operation.dto';
+import { ResubmitOperationDto } from './dto/resubmit-operation.dto';
 import { RegenerateConfirmationTokenDto } from './dto/regenerate-confirmation-token.dto';
 import { TokenPreviewDto } from './dto/token-preview.dto';
+import { SendConfirmationEmailDto } from './dto/send-confirmation-email.dto';
 import { OperationExportService } from './services/operation-export.service';
 import { ExportOperationsDto, ExportReportType } from './dto/export-operations.dto';
 // import { OperationsCronService } from 'src/cron-job/cron-job.service';
@@ -259,6 +261,36 @@ async create(
     }
   }
 
+  @Post('resubmit/:id')
+  @ApiOperation({
+    summary: 'Reenviar operación especial rechazada a aprobación',
+    description:
+      'Transiciona una operación especial de REJECTED a TO_APPROVED. ' +
+      'Invalida los tokens anteriores, genera uno nuevo y reenvía el correo de confirmación al cliente. ' +
+      'Solo aplica a operaciones con tarifa isSpecial=YES en estado REJECTED.',
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    description: 'ID de la operación rechazada',
+    example: 1792,
+  })
+  @ApiResponse({ status: 200, description: 'Operación reenviada a TO_APPROVED exitosamente' })
+  @ApiResponse({ status: 400, description: 'operationId inválido' })
+  @ApiResponse({ status: 404, description: 'Operación no encontrada' })
+  @ApiResponse({ status: 409, description: 'La operación no está en estado REJECTED o no es especial' })
+  @ApiBody({ type: ResubmitOperationDto, required: false })
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  async resubmit(
+    @Param('id', ParseIntPipe) operationId: number,
+    @Body() body: ResubmitOperationDto,
+  ) {
+    return this.operationService.resubmitRejectedOperation(
+      operationId,
+      body?.supervisorObservation,
+    );
+  }
+
   @Post('complete/:id')
   @ApiOperation({
     summary: 'Completar operacion',
@@ -296,7 +328,8 @@ async create(
       body.action,
       ipAddress,
       device,
-      body.observation,
+      body.clientObservation,
+      body.supervisorObservation,
     );
   }
 
@@ -315,13 +348,13 @@ async create(
     return this.operationService.getConfirmationPreviewByToken(body.token);
   }
 
-  @Post('regenerate-confirmation-token')
+  @Post('regenerate-confirmation-token/:id')
   @ApiOperation({
     summary: 'Regenerar token de confirmacion',
     description:
       'Regenera un token de confirmación para una operación especial. Invalida tokens anteriores. Útil cuando el token ha expirado o no funciona.',
   })
-  @ApiBody({ type: RegenerateConfirmationTokenDto })
+  @ApiParam({ name: 'id', description: 'ID de la operación', type: 'number' })
   @ApiResponse({
     status: 201,
     description: 'Token regenerado exitosamente',
@@ -343,18 +376,26 @@ async create(
     status: 409,
     description: 'La operación no está pendiente de confirmación o no es especial',
   })
-  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
   async regenerateConfirmationToken(
-    @Body() body: RegenerateConfirmationTokenDto,
+    @Param('id', ParseIntPipe) id: number,
   ) {
     const result = await this.operationService.regenerateConfirmationToken(
-      body.operationId,
+      id,
     );
+
+    const tokenTtlMs = result.tokenTtlMinutes * 60 * 1000;
+    const expiresAt = new Date(result.token.createdAt.getTime() + tokenTtlMs);
 
     return {
       operationId: result.operationId,
       link: result.link,
       tokenTtlMinutes: result.tokenTtlMinutes,
+      token: {
+        id: result.token.id,
+        status: result.token.status,
+        created_at: result.token.createdAt.toISOString(),
+        expires_at: expiresAt.toISOString(),
+      },
       message: `Token regenerado exitosamente. Los tokens activos anteriores fueron marcados como EXPIRED.`,
     };
   }
@@ -408,6 +449,33 @@ async create(
   async getConfirmationLink(@Param('id', ParseIntPipe) operationId: number) {
     return await this.operationService.getConfirmationLinkForSpecialOperation(
       operationId,
+    );
+  }
+
+  @Post(':id/send-confirmation-email')
+  @ApiOperation({
+    summary: 'Enviar correo de confirmación de operación especial',
+    description:
+      'Envía el enlace de confirmación (sin QR) al correo destino indicado. ' +
+      'El correo se escribe manualmente por ahora. Se permite personalizar el asunto y el cuerpo.',
+  })
+  @ApiParam({ name: 'id', description: 'ID de la operación especial' })
+  @ApiBody({ type: SendConfirmationEmailDto })
+  @ApiResponse({ status: 201, description: 'Correo enviado exitosamente' })
+  @ApiResponse({ status: 400, description: 'operationId o correo inválido' })
+  @ApiResponse({ status: 404, description: 'Operación no encontrada' })
+  @ApiResponse({
+    status: 409,
+    description: 'La operación no es especial o no se pudo enviar el correo',
+  })
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  async sendConfirmationEmail(
+    @Param('id', ParseIntPipe) operationId: number,
+    @Body() body: SendConfirmationEmailDto,
+  ) {
+    return await this.operationService.sendConfirmationEmailManually(
+      operationId,
+      body,
     );
   }
 

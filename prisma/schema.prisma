@@ -417,16 +417,8 @@ model Bill {
   timeStart_group   String?
   dateEnd_group     DateTime?    @db.Date
   timeEnd_group     String?
-  operation         Operation    @relation(fields: [id_operation], references: [id])
   user              User         @relation(fields: [id_user], references: [id])
   billDetails       BillDetail[]
-  group_hours       Decimal?  @db.Decimal(15, 3)
-  observation       String?
-  dateStart_group DateTime? @db.Date
-  timeStart_group String?
-  dateEnd_group   DateTime? @db.Date
-  timeEnd_group   String?
-
 }
 
 model BillDetail {
@@ -449,9 +441,10 @@ model OperationConfirmation {
 
   operation     Operation @relation(fields: [id_operation], references: [id])
 
-  ipAddress     String?
-  device        String?
-  observation   String?
+  ipAddress             String?
+  device                String?
+  clientObservation     String?
+  supervisorObservation String?
 
   confirmedAt   DateTime?
 

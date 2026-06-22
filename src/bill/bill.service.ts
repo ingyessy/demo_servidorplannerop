@@ -3894,21 +3894,39 @@ const endDate = operationWorker?.dateEnd
         latestEndDateTime,
       );
 
-      // 4. Actualizar operación a COMPLETED con fechas y duración
+      // 3.1 Determinar el estado destino según si la operación es especial.
+      //   - Especial (alguna tarifa isSpecial = YES): TO_APPROVED (requiere confirmación del cliente)
+      //   - Normal: COMPLETED
+      const specialTariffCount = await this.prisma.operation_Worker.count({
+        where: {
+          id_operation: operationId,
+          tariff: {
+            isSpecial: 'YES',
+          },
+        },
+      });
+      const isSpecial = specialTariffCount > 0;
+      const targetStatus = isSpecial ? 'TO_APPROVED' : 'COMPLETED';
+
+      // 4. Actualizar operación al estado destino con fechas y duración
       await this.prisma.operation.update({
         where: { id: operationId },
         data: {
-          status: 'COMPLETED',
+          status: targetStatus,
           dateEnd: latestEndDateTime.date,
           timeEnd: latestEndDateTime.time,
           op_duration: opDuration,
         },
       });
 
-      // 5. Liberar trabajadores
-      await this.releaseOperationWorkers(operationId);
+      // 5. Liberar trabajadores SOLO para operaciones normales (COMPLETED).
+      //   En las especiales (TO_APPROVED) los trabajadores siguen asignados hasta
+      //   que el cliente confirme; la liberación ocurre al aprobar la confirmación.
+      if (!isSpecial) {
+        await this.releaseOperationWorkers(operationId);
+      }
 
-      // console.log(`[BillService] 🎉 Operación ${operationId} completada exitosamente con duración ${opDuration} horas`);
+      // console.log(`[BillService] 🎉 Operación ${operationId} ${isSpecial ? 'enviada a aprobación (TO_APPROVED)' : 'completada (COMPLETED)'} con duración ${opDuration} horas`);
     } catch (error) {
       console.error(
         `[BillService] ❌ Error completando operación ${operationId}:`,

@@ -80,7 +80,7 @@ export class OperationFinderService {
           select: {
             id: true,
             id_operation: true,
-            observation: true,
+            clientObservation: true,
             confirmedAt: true,
             ipAddress: true,
             device: true,

@@ -101,6 +101,7 @@ export class TaskService {
                   select: {
                     id: true,
                     code: true,
+                    isSpecial: true,
                   },
                 },
               },
@@ -114,6 +115,7 @@ export class TaskService {
                   select: {
                     id: true,
                     code: true,
+                    isSpecial: true,
                   },
                 },
               },
@@ -144,6 +146,7 @@ export class TaskService {
               select: {
                 id: true,
                 code: true,
+                isSpecial: true,
               },
             },
           },

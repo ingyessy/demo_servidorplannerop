@@ -45,7 +45,7 @@ import { Decimal } from '@prisma/client/runtime/library';
 export class OperationService {
   private readonly logger = new Logger(OperationService.name);
   // Duración del token en minutos
-  private static readonly TOKEN_VALIDITY_MINUTES = 480; // 8 horas
+  private static readonly TOKEN_VALIDITY_MINUTES = 15;
 
   constructor(
     private prisma: PrismaService,
@@ -353,7 +353,7 @@ export class OperationService {
       `Confirmacion ${confirmation.id} creada/reutilizada para operacion ${operationId}`,
     );
 
-    // Si ya existe un token activo vigente, se reutiliza y no se crea uno nuevo.
+    // Si ya existe un token activo, se expira para garantizar que el link nuevo sea el único válido.
     const activeToken = await this.prisma.token.findFirst({
       where: {
         id_confirmation: confirmation.id,
@@ -369,27 +369,14 @@ export class OperationService {
     });
 
     if (activeToken) {
-      if (this.isTokenExpired(activeToken.createdAt)) {
-        await this.prisma.token.update({
-          where: { id: activeToken.id },
-          data: { status: TokenStatus.EXPIRED },
-        });
-      } else {
-        const reusedLink = this.operationTokenService.buildConfirmationLink(
-          activeToken.tokenHash,
-        );
+      await this.prisma.token.update({
+        where: { id: activeToken.id },
+        data: { status: TokenStatus.EXPIRED },
+      });
 
-        this.logger.log(
-          `Token activo ${activeToken.id} reutilizado para confirmacion ${confirmation.id} (operacion ${operationId})`,
-        );
-
-        return {
-          operationId,
-          confirmation,
-          token: activeToken,
-          link: reusedLink,
-        };
-      }
+      this.logger.log(
+        `Token activo ${activeToken.id} expirado para emitir uno nuevo (confirmacion ${confirmation.id}, operacion ${operationId})`,
+      );
     }
 
     // createdToken guarda metadatos persistidos; rawTokenValue es solo para responder el link.
@@ -539,6 +526,196 @@ export class OperationService {
   }
 
   /**
+   * Reenvía una operación especial RECHAZADA de vuelta a TO_APPROVED.
+   * Invalida los tokens anteriores, genera uno nuevo y reenvía el correo al cliente.
+   * Sólo aplica a operaciones especiales (isSpecial = YES) en estado REJECTED.
+   */
+  async resubmitRejectedOperation(operationId: number, supervisorObservation?: string | null) {
+    if (!operationId || operationId <= 0) {
+      throw new BadRequestException('operationId inválido');
+    }
+
+    const operation = await this.prisma.operation.findUnique({
+      where: { id: operationId },
+      select: { id: true, status: true, id_user: true },
+    });
+
+    if (!operation) {
+      throw new OperationNotFoundException(operationId);
+    }
+
+    if (operation.status !== StatusOperation.REJECTED) {
+      throw new ConflictException(
+        `La operación ${operationId} no está en estado REJECTED (estado actual: ${operation.status})`,
+      );
+    }
+
+    const isSpecial = await this.isOperationSpecial(operationId, operation);
+    if (!isSpecial) {
+      throw new ConflictException(
+        `La operación ${operationId} no es especial y no puede ser reenviada a aprobación por este flujo`,
+      );
+    }
+
+    // Expirar todos los tokens activos de la confirmación anterior
+    const existingConfirmation = await this.prisma.operationConfirmation.findUnique({
+      where: { id_operation: operationId },
+      select: { id: true },
+    });
+
+    if (existingConfirmation) {
+      await this.prisma.token.updateMany({
+        where: {
+          id_confirmation: existingConfirmation.id,
+          status: TokenStatus.ACTIVE,
+        },
+        data: { status: TokenStatus.EXPIRED },
+      });
+      this.logger.log(
+        `Tokens anteriores expirados para confirmación ${existingConfirmation.id} (operación ${operationId})`,
+      );
+    }
+
+    // Cambiar estado a TO_APPROVED
+    const updatedOperation = await this.prisma.operation.update({
+      where: { id: operationId },
+      data: { status: StatusOperation.TO_APPROVED },
+    });
+
+    // Crear / reutilizar confirmación y generar nuevo token
+    const confirmationData = await this.createConfirmation(operationId, operation);
+
+    // Guardar nota interna del supervisor si se proporcionó
+    if (supervisorObservation?.trim()) {
+      await this.prisma.operationConfirmation.update({
+        where: { id: confirmationData.confirmation.id },
+        data: { supervisorObservation: supervisorObservation.trim() },
+      });
+    }
+
+    const tokenTtlMinutes = this.getTokenValidityMinutes();
+    const emailTarget = await this.resolveClientConfirmationEmail(operationId);
+
+    let emailNotification: {
+      sent: boolean;
+      to: string | null;
+      reason?: string;
+      messageId?: string;
+    } = { sent: false, to: emailTarget };
+
+    if (emailTarget) {
+      const emailResult =
+        await this.operationEmailService.sendSpecialOperationConfirmationEmail({
+          to: emailTarget,
+          operationId,
+          confirmationLink: confirmationData.link,
+          tokenTtlMinutes,
+        });
+      emailNotification = {
+        sent: emailResult.sent,
+        to: emailTarget,
+        reason: emailResult.reason,
+        messageId: emailResult.messageId,
+      };
+    } else {
+      emailNotification = {
+        sent: false,
+        to: null,
+        reason:
+          'No se encontró correo válido del cliente. Configure CONFIRMATION_DEFAULT_EMAIL o ajuste datos del cliente.',
+      };
+      this.logger.warn(
+        `Operación ${operationId} reenviada a aprobación sin correo destino válido`,
+      );
+    }
+
+    this.logger.log(
+      `Operación ${operationId} reenviada de REJECTED a TO_APPROVED. Confirmación: ${confirmationData.confirmation.id}`,
+    );
+
+    return {
+      operation: updatedOperation,
+      confirmation: confirmationData.confirmation,
+      token: confirmationData.token,
+      link: confirmationData.link,
+      emailNotification,
+      movedTo: StatusOperation.TO_APPROVED,
+    };
+  }
+
+  /**
+   * Envía el correo de confirmación de una operación especial a un destinatario
+   * escrito manualmente (por ahora no se obtiene de la base de datos).
+   * Reutiliza el token activo (mismo enlace que el QR) y NO envía QR, solo el link.
+   */
+  async sendConfirmationEmailManually(
+    operationId: number,
+    params: { to: string; subject?: string; body?: string },
+  ) {
+    if (!operationId || operationId <= 0) {
+      throw new BadRequestException('operationId inválido');
+    }
+
+    const to = (params?.to || '').trim();
+    if (!this.isValidEmail(to)) {
+      throw new BadRequestException(
+        'Debe proporcionar un correo destino válido',
+      );
+    }
+
+    const operation = await this.prisma.operation.findUnique({
+      where: { id: operationId },
+      select: { id: true, status: true, id_user: true },
+    });
+
+    if (!operation) {
+      throw new OperationNotFoundException(operationId);
+    }
+
+    const isSpecial = await this.isOperationSpecial(operationId, operation);
+    if (!isSpecial) {
+      throw new ConflictException(
+        'La operación no es especial y no tiene enlace de confirmación',
+      );
+    }
+
+    // Reutiliza/crea el token activo: produce el mismo enlace que muestra el QR.
+    const confirmationData = await this.createConfirmation(
+      operationId,
+      operation,
+    );
+    const tokenTtlMinutes = this.getTokenValidityMinutes();
+
+    const emailResult =
+      await this.operationEmailService.sendSpecialOperationConfirmationEmail({
+        to,
+        operationId,
+        confirmationLink: confirmationData.link,
+        tokenTtlMinutes,
+        subject: params?.subject,
+        bodyMessage: params?.body,
+      });
+
+    if (!emailResult.sent) {
+      throw new ConflictException(
+        emailResult.reason || 'No se pudo enviar el correo de confirmación',
+      );
+    }
+
+    this.logger.log(
+      `Correo de confirmación enviado manualmente para operación ${operationId} a ${to}`,
+    );
+
+    return {
+      operationId,
+      sent: true,
+      to,
+      messageId: emailResult.messageId,
+      link: confirmationData.link,
+    };
+  }
+
+  /**
    * Confirma una operación especial mediante token.
    * - APPROVE -> activa prefactura, mueve a APPROVED y luego a COMPLETED automáticamente
    * - REJECT -> operación entra a REJECTED
@@ -548,7 +725,8 @@ export class OperationService {
     action: 'APPROVE' | 'REJECT',
     ipAddress?: string | null,
     device?: string | null,
-    observation?: string | null,
+    clientObservation?: string | null,
+    supervisorObservation?: string | null,
   ) {
     // Sincroniza estado en BD: todo token ACTIVE vencido por tiempo pasa a EXPIRED.
     await this.expireActiveTokensByTime();
@@ -650,7 +828,8 @@ export class OperationService {
           confirmedAt: now,
           ipAddress: ipAddress || null,
           device: device || null,
-          observation: observation?.trim() ? observation.trim() : null,
+          clientObservation: clientObservation?.trim() ? clientObservation.trim() : null,
+          supervisorObservation: supervisorObservation?.trim() ? supervisorObservation.trim() : null,
         },
       });
 
@@ -938,6 +1117,11 @@ export class OperationService {
                       group_hours: true,
                     },
                   },
+                  clientProgramming: {
+                    select: {
+                      service_request: true,
+                    },
+                  },
                   workers: {
                     select: {
                       id_worker: true,
@@ -1093,21 +1277,20 @@ export class OperationService {
       operation: {
         id: operation.id,
         status: operation.status,
-        cliente: operation.client?.name || null,
+        serviceRequest: (operation as any).clientProgramming?.service_request || null,
+        client: operation.client?.name || null,
         area: operation.jobArea?.name || null,
-        motonave: operation.motorShip || null,
-        servicio: operation.task?.name || null,
-        fechaInicio: operation.dateStart,
-        fechaFin: operation.dateEnd || null,
-        horaInicio: operation.timeStrat,
-        horaFin: operation.timeEnd || null,
+        service: operation.task?.name || null,
+        motorShip: operation.motorShip || null,
+        zone: operation.zone,
         dateStart: operation.dateStart,
         dateStartFormatted: formatColombianDate(operation.dateStart),
         timeStart: operation.timeStrat,
         timeStartFormatted: this.formatTimeForDisplay(operation.timeStrat),
-        motorShip: operation.motorShip,
-        zone: operation.zone,
-        client: operation.client?.name || null,
+        dateEnd: operation.dateEnd || null,
+        dateEndFormatted: operation.dateEnd ? formatColombianDate(operation.dateEnd) : null,
+        timeEnd: operation.timeEnd || null,
+        timeEndFormatted: this.formatTimeForDisplay(operation.timeEnd),
         site: operation.Site?.name || null,
         subsite: operation.subSite?.name || null,
       },
@@ -1203,10 +1386,10 @@ export class OperationService {
       select: { id: true, createdAt: true },
     });
 
-    const cooldownMinutes = this.getTokenRegenerationCooldownMinutes();
-    if (latestToken && cooldownMinutes > 0) {
+    const cooldownSeconds = this.getTokenRegenerationCooldownSeconds();
+    if (latestToken && cooldownSeconds > 0) {
       const elapsedMs = Date.now() - latestToken.createdAt.getTime();
-      const cooldownMs = cooldownMinutes * 60 * 1000;
+      const cooldownMs = cooldownSeconds * 1000;
 
       if (elapsedMs < cooldownMs) {
         const remainingSeconds = Math.ceil((cooldownMs - elapsedMs) / 1000);
@@ -1362,13 +1545,13 @@ export class OperationService {
     return expired.count;
   }
 
-  private getTokenRegenerationCooldownMinutes(): number {
+  private getTokenRegenerationCooldownSeconds(): number {
     const configured = Number(
-      process.env.OPERATION_CONFIRMATION_TOKEN_REGEN_COOLDOWN_MINUTES || 5,
+      process.env.OPERATION_CONFIRMATION_TOKEN_REGEN_COOLDOWN_SECONDS || 30,
     );
 
     if (!Number.isFinite(configured) || configured < 0) {
-      return 5;
+      return 30;
     }
 
     return Math.floor(configured);
@@ -1391,15 +1574,7 @@ export class OperationService {
       ...(args || {}),
     });
 
-    if (findByRaw) {
-      return findByRaw;
-    }
-
-    // Compatibilidad: también acepta tokenHash directo en links reutilizados.
-    return this.prisma.token.findUnique({
-      where: { tokenHash: normalizedToken },
-      ...(args || {}),
-    });
+    return findByRaw ?? null;
   }
 
   private async resolveClientConfirmationEmail(
@@ -2919,9 +3094,18 @@ const hasDateTimeChanges = dateStart || dateEnd || timeStrat || timeEnd;
 
     const incomingTariffIds = [...tariffIdsFromConnect, ...tariffIdsFromUpdate];
     if (incomingTariffIds.length > 0) {
+      // Los grupos que se están actualizando deben excluirse del estado "existente"
+      // para que la validación evalúe el estado final y no el actual.
+      const groupIdsBeingUpdated = Array.isArray(workersOps.update)
+        ? workersOps.update
+          .map((item: any) => item?.id_group)
+          .filter((id: any) => typeof id === 'string' && id.length > 0)
+        : [];
+
       await this.validateSpecialTariffConsistencyByIds(
         incomingTariffIds,
         operationId,
+        groupIdsBeingUpdated.length > 0 ? groupIdsBeingUpdated : undefined,
       );
     }
 
@@ -3346,6 +3530,7 @@ const hasDateTimeChanges = dateStart || dateEnd || timeStrat || timeEnd;
   private async validateSpecialTariffConsistencyByIds(
     tariffIds: number[],
     operationId?: number,
+    excludeGroupIds?: string[],
   ) {
     const uniqueTariffIds = [...new Set(tariffIds)];
     if (uniqueTariffIds.length === 0) return;
@@ -3367,12 +3552,18 @@ const hasDateTimeChanges = dateStart || dateEnd || timeStrat || timeEnd;
 
     if (!operationId) return;
 
+    const existingWhereClause: any = {
+      id_operation: operationId,
+      id_tariff: { not: null },
+    };
+    if (excludeGroupIds && excludeGroupIds.length > 0) {
+      // Excluir los grupos que están siendo actualizados para evaluar el estado final
+      existingWhereClause.NOT = { id_group: { in: excludeGroupIds } };
+    }
+
     const existingOperationTariffs =
       await this.prisma.operation_Worker.findMany({
-        where: {
-          id_operation: operationId,
-          id_tariff: { not: null },
-        },
+        where: existingWhereClause,
         select: {
           tariff: {
             select: { isSpecial: true },

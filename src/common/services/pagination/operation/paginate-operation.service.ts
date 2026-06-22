@@ -49,9 +49,10 @@ export class PaginateOperationService {
           limit,
           filters,
           include: defaultInclude,
-          // Optimizar ordenamiento para grandes datasets
-          // Usar ID como campo secundario para consistencia y rendimiento
-          orderBy: [{ status: 'asc' }, { id: 'desc' }],
+          // Ordenar por ID descendente (más recientes primero)
+          // No ordenar por status: evita que estados como REJECTED queden
+          // enterrados al final de la página cuando el límite es pequeño.
+          orderBy: [{ id: 'desc' }],
           activatePaginated,
           transformFn: (item) => {
             const transformed = transformer.transformOperationResponse(item);
