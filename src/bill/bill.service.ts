@@ -3908,11 +3908,22 @@ const endDate = operationWorker?.dateEnd
       const isSpecial = specialTariffCount > 0;
       const targetStatus = isSpecial ? 'TO_APPROVED' : 'COMPLETED';
 
-      // 4. Actualizar operación al estado destino con fechas y duración
+      // 3.2 Si la operación viene de un rechazo (REJECTED), no se debe avanzar
+      //   automáticamente de estado: el usuario debe enviarla manualmente a
+      //   aprobación ("Enviar a Aprobación") tras corregir/completar los grupos.
+      //   Solo se actualizan fecha/hora de fin y duración.
+      const currentOperation = await this.prisma.operation.findUnique({
+        where: { id: operationId },
+        select: { status: true },
+      });
+      const isRejected = currentOperation?.status === 'REJECTED';
+
+      // 4. Actualizar operación con fechas y duración. El estado solo avanza
+      //   al destino calculado si la operación no estaba rechazada.
       await this.prisma.operation.update({
         where: { id: operationId },
         data: {
-          status: targetStatus,
+          ...(isRejected ? {} : { status: targetStatus }),
           dateEnd: latestEndDateTime.date,
           timeEnd: latestEndDateTime.time,
           op_duration: opDuration,
@@ -3922,7 +3933,8 @@ const endDate = operationWorker?.dateEnd
       // 5. Liberar trabajadores SOLO para operaciones normales (COMPLETED).
       //   En las especiales (TO_APPROVED) los trabajadores siguen asignados hasta
       //   que el cliente confirme; la liberación ocurre al aprobar la confirmación.
-      if (!isSpecial) {
+      //   Si la operación seguía REJECTED, tampoco se liberan: se espera el envío manual.
+      if (!isSpecial && !isRejected) {
         await this.releaseOperationWorkers(operationId);
       }
 
@@ -6573,7 +6585,7 @@ private async areAllGroupsCompleted(
     success: boolean;
     billId: number;
     message: string;
-    action: 'recreated';
+    action: 'recreated' | 'deleted';
   }> {
     try {
       console.log(
@@ -6608,11 +6620,16 @@ private async areAllGroupsCompleted(
         `[BillService][updateBillWithServiceChange] ✅ Bill encontrada: grupo=${existingBill.id_group}`,
       );
 
-      // 2. Obtener el id_tariff actual del grupo (de los operation_workers)
-      const currentTariffId = await this.getCurrentTariffForGroup(
-        updateDto.id_operation,
-        existingBill.id_group,
-      );
+      // 2. Obtener el id_tariff "actual" del grupo. Si el caller ya conoce el
+      //   tariff anterior (capturado antes de que un PATCH previo en el mismo
+      //   flujo de guardado lo sobrescribiera en operation_worker), se usa ese
+      //   valor; de lo contrario se consulta en BD (comportamiento legado).
+      const currentTariffId =
+        updateDto.old_id_tariff ??
+        (await this.getCurrentTariffForGroup(
+          updateDto.id_operation,
+          existingBill.id_group,
+        ));
 
       console.log(
         `[BillService][updateBillWithServiceChange] 📊 Tariff actual: ${currentTariffId}, Nuevo: ${updateDto.new_id_tariff}`,
@@ -6678,7 +6695,7 @@ private async areAllGroupsCompleted(
     success: boolean;
     billId: number;
     message: string;
-    action: 'recreated';
+    action: 'recreated' | 'deleted';
   }> {
     try {
       console.log(
@@ -6715,6 +6732,22 @@ private async areAllGroupsCompleted(
         console.log(
           `[BillService][recreateBillWithNewTariff] ✅ Operation_Workers actualizados con nuevo tariff ${updateDto.new_id_tariff}`,
         );
+      }
+
+      // 2.1. Si el caller va a generar la bill definitiva inmediatamente
+      //   después (p.ej. desde el formulario de completación con los datos
+      //   reales del usuario), no crear aquí una bill provisional: evita
+      //   terminar con dos bills para el mismo grupo.
+      if (updateDto.defer_bill_creation) {
+        console.log(
+          `[BillService][recreateBillWithNewTariff] ⏭️ defer_bill_creation=true, se omite creación de bill provisional`,
+        );
+        return {
+          success: true,
+          billId: 0,
+          message: `Bill anterior ${oldBillId} eliminada. Creación de la nueva bill diferida al formulario de completación.`,
+          action: 'deleted',
+        };
       }
 
       // 3. Crear la nueva bill con los datos proporcionados

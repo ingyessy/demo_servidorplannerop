@@ -199,6 +199,32 @@ export class UpdateBillWithServiceChangeDto {
   new_id_tariff?: number;
 
   @ApiProperty({
+    example: 3,
+    description:
+      'ID de tariff/servicio anterior, capturado por el cliente ANTES de modificar el grupo ' +
+      '(opcional). El operation_worker del grupo puede haber sido actualizado al nuevo tariff ' +
+      'por un PATCH previo en el mismo flujo de guardado; en ese caso comparar contra el tariff ' +
+      'actual en BD ya no detecta el cambio. Si se envía, se usa este valor en vez de consultarlo.',
+    required: false,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Type(() => Number)
+  old_id_tariff?: number;
+
+  @ApiProperty({
+    example: false,
+    description:
+      'Si es true, sólo borra la bill anterior (y sincroniza el tariff) pero NO crea la nueva ' +
+      'bill todavía. Útil cuando el formulario de completación generará la bill definitiva con ' +
+      'los datos reales capturados por el usuario inmediatamente después.',
+    required: false,
+  })
+  @IsOptional()
+  defer_bill_creation?: boolean;
+
+  @ApiProperty({
     description: 'Distribución horaria para facturación (opcional)',
     required: false,
     example: {
