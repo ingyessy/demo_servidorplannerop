@@ -8,7 +8,7 @@
   "scripts": {
     "prebuild": "npx rimraf dist",
     "build": "nest build",
-    "postbuild": "npm run doc && npm run copy-docs",
+    "build:full": "npm run build && npm run doc && npm run copy-docs",
     "copy-docs": "copyfiles -u 1 \"docs/**/*\" dist/",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "node dist/src/main.js",
