@@ -6,7 +6,7 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "prebuild": "npx rimraf dist",
+    "prebuild": "npx rimraf dist && npx prisma generate",
     "build": "nest build",
     "postbuild": "npm run doc && npm run copy-docs",
     "copy-docs": "copyfiles -u 1 \"docs/**/*\" dist/",
