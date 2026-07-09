@@ -14,6 +14,13 @@ type SendConfirmationEmailParams = {
   bodyMessage?: string | null;
 };
 
+type SendLiquidationEmailParams = {
+  to: string[];
+  operationId: number;
+  liquidationLink: string;
+  clientLabel?: string | null;
+};
+
 type SendConfirmationEmailResult = {
   sent: boolean;
   reason?: string;
@@ -28,6 +35,118 @@ export class OperationEmailService {
     params: SendConfirmationEmailParams,
   ): Promise<SendConfirmationEmailResult> {
     return this.sendViaGraphApi(params);
+  }
+
+  async sendLiquidationEmail(
+    params: SendLiquidationEmailParams,
+  ): Promise<SendConfirmationEmailResult> {
+    const recipients = params.to.filter((email) => this.isValidEmail(email));
+    if (recipients.length === 0) {
+      return { sent: false, reason: 'No hay correos de liquidacion validos para esta operacion' };
+    }
+
+    try {
+      const token = await this.getGraphToken();
+
+      const subjectPrefix =
+        process.env.CONFIRMATION_EMAIL_SUBJECT_PREFIX || 'PlannerOP';
+      const subject = `[${subjectPrefix}] Radicado de operacion #${params.operationId}`;
+
+      const clientLabel = params.clientLabel?.trim() || '';
+      const now = new Date();
+      const dateLabel = now.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' });
+
+      const html = `
+        <div style="background:#f3f4f6;padding:24px;font-family:Arial,sans-serif;">
+          <div style="max-width:580px;margin:0 auto;background:#ffffff;border-radius:12px;border:1px solid #e5e7eb;overflow:hidden;">
+
+            <div style="background:#0f3460;padding:28px 32px 24px;">
+              <span style="font-size:22px;font-weight:600;color:#ffffff;letter-spacing:1.5px;">CARGOBAN</span>
+              <p style="font-size:12px;color:#9FE1CB;margin:4px 0 0;">Operador Logístico y Portuario S.A.S.</p>
+            </div>
+
+            <div style="padding:28px 32px 0;">
+              <p style="font-size:13px;color:#6b7280;margin:0 0 4px;">Estimado equipo de liquidación,</p>
+              <h2 style="font-size:18px;font-weight:600;color:#111827;margin:0 0 16px;">
+                Servicio confirmado — Operación #${params.operationId}
+              </h2>
+
+              <p style="font-size:14px;color:#374151;line-height:1.7;margin:0 0 20px;">
+                El cliente ha confirmado el servicio. Por favor ingrese el número de radicado en el portal adjunto para completar el proceso de liquidación.
+              </p>
+
+              <div style="background:#f9fafb;border-radius:8px;border:1px solid #e5e7eb;padding:16px 20px;margin-bottom:24px;">
+                <table style="width:100%;border-collapse:collapse;">
+                  <tr>
+                    <td style="padding:6px 0;width:50%;">
+                      <p style="font-size:11px;color:#9ca3af;margin:0 0 2px;text-transform:uppercase;letter-spacing:0.5px;">Operación</p>
+                      <p style="font-size:14px;font-weight:600;color:#111827;margin:0;">#${params.operationId}</p>
+                    </td>
+                    <td style="padding:6px 0;width:50%;">
+                      <p style="font-size:11px;color:#9ca3af;margin:0 0 2px;text-transform:uppercase;letter-spacing:0.5px;">Estado</p>
+                      <p style="margin:0;"><span style="background:#E1F5EE;color:#0F6E56;font-size:12px;padding:2px 10px;border-radius:20px;">Confirmado por cliente</span></p>
+                    </td>
+                  </tr>
+                  ${clientLabel ? `
+                  <tr>
+                    <td style="padding:6px 0;" colspan="2">
+                      <p style="font-size:11px;color:#9ca3af;margin:0 0 2px;text-transform:uppercase;letter-spacing:0.5px;">Cliente</p>
+                      <p style="font-size:14px;font-weight:600;color:#111827;margin:0;">${this.escapeHtml(clientLabel)}</p>
+                    </td>
+                  </tr>` : ''}
+                  <tr>
+                    <td style="padding:6px 0;" colspan="2">
+                      <p style="font-size:11px;color:#9ca3af;margin:0 0 2px;text-transform:uppercase;letter-spacing:0.5px;">Fecha de confirmación</p>
+                      <p style="font-size:14px;font-weight:600;color:#111827;margin:0;">${dateLabel}</p>
+                    </td>
+                  </tr>
+                </table>
+              </div>
+
+              <div style="text-align:center;margin-bottom:24px;">
+                <a href="${params.liquidationLink}" style="display:inline-block;background:#0f3460;color:#ffffff;padding:12px 32px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600;">
+                  Ingresar radicado
+                </a>
+              </div>
+
+              <div style="border:1px solid #e5e7eb;border-radius:8px;padding:12px 16px;margin-bottom:24px;">
+                <p style="font-size:12px;color:#6b7280;margin:0 0 4px;">Si el botón no funciona, copie este enlace en su navegador:</p>
+                <p style="font-size:12px;color:#185FA5;word-break:break-all;margin:0;">${params.liquidationLink}</p>
+              </div>
+            </div>
+
+            <div style="border-top:1px solid #e5e7eb;padding:20px 32px;">
+              <p style="font-size:12px;color:#374151;margin:0;">CARGOBAN Operador Logístico y Portuario S.A.S.</p>
+              <p style="font-size:11px;color:#9ca3af;margin:4px 0 0;">Este es un mensaje automático, por favor no responda este correo.</p>
+            </div>
+
+          </div>
+        </div>
+      `;
+
+      const mailFrom = process.env.MAIL_FROM!;
+      const payload = JSON.stringify({
+        message: {
+          subject,
+          body: { contentType: 'HTML', content: html },
+          toRecipients: recipients.map((email) => ({ emailAddress: { address: email } })),
+        },
+        saveToSentItems: false,
+      });
+
+      await this.graphRequest(token, mailFrom, payload);
+
+      this.logger.log(
+        '[Graph] Correo de liquidacion enviado para operacion ' + params.operationId + ' a [' + recipients.join(', ') + ']',
+      );
+
+      return { sent: true };
+    } catch (error: any) {
+      this.logger.error(
+        `[Graph] Error enviando correo de liquidacion para operacion ${params.operationId}: ${error?.message || 'unknown'}`,
+      );
+      return { sent: false, reason: error?.message || 'Error al enviar correo via Graph API' };
+    }
   }
 
   // ─────────────────────────── Microsoft Graph API ───────────────────────────

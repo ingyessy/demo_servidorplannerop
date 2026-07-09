@@ -755,7 +755,10 @@ export class OperationService {
       throw new BadRequestException('Token de confirmacion invalido');
     }
 
-    if (tokenRecord.status === TokenStatus.USED) {
+    if (
+      tokenRecord.status === TokenStatus.CONFIRMED ||
+      tokenRecord.status === TokenStatus.REJECTED
+    ) {
       throw new BadRequestException('Token de confirmacion ya utilizado');
     }
 
@@ -793,28 +796,10 @@ export class OperationService {
         operation.id,
         operation.id_user ?? 1,
       );
-
-      await this.updateBillStatusesForOperation(
-        operation.id,
-        'TO_APPROVED' as BillStatus,
-        BillStatus.ACTIVE,
-      );
     }
 
-    if (action === 'REJECT') {
-      // Cuando se rechaza, eliminar todas las bills y billdetails de la operación
-      // try {
-      //   await this.deleteAllBillsAndDetailsForOperation(operation.id);
-      //   this.logger.log(
-      //     `Bills y billdetails eliminados para operación rechazada ${operation.id}`,
-      //   );
-      // } catch (error) {
-      //   this.logger.error(
-      //     `Error eliminando bills para operación rechazada ${operation.id}: ${error}`,
-      //   );
-      //   throw error;
-      // }
-    }
+    const tokenFinalStatus =
+      action === 'APPROVE' ? TokenStatus.CONFIRMED : TokenStatus.REJECTED;
 
     const result = await this.prisma.$transaction(async (tx) => {
       const updatedOperation = await tx.operation.update({
@@ -836,8 +821,7 @@ export class OperationService {
       await tx.token.update({
         where: { id: tokenRecord.id },
         data: {
-          // El token que confirma queda marcado como usado para evitar replay.
-          status: TokenStatus.USED,
+          status: tokenFinalStatus,
           usedAt: now,
         },
       });
@@ -849,7 +833,6 @@ export class OperationService {
           status: TokenStatus.ACTIVE,
         },
         data: {
-          // Cualquier token activo anterior para la misma confirmación queda invalidado.
           status: TokenStatus.EXPIRED,
         },
       });
@@ -865,6 +848,13 @@ export class OperationService {
       const completedOperation =
         await this.autoCompleteConfirmedSpecialOperation(operation.id);
 
+      // Dispatch liquidation email without blocking the response.
+      this.sendLiquidationEmailForOperation(operation.id).catch((err) =>
+        this.logger.error(
+          `Error enviando email de liquidacion para operacion ${operation.id}: ${err?.message || err}`,
+        ),
+      );
+
       return {
         operation: completedOperation,
         confirmation: result.updatedConfirmation,
@@ -879,6 +869,270 @@ export class OperationService {
       action,
       movedTo: newStatus,
     };
+  }
+
+  async submitRadicado(token: string, fileCode: string) {
+    const normalizedToken = token?.trim();
+    const normalizedFileCode = fileCode?.trim();
+
+    if (!normalizedToken) {
+      throw new BadRequestException('Token de liquidacion requerido');
+    }
+
+    if (!normalizedFileCode) {
+      throw new BadRequestException('Numero de radicado requerido');
+    }
+
+    const tokenRecord = await this.findTokenRecordByClientToken(normalizedToken, {
+      include: {
+        confirmation: {
+          include: {
+            operation: { select: { id: true, status: true } },
+          },
+        },
+      },
+    });
+
+    if (!tokenRecord) {
+      throw new BadRequestException('Token de liquidacion invalido');
+    }
+
+    if (tokenRecord.type !== 'LIQUIDATION') {
+      throw new BadRequestException('Token de liquidacion invalido');
+    }
+
+    if (tokenRecord.status === TokenStatus.CONFIRMED) {
+      throw new BadRequestException('El radicado ya fue registrado para esta operacion');
+    }
+
+    if (tokenRecord.status !== TokenStatus.ACTIVE) {
+      throw new BadRequestException('Token de liquidacion invalido o expirado');
+    }
+
+    const confirmation = tokenRecord.confirmation;
+    if (!confirmation?.operation) {
+      throw new OperationNotFoundException(-1);
+    }
+
+    const now = getColombianDateTime();
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.operationConfirmation.update({
+        where: { id: confirmation.id },
+        data: { fileCodeRegistered: true },
+      });
+
+      await tx.token.update({
+        where: { id: tokenRecord.id },
+        data: { status: TokenStatus.CONFIRMED, usedAt: now },
+      });
+
+      await tx.bill.updateMany({
+        where: { id_operation: confirmation.operation.id, status: 'TO_APPROVED' as BillStatus },
+        data: { status: BillStatus.ACTIVE, fileCode: normalizedFileCode },
+      });
+    });
+
+    this.logger.log(
+      `Radicado "${normalizedFileCode}" registrado para operacion ${confirmation.operation.id}`,
+    );
+
+    return {
+      operationId: confirmation.operation.id,
+      fileCode: normalizedFileCode,
+    };
+  }
+
+  async getLiquidationPreviewByToken(token: string) {
+    const normalizedToken = token?.trim();
+    if (!normalizedToken) {
+      throw new BadRequestException('Token de liquidacion requerido');
+    }
+
+    const tokenRecord = await this.findTokenRecordByClientToken(normalizedToken, {
+      include: {
+        confirmation: {
+          include: {
+            operation: {
+              select: {
+                id: true,
+                status: true,
+                dateStart: true,
+                dateEnd: true,
+                timeStrat: true,
+                timeEnd: true,
+                motorShip: true,
+                zone: true,
+                jobArea: { select: { name: true } },
+                client: { select: { name: true } },
+                task: { select: { name: true } },
+                Site: { select: { name: true } },
+                subSite: { select: { name: true } },
+                Bill: {
+                  select: {
+                    id_group: true,
+                    amount: true,
+                    number_of_hours: true,
+                    group_hours: true,
+                  },
+                },
+                clientProgramming: {
+                  select: { service_request: true },
+                },
+                workers: {
+                  select: {
+                    id_worker: true,
+                    id_group: true,
+                    dateStart: true,
+                    dateEnd: true,
+                    timeStart: true,
+                    timeEnd: true,
+                    SubTask: { select: { name: true } },
+                    tariff: {
+                      select: {
+                        pay_units: true,
+                        unitOfMeasure: { select: { name: true } },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!tokenRecord || !tokenRecord.confirmation?.operation) {
+      throw new BadRequestException('Token de liquidacion invalido');
+    }
+
+    if (tokenRecord.type !== 'LIQUIDATION') {
+      throw new BadRequestException('Token de liquidacion invalido');
+    }
+
+    const canSubmit = tokenRecord.status === TokenStatus.ACTIVE;
+    const operation = tokenRecord.confirmation.operation;
+
+    const groupMap = new Map<string, { workerIds: Set<number>; totalHoursWorked: number; subservices: Set<string>; unitNames: Set<string>; totalQuantity: number }>();
+
+    for (const row of operation.workers || []) {
+      const groupId = (row.id_group || 'SIN_GRUPO').trim();
+      if (!groupMap.has(groupId)) {
+        groupMap.set(groupId, { workerIds: new Set(), totalHoursWorked: 0, subservices: new Set(), unitNames: new Set(), totalQuantity: 0 });
+      }
+      const g = groupMap.get(groupId)!;
+      g.workerIds.add(row.id_worker);
+      if (row.SubTask?.name) g.subservices.add(row.SubTask.name);
+      if (row.tariff?.unitOfMeasure?.name) g.unitNames.add(row.tariff.unitOfMeasure.name);
+      if (row.tariff?.pay_units) g.totalQuantity += Number(row.tariff.pay_units);
+      if (row.dateStart && row.dateEnd) {
+        const diffMs = new Date(row.dateEnd).getTime() - new Date(row.dateStart).getTime();
+        if (diffMs > 0) g.totalHoursWorked += diffMs / 3_600_000;
+      }
+    }
+
+    const groups = Array.from(groupMap.entries()).map(([groupId, g]) => ({
+      groupId,
+      workersCount: g.workerIds.size,
+      totalHoursWorked: Math.round(g.totalHoursWorked * 100) / 100,
+      subservices: Array.from(g.subservices),
+      unitMeasures: Array.from(g.unitNames),
+      quantity: Math.round(g.totalQuantity * 100) / 100,
+    }));
+
+    return {
+      token: { status: tokenRecord.status, createdAt: tokenRecord.createdAt },
+      operation,
+      groupSummary: {
+        groups,
+        totalGroups: groups.length,
+        totalWorkers: groups.reduce((s, g) => s + (g.workersCount ?? 0), 0),
+      },
+      canSubmit,
+    };
+  }
+
+  private async sendLiquidationEmailForOperation(operationId: number): Promise<void> {
+    const emailTargets = await this.resolveLiquidationEmails(operationId);
+    if (emailTargets.length === 0) {
+      this.logger.warn(`No se encontraron correos de liquidacion para operacion ${operationId}`);
+      return;
+    }
+
+    const clientLabel = await this.getClientLabel(operationId);
+    const liquidationTokenValue = await this.createLiquidationToken(operationId);
+    if (!liquidationTokenValue) {
+      this.logger.warn(`No se pudo generar token de liquidacion para operacion ${operationId}`);
+      return;
+    }
+
+    const liquidationLink = this.operationTokenService.buildLiquidationLink(liquidationTokenValue);
+
+    await this.operationEmailService.sendLiquidationEmail({
+      to: emailTargets,
+      operationId,
+      liquidationLink,
+      clientLabel,
+    });
+  }
+
+  private async createLiquidationToken(operationId: number): Promise<string | null> {
+    const confirmation = await this.prisma.operationConfirmation.findUnique({
+      where: { id_operation: operationId },
+      select: { id: true },
+    });
+
+    if (!confirmation) return null;
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const tokenValue = this.operationTokenService.generateTokenValue();
+      const tokenHash = this.operationTokenService.hashTokenValue(tokenValue);
+
+      try {
+        await this.prisma.token.create({
+          data: {
+            id_confirmation: confirmation.id,
+            tokenHash,
+            status: TokenStatus.ACTIVE,
+            type: 'LIQUIDATION',
+          },
+        });
+        return tokenValue;
+      } catch (error: any) {
+        if (error?.code !== 'P2002') throw error;
+      }
+    }
+
+    return null;
+  }
+
+  private async resolveLiquidationEmails(operationId: number): Promise<string[]> {
+    const operation = await this.prisma.operation.findUnique({
+      where: { id: operationId },
+      select: { id_client: true },
+    });
+
+    if (!operation?.id_client) return [];
+
+    const emails = await this.prisma.clientEmail.findMany({
+      where: {
+        id_client: operation.id_client,
+        type: 'LIQUIDATION',
+        status: 'ACTIVE',
+      },
+      select: { email: true },
+    });
+
+    return emails.map((e) => e.email);
+  }
+
+  private async getClientLabel(operationId: number): Promise<string | null> {
+    const operation = await this.prisma.operation.findUnique({
+      where: { id: operationId },
+      select: { client: { select: { name: true } } },
+    });
+    return operation?.client?.name ?? null;
   }
 
   private async ensurePreBillsForSpecialOperation(
@@ -1533,6 +1787,7 @@ export class OperationService {
     const expired = await this.prisma.token.updateMany({
       where: {
         status: TokenStatus.ACTIVE,
+        type: 'CONFIRMATION',
         createdAt: {
           lte: expirationThreshold,
         },

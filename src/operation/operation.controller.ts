@@ -53,6 +53,7 @@ import { ResubmitOperationDto } from './dto/resubmit-operation.dto';
 import { RegenerateConfirmationTokenDto } from './dto/regenerate-confirmation-token.dto';
 import { TokenPreviewDto } from './dto/token-preview.dto';
 import { SendConfirmationEmailDto } from './dto/send-confirmation-email.dto';
+import { SubmitRadicadoDto } from './dto/submit-radicado.dto';
 import { OperationExportService } from './services/operation-export.service';
 import { ExportOperationsDto, ExportReportType } from './dto/export-operations.dto';
 // import { OperationsCronService } from 'src/cron-job/cron-job.service';
@@ -346,6 +347,34 @@ async create(
   @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
   async confirmPreview(@Body() body: TokenPreviewDto) {
     return this.operationService.getConfirmationPreviewByToken(body.token);
+  }
+
+  @Post('liquidation-preview')
+  @Public()
+  @ApiOperation({
+    summary: 'Preview del portal de liquidacion por token',
+    description: 'Devuelve informacion de la operacion para el portal de liquidacion sin consumir el token.',
+  })
+  @ApiBody({ type: TokenPreviewDto })
+  @ApiResponse({ status: 200, description: 'Preview obtenido exitosamente' })
+  @ApiResponse({ status: 400, description: 'Token invalido o faltante' })
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  async liquidationPreview(@Body() body: TokenPreviewDto) {
+    return this.operationService.getLiquidationPreviewByToken(body.token);
+  }
+
+  @Post('submit-radicado')
+  @Public()
+  @ApiOperation({
+    summary: 'Registrar numero de radicado',
+    description: 'Registra el radicado de la operacion confirmada y activa las bills asociadas.',
+  })
+  @ApiBody({ type: SubmitRadicadoDto })
+  @ApiResponse({ status: 201, description: 'Radicado registrado exitosamente' })
+  @ApiResponse({ status: 400, description: 'Token o radicado invalido' })
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  async submitRadicado(@Body() body: SubmitRadicadoDto) {
+    return this.operationService.submitRadicado(body.token, body.fileCode);
   }
 
   @Post('regenerate-confirmation-token/:id')

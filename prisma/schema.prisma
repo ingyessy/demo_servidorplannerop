@@ -353,6 +353,7 @@ model OperationConfirmation {
   device                String?
   clientObservation     String?
   supervisorObservation String?
+  fileCodeRegistered    Boolean   @default(false)
 
   confirmedAt DateTime?
 
@@ -368,6 +369,7 @@ model Token {
   tokenHash String      @unique
   createdAt DateTime    @default(now())
   status    TokenStatus @default(ACTIVE)
+  type      TokenType   @default(CONFIRMATION)
   usedAt    DateTime?
 }
 
@@ -468,6 +470,7 @@ model Bill {
   billDetails       BillDetail[]
   group_hours       Decimal?     @db.Decimal(15, 3)
   observation       String?
+  fileCode          String?
   dateStart_group   DateTime?    @db.Date
   timeStart_group   String?
   dateEnd_group     DateTime?    @db.Date
@@ -549,8 +552,14 @@ enum StatusOperation {
 
 enum TokenStatus {
   ACTIVE
-  USED
+  CONFIRMED
+  REJECTED
   EXPIRED
+}
+
+enum TokenType {
+  CONFIRMATION
+  LIQUIDATION
 }
 
 enum Failures {

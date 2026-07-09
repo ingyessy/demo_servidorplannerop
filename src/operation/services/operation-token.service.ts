@@ -21,9 +21,26 @@ export class OperationTokenService {
       process.env.CLIENT_URL ||
       'http://192.168.15.68:5173/cargoplannerweb/confirm-operation';
 
-    const normalizedBaseUrl = confirmationPageUrl.trim().replace(/\/$/, '');
+    return this.buildLink(confirmationPageUrl, token);
+  }
 
-    // Soporta URLs base con o sin query previa y evita token duplicado.
+  buildLiquidationLink(token: string): string {
+    const liquidationPageUrl =
+      process.env.OPERATION_LIQUIDATION_PAGE_URL ||
+      (() => {
+        const base =
+          process.env.FRONTEND_URL ||
+          process.env.CLIENT_URL ||
+          'http://192.168.15.68:5173';
+        return `${base.replace(/\/$/, '')}/cargoplannerweb/liquidacion`;
+      })();
+
+    return this.buildLink(liquidationPageUrl, token);
+  }
+
+  private buildLink(baseUrl: string, token: string): string {
+    const normalizedBaseUrl = baseUrl.trim().replace(/\/$/, '');
+
     try {
       const url = new URL(normalizedBaseUrl);
       url.searchParams.set('token', token);

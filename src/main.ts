@@ -3,7 +3,7 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { join } from 'path';
-import { NestExpressApplication } from '@nestjs/platform-express';
+import { NestExpressApplication } from '@nestjs/platform-express';  
 import * as cookieParser from 'cookie-parser';
 import { AuthService } from './auth/auth.service';
 import { DocsAuthMiddleware } from './common/middleware/docs-auth.middleware';
