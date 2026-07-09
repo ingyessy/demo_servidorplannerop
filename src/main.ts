@@ -49,6 +49,7 @@ async function bootstrap() {
     origin: (origin, callback) => {
       const allowedOrigins = [
         // 'https://seal-app-55opl.ondigitalocean.app',
+        'https://cargo-planner-web-leo.vercel.app',
         'https://cargoban.com.co',
         'https://www.cargoban.com.co',
         'http://localhost:3001',
