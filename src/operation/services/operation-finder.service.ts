@@ -16,6 +16,7 @@ import { createTariffInclude } from '../../tariff/entities/tariff-include.types'
 
 /**
  * Servicio para buscar operaciones
+ * 
  */
 @Injectable()
 export class OperationFinderService {
