@@ -1238,21 +1238,6 @@ export class OperationService {
       );
     }
 
-    const nonActiveBills = await this.prisma.bill.count({
-      where: {
-        id_operation: operationId,
-        status: {
-          not: BillStatus.ACTIVE,
-        },
-      },
-    });
-
-    if (nonActiveBills > 0) {
-      throw new ConflictException(
-        `La operación ${operationId} tiene facturas sin activar`,
-      );
-    }
-
     const latestEndDateTime = await this.getLatestGroupEndDateTime(operationId);
 
     if (!latestEndDateTime) {
